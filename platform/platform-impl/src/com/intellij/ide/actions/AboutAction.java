@@ -14,6 +14,8 @@ import com.intellij.openapi.wm.WindowManager;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import javax.swing.*;
+
 public class AboutAction extends AnAction implements DumbAware, LightEditCompatible {
   @Override
   public void update(@NotNull AnActionEvent e) {
@@ -23,9 +25,10 @@ public class AboutAction extends AnAction implements DumbAware, LightEditCompati
 
   @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
+    JOptionPane.showMessageDialog(new JFrame(), "Hello Intellij!", "Zuxing Dialog",
+                                  JOptionPane.ERROR_MESSAGE);
     perform(e.getData(CommonDataKeys.PROJECT));
   }
-
   public static void perform(@Nullable Project project) {
     AboutPopup.show(WindowManager.getInstance().suggestParentWindow(project), false);
   }
