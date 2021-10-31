@@ -1,4 +1,12 @@
 # IntelliJ IDEA Community Edition [![official JetBrains project](http://jb.gg/badges/official.svg)](https://confluence.jetbrains.com/display/ALL/JetBrains+on+GitHub)
+> Notes: 
+> 1. IDEA 2020.3.1 - 203.6682.168; src 203.8084.17 (need kotlin-1.4.10)
+> 2. before build: set Kotlin Compiler to 1.4
+> 3. Click Gradle Sync without failed to download or sync XXX
+> 4. Click Project Structure without dependency errors
+> 
+> For details: https://gitee.com/tomgu1991/Foundation4AIandSE/blob/main/product/jetbrains/build_community.md
+> 
 These instructions will help you build IntelliJ IDEA Community Edition from source code, which is the basis for IntelliJ Platform development.
 The following conventions will be used to refer to directories on your machine:
 * `<USER_HOME>` is your home directory.

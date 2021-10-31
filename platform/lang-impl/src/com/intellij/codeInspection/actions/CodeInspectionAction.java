@@ -67,6 +67,8 @@ public class CodeInspectionAction extends BaseAnalysisAction {
 
   @Override
   protected void analyze(@NotNull Project project, @NotNull AnalysisScope scope) {
+    System.out.println("guzuxing: click code inspection action");
+    LOG.info("guzuxing: click code inspection action");
     FeatureUsageTracker.getInstance().triggerFeatureUsed("codeassist.inspect.batch");
     try {
       runInspections(project, scope);

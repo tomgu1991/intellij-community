@@ -8,13 +8,18 @@ import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.application.ApplicationNamesInfo;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.wm.WindowManager;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import javax.swing.*;
+
 public class AboutAction extends AnAction implements DumbAware, LightEditCompatible {
+  private static final Logger LOG = Logger.getInstance(AboutAction.class);
+
   @Override
   public void update(@NotNull AnActionEvent e) {
     e.getPresentation().setEnabledAndVisible(!ActionPlaces.isMacSystemMenuAction(e));
@@ -23,6 +28,9 @@ public class AboutAction extends AnAction implements DumbAware, LightEditCompati
 
   @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
+    System.out.println("guzuxing: click about action");
+    LOG.info("guzuxing: click about action");
+    JOptionPane.showMessageDialog(new JFrame(), "Hello Intellij!", "Zuxing Dialog", JOptionPane.ERROR_MESSAGE);
     perform(e.getData(CommonDataKeys.PROJECT));
   }
 
