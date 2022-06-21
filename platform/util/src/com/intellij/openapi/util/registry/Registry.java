@@ -121,6 +121,7 @@ public final class Registry  {
       return result;
     }
 
+    // load resource from properties
     InputStream stream = Registry.class.getClassLoader().getResourceAsStream("misc/registry.properties");
     if (stream == null) {
       return null;

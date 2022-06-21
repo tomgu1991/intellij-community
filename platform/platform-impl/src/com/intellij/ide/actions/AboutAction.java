@@ -30,6 +30,7 @@ public class AboutAction extends AnAction implements DumbAware, LightEditCompati
   }
 
   public static void perform(@Nullable Project project) {
+    // Registry load configs from "registry.properties", where this property is true
     if (Registry.is("ide.new.about.dialog")) {
       new AboutDialog(project).show();
     }
