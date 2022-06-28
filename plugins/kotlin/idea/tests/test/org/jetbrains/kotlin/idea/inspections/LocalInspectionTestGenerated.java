@@ -6925,16 +6925,6 @@ public abstract class LocalInspectionTestGenerated extends AbstractLocalInspecti
             KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
         }
 
-        @TestMetadata("junit4Test.kt")
-        public void testJunit4Test() throws Exception {
-            runTest("testData/inspectionsLocal/mainFunctionReturnUnit/junit4Test.kt");
-        }
-
-        @TestMetadata("junit5Test.kt")
-        public void testJunit5Test() throws Exception {
-            runTest("testData/inspectionsLocal/mainFunctionReturnUnit/junit5Test.kt");
-        }
-
         @TestMetadata("notMain.kt")
         public void testNotMain() throws Exception {
             runTest("testData/inspectionsLocal/mainFunctionReturnUnit/notMain.kt");
@@ -10514,6 +10504,21 @@ public abstract class LocalInspectionTestGenerated extends AbstractLocalInspecti
             KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
         }
 
+        @TestMetadata("functionType.kt")
+        public void testFunctionType() throws Exception {
+            runTest("testData/inspectionsLocal/removeExplicitTypeArguments/functionType.kt");
+        }
+
+        @TestMetadata("ktij-10623.kt")
+        public void testKtij_10623() throws Exception {
+            runTest("testData/inspectionsLocal/removeExplicitTypeArguments/ktij-10623.kt");
+        }
+
+        @TestMetadata("overloads.kt")
+        public void testOverloads() throws Exception {
+            runTest("testData/inspectionsLocal/removeExplicitTypeArguments/overloads.kt");
+        }
+
         @TestMetadata("removeTypeArgumentsFromFunction.kt")
         public void testRemoveTypeArgumentsFromFunction() throws Exception {
             runTest("testData/inspectionsLocal/removeExplicitTypeArguments/removeTypeArgumentsFromFunction.kt");
@@ -10532,6 +10537,11 @@ public abstract class LocalInspectionTestGenerated extends AbstractLocalInspecti
         @TestMetadata("removeTypeFromProperty.kt")
         public void testRemoveTypeFromProperty() throws Exception {
             runTest("testData/inspectionsLocal/removeExplicitTypeArguments/removeTypeFromProperty.kt");
+        }
+
+        @TestMetadata("typealiasToFunctionType.kt")
+        public void testTypealiasToFunctionType() throws Exception {
+            runTest("testData/inspectionsLocal/removeExplicitTypeArguments/typealiasToFunctionType.kt");
         }
     }
 
@@ -14889,6 +14899,11 @@ public abstract class LocalInspectionTestGenerated extends AbstractLocalInspecti
             runTest("testData/inspectionsLocal/suspiciousCollectionReassignment/mutableSet.kt");
         }
 
+        @TestMetadata("notLocal.kt")
+        public void testNotLocal() throws Exception {
+            runTest("testData/inspectionsLocal/suspiciousCollectionReassignment/notLocal.kt");
+        }
+
         @TestMetadata("plus.kt")
         public void testPlus() throws Exception {
             runTest("testData/inspectionsLocal/suspiciousCollectionReassignment/plus.kt");
@@ -16156,6 +16171,11 @@ public abstract class LocalInspectionTestGenerated extends AbstractLocalInspecti
         @TestMetadata("usedEnumFunction9.kt")
         public void testUsedEnumFunction9() throws Exception {
             runTest("testData/inspectionsLocal/unusedSymbol/usedEnumFunction9.kt");
+        }
+
+        @TestMetadata("usedEnumFunctionWithNestedEnum.kt")
+        public void testUsedEnumFunctionWithNestedEnum() throws Exception {
+            runTest("testData/inspectionsLocal/unusedSymbol/usedEnumFunctionWithNestedEnum.kt");
         }
 
         @TestMetadata("valueClassParameter.kt")

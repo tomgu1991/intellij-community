@@ -2,10 +2,11 @@
 package com.intellij.debugger.engine.dfaassist;
 
 import com.intellij.codeInspection.dataFlow.lang.DfaListener;
+import com.intellij.openapi.util.TextRange;
 import com.intellij.psi.PsiElement;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.Map;
+import java.util.*;
 
 /**
  * A DFAListener to gather DFAAssist hints that should be displayed
@@ -17,4 +18,8 @@ public interface DebuggerDfaListener extends DfaListener {
    * @return map whose keys are PSI elements (e.g., boolean expression) and values are the corresponding hints (e.g., {@link DfaHint#TRUE})
    */
   @NotNull Map<PsiElement, DfaHint> computeHints();
+
+  default @NotNull Collection<TextRange> unreachableSegments(@NotNull PsiElement startAnchor, @NotNull Set<PsiElement> unreachableElements) {
+    return Collections.emptyList();
+  }
 }

@@ -37,7 +37,7 @@ class JavaJUnitMalformedDeclarationInspectionTest : JUnitMalformedDeclarationIns
     myFixture.testHighlighting(ULanguage.JAVA, """
       class A {
         @org.junit.jupiter.api.Nested
-        static class <warning descr="Only non-static nested classes can serve as '@Nested' test classes.">B</warning> { }
+        static class <warning descr="Only non-static nested classes can serve as '@Nested' test classes">B</warning> { }
       }
     """.trimIndent())
   }
@@ -427,7 +427,7 @@ class JavaJUnitMalformedDeclarationInspectionTest : JUnitMalformedDeclarationIns
         }
     """.trimIndent())
     myFixture.configureFromExistingVirtualFile(file.virtualFile)
-    val intention = myFixture.findSingleIntention("Create File two-column.txt")
+    val intention = myFixture.findSingleIntention("Create file two-column.txt")
     assertNotNull(intention)
     myFixture.launchAction(intention)
     assertNotNull(myFixture.findFileInTempDir("two-column.txt"))

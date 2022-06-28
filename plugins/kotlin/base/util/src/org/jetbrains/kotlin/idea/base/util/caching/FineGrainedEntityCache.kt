@@ -2,17 +2,27 @@
 package org.jetbrains.kotlin.idea.base.util.caching
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.roots.ProjectRootModificationTracker
 import com.intellij.openapi.util.LowMemoryWatcher
 import com.intellij.openapi.util.registry.Registry
-import com.intellij.psi.util.CachedValueProvider
-import com.intellij.psi.util.CachedValuesManager
+import org.jetbrains.kotlin.caches.project.cacheByClassInvalidatingOnRootModifications
 import org.jetbrains.kotlin.utils.addIfNotNull
+import kotlin.properties.ReadOnlyProperty
+import kotlin.reflect.KProperty
 
 abstract class FineGrainedEntityCache<Key: Any, Value: Any>(protected val project: Project, cleanOnLowMemory: Boolean): Disposable {
-    private val cache: MutableMap<Key, Value> = HashMap()
+    private val cache: MutableMap<Key, Value> by StorageProvider(project, javaClass) { HashMap() }
+        @Deprecated("Do not use directly", level = DeprecationLevel.ERROR) get
+
+    private var invalidationCount: Int = 0
+
+    private var currentInvalidationCount: Int = 0
+
+    private val lock = Any()
+
+    protected val logger = Logger.getInstance(javaClass)
 
     init {
         if (cleanOnLowMemory) {
@@ -26,30 +36,35 @@ abstract class FineGrainedEntityCache<Key: Any, Value: Any>(protected val projec
         }
     }
 
+    private inline fun <T> useCache(block: (MutableMap<Key, Value>) -> T) {
+        synchronized(lock) {
+            @Suppress("DEPRECATION_ERROR")
+            cache.run(block)
+        }
+    }
+
     override fun dispose() {
         invalidate()
     }
 
     fun get(key: Key): Value {
-        try {
-            checkKeyValidity(key)
-        } catch (e: Throwable) {
-            synchronized(cache) {
-                cache.remove(key)
-            }
+        if (isValidityChecksEnabled) {
+            try {
+                checkKeyValidity(key)
+            } catch (e: Throwable) {
+                useCache { cache ->
+                    cache.remove(key)
+                }
 
-            throw e
-        }
-
-        if (!isFineGrainedCacheInvalidationEnabled) {
-            return CachedValuesManager.getManager(project).getCachedValue(project) {
-                val value = calculate(key)
-                CachedValueProvider.Result.create(value, globalDependencies(key, value))
+                logger.error(e)
             }
         }
 
-        // Fast check
-        synchronized(cache) {
+        useCache { cache ->
+            if (currentInvalidationCount > invalidationCount) {
+                checkEntities(cache, CHECK_ALL)
+            }
+
             cache[key]?.let { return it }
         }
 
@@ -57,9 +72,13 @@ abstract class FineGrainedEntityCache<Key: Any, Value: Any>(protected val projec
 
         val newValue = calculate(key)
 
+        if (isValidityChecksEnabled) {
+            checkValueValidity(newValue)
+        }
+
         ProgressManager.checkCanceled()
 
-        synchronized(cache) {
+        useCache { cache ->
             cache.putIfAbsent(key, newValue)?.let { return it }
         }
 
@@ -67,11 +86,14 @@ abstract class FineGrainedEntityCache<Key: Any, Value: Any>(protected val projec
     }
 
     protected fun putAll(map: Map<Key, Value>) {
-        for((key, value) in map) {
-            checkKeyValidity(key)
-            checkValueValidity(value)
+        if (isValidityChecksEnabled) {
+            for((key, value) in map) {
+                checkKeyValidity(key)
+                checkValueValidity(value)
+            }
         }
-        synchronized(cache) {
+
+        useCache { cache ->
             for((key, value) in map) {
                 cache.putIfAbsent(key, value)
             }
@@ -79,76 +101,117 @@ abstract class FineGrainedEntityCache<Key: Any, Value: Any>(protected val projec
     }
 
     protected fun invalidate() {
-        synchronized(cache) {
+        useCache { cache ->
             cache.clear()
         }
     }
 
     protected fun invalidateKeysAndGetOutdatedValues(
         keys: Collection<Key>,
-        validityCondition: (Key, Value) -> Boolean = { _, _ -> true }
+        validityCondition: ((Key, Value) -> Boolean)? = CHECK_ALL
     ): Collection<Value> {
         val removedValues = mutableListOf<Value>()
-        synchronized(cache) {
+        useCache { cache ->
             for (key in keys) {
                 removedValues.addIfNotNull(cache.remove(key))
             }
-            checkEntities(validityCondition)
+            currentInvalidationCount++
+            checkEntities(cache, validityCondition)
         }
         return removedValues
     }
 
     protected fun invalidateKeys(
         keys: Collection<Key>,
-        validityCondition: (Key, Value) -> Boolean = { _, _ -> true }
+        validityCondition: ((Key, Value) -> Boolean)? = CHECK_ALL
     ) {
-        synchronized(cache) {
+        useCache { cache ->
             for (key in keys) {
                 cache.remove(key)
             }
-            checkEntities(validityCondition)
+            currentInvalidationCount++
+            checkEntities(cache, validityCondition)
         }
     }
 
     protected fun invalidateEntries(
         condition: (Key, Value) -> Boolean,
-        validityCondition: (Key, Value) -> Boolean = { _, _ -> true }
+        validityCondition: ((Key, Value) -> Boolean)? = CHECK_ALL
     ) {
-        synchronized(cache) {
+        useCache { cache ->
             val iterator = cache.entries.iterator()
-            while(iterator.hasNext()) {
-                val (key, value )= iterator.next()
+            while (iterator.hasNext()) {
+                val (key, value) = iterator.next()
                 if (condition(key, value)) {
                     iterator.remove()
                 }
             }
-            checkEntities(validityCondition)
+            currentInvalidationCount++
+            checkEntities(cache, validityCondition)
         }
     }
 
-    private fun checkEntities(validityCondition: (Key, Value) -> Boolean = { _, _ -> true }) {
-        for (entry in cache) {
-            if (validityCondition(entry.key, entry.value)) {
-                checkKeyValidity(entry.key)
-                checkValueValidity(entry.value)
+    private fun checkEntities(cache: MutableMap<Key, Value>, validityCondition: ((Key, Value) -> Boolean)?) {
+        if (isValidityChecksEnabled && validityCondition != null) {
+            var allEntriesChecked = true
+            val iterator = cache.entries.iterator()
+            while (iterator.hasNext()) {
+                val entry = iterator.next()
+                if (validityCondition(entry.key, entry.value)) {
+                    try {
+                        checkKeyValidity(entry.key)
+                        checkValueValidity(entry.value)
+                    } catch (e: Throwable) {
+                        iterator.remove()
+                        throw e
+                    }
+                } else {
+                    allEntriesChecked = false
+                }
+            }
+            if (allEntriesChecked) {
+                invalidationCount = currentInvalidationCount
             }
         }
     }
 
     protected abstract fun subscribe()
 
-    protected open fun globalDependencies(key: Key, value: Value): List<Any> =
-        listOf(ProjectRootModificationTracker.getInstance(project))
-
     protected abstract fun checkKeyValidity(key: Key)
 
-    protected open fun checkValueValidity(value: Value) {
-    }
+    protected open fun checkValueValidity(value: Value) {}
 
     protected abstract fun calculate(key: Key): Value
 
     companion object {
-        val isFineGrainedCacheInvalidationEnabled: Boolean
-            get() = Registry.`is`("kotlin.caches.fine.grained.invalidation")
+
+        val CHECK_ALL:(Any, Any) -> Boolean = { _, _ -> true }
+
+        val isFineGrainedCacheInvalidationEnabled: Boolean by lazy {
+            Registry.`is`("kotlin.caches.fine.grained.invalidation")
+        }
+
+        val isValidityChecksEnabled: Boolean by lazy {
+            Registry.`is`("kotlin.caches.fine.grained.entity.validation")
+        }
     }
 }
+
+private class StorageProvider<Storage: Any>(
+    private val project: Project,
+    private val key: Class<*>,
+    private val factory: () -> Storage
+) : ReadOnlyProperty<Any, Storage> {
+    private val storage = lazy(factory)
+
+    override fun getValue(thisRef: Any, property: KProperty<*>): Storage {
+        if (!FineGrainedEntityCache.isFineGrainedCacheInvalidationEnabled) {
+            @Suppress("DEPRECATION")
+            return project.cacheByClassInvalidatingOnRootModifications(key) { factory() }
+        }
+
+        return storage.value
+    }
+}
+
+fun <T: Any> FineGrainedEntityCache<Unit, T>.get() = get(Unit)

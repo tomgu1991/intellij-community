@@ -10,9 +10,6 @@ import com.intellij.openapi.components.Storage
 import com.intellij.openapi.components.StoragePathMacros
 import com.intellij.openapi.externalSystem.service.project.IdeModifiableModelsProvider
 import com.intellij.openapi.module.Module
-import com.intellij.openapi.progress.ProgressIndicator
-import com.intellij.openapi.progress.ProgressManager
-import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.*
 import com.intellij.openapi.roots.impl.libraries.LibraryEx
@@ -36,15 +33,15 @@ import org.jetbrains.kotlin.cli.common.arguments.parseCommandLineArguments
 import org.jetbrains.kotlin.compilerRunner.ArgumentUtils
 import org.jetbrains.kotlin.config.*
 import org.jetbrains.kotlin.extensions.ProjectExtensionDescriptor
+import org.jetbrains.kotlin.idea.KotlinBundle
 import org.jetbrains.kotlin.idea.base.platforms.detectLibraryKind
+import org.jetbrains.kotlin.idea.base.platforms.tooling.tooling
 import org.jetbrains.kotlin.idea.compiler.configuration.IdeKotlinVersion
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinJpsPluginSettings
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinPluginLayout
-import org.jetbrains.kotlin.idea.KotlinBundle
 import org.jetbrains.kotlin.idea.facet.*
 import org.jetbrains.kotlin.idea.framework.KotlinSdkType
 import org.jetbrains.kotlin.idea.maven.configuration.KotlinMavenConfigurator
-import org.jetbrains.kotlin.idea.platform.tooling
 import org.jetbrains.kotlin.platform.IdePlatformKind
 import org.jetbrains.kotlin.platform.TargetPlatform
 import org.jetbrains.kotlin.platform.impl.CommonIdePlatformKind
@@ -73,7 +70,6 @@ class KotlinMavenImporter : MavenImporter(KOTLIN_PLUGIN_GROUP_ID, KOTLIN_PLUGIN_
 
         const val KOTLIN_PLUGIN_SOURCE_DIRS_CONFIG = "sourceDirs"
 
-        private val NOTIFICATION_KEY = Key<Boolean>("NOTIFICATION_KEY")
         private val KOTLIN_JVM_TARGET_6_NOTIFICATION_DISPLAYED = Key<Boolean>("KOTLIN_JVM_TARGET_6_NOTIFICATION_DISPLAYED")
         private val KOTLIN_JPS_VERSION_ACCUMULATOR = Key<IdeKotlinVersion>("KOTLIN_JPS_VERSION_ACCUMULATOR")
     }
@@ -85,7 +81,6 @@ class KotlinMavenImporter : MavenImporter(KOTLIN_PLUGIN_GROUP_ID, KOTLIN_PLUGIN_
         modifiableModelsProvider: IdeModifiableModelsProvider
     ) {
         KotlinJpsPluginSettings.getInstance(module.project)?.dropExplicitVersion()
-        module.project.putUserData(NOTIFICATION_KEY, null)
         module.project.putUserData(KOTLIN_JVM_TARGET_6_NOTIFICATION_DISPLAYED, null)
         module.project.putUserData(KOTLIN_JPS_VERSION_ACCUMULATOR, null)
     }
@@ -105,9 +100,7 @@ class KotlinMavenImporter : MavenImporter(KOTLIN_PLUGIN_GROUP_ID, KOTLIN_PLUGIN_
             contributeSourceDirectories(mavenProject, module, rootModel)
         }
 
-        if (MavenRunner.getInstance(module.project).settings.isDelegateBuildToMaven ||
-            !KotlinJpsPluginSettings.isUnbundledJpsExperimentalFeatureEnabled(module.project)
-        ) {
+        if (!KotlinJpsPluginSettings.isUnbundledJpsExperimentalFeatureEnabled(module.project)) {
             return
         }
         val mavenPlugin = mavenProject.findKotlinMavenPlugin() ?: return
@@ -124,15 +117,12 @@ class KotlinMavenImporter : MavenImporter(KOTLIN_PLUGIN_GROUP_ID, KOTLIN_PLUGIN_
     ) {
         super.postProcess(module, mavenProject, changes, modifiableModelsProvider)
         module.project.getUserData(KOTLIN_JPS_VERSION_ACCUMULATOR)?.let { version ->
-            val success = KotlinJpsPluginSettings.importKotlinJpsVersionFromExternalBuildSystem(
+            KotlinJpsPluginSettings.importKotlinJpsVersionFromExternalBuildSystem(
                 module.project,
                 version.rawVersion,
-                showNotification = module.project.getUserData(NOTIFICATION_KEY) != true,
+                isDelegatedToExtBuild = MavenRunner.getInstance(module.project).settings.isDelegateBuildToMaven
             )
 
-            if (!success) {
-                module.project.putUserData(NOTIFICATION_KEY, true)
-            }
             module.project.putUserData(KOTLIN_JPS_VERSION_ACCUMULATOR, null)
         }
 

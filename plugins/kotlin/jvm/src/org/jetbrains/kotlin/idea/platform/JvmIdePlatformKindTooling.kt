@@ -4,10 +4,10 @@ package org.jetbrains.kotlin.idea.core.platform.impl
 
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.libraries.PersistentLibraryKind
-import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
+import org.jetbrains.kotlin.idea.base.platforms.tooling.IdePlatformKindTooling
+import org.jetbrains.kotlin.idea.caches.resolve.resolveToDescriptorIfAny
 import org.jetbrains.kotlin.idea.framework.JavaRuntimeLibraryDescription
 import org.jetbrains.kotlin.idea.highlighter.KotlinTestRunLineMarkerContributor.Companion.getTestStateIcon
-import org.jetbrains.kotlin.idea.platform.IdePlatformKindTooling
 import org.jetbrains.kotlin.idea.platform.getGenericTestIcon
 import org.jetbrains.kotlin.idea.projectModel.KotlinPlatform
 import org.jetbrains.kotlin.idea.testIntegration.framework.KotlinTestFramework
@@ -54,17 +54,16 @@ class JvmIdePlatformKindTooling : IdePlatformKindTooling() {
         }
     }
 
-    override fun getTestIcon(
-        declaration: KtNamedDeclaration,
-        descriptorProvider: () -> DeclarationDescriptor?,
-        includeSlowProviders: Boolean?
-    ): Icon? {
-        return calculateUrls(declaration, includeSlowProviders)?.let { getTestStateIcon(it, declaration) }
-            ?: if (includeSlowProviders == false) {
-                null
-            } else {
-                getGenericTestIcon(declaration, descriptorProvider) { emptyList() }
-            }
+    override fun getTestIcon(declaration: KtNamedDeclaration, allowSlowOperations: Boolean): Icon? {
+        val urls = calculateUrls(declaration, allowSlowOperations)
+
+        if (urls != null) {
+            return getTestStateIcon(urls, declaration)
+        } else if (allowSlowOperations) {
+            return getGenericTestIcon(declaration, { declaration.resolveToDescriptorIfAny() }) { emptyList() }
+        }
+
+        return null
     }
 
     override fun acceptsAsEntryPoint(function: KtFunction) = true

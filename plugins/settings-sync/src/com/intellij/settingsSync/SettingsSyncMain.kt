@@ -58,7 +58,7 @@ internal class SettingsSyncMain : Disposable {
       }
       ServerState.UpToDate -> {
         LOG.info("Updating settings is not needed, will check if push is needed")
-        SettingsSyncEvents.getInstance().fireSettingsChanged(SyncSettingsEvent.PushIfNeededRequest)
+        SettingsSyncEvents.getInstance().fireSettingsChanged(SyncSettingsEvent.PingRequest)
       }
       is ServerState.Error -> {
         // error already logged in checkServerState, we schedule update
@@ -87,7 +87,7 @@ internal class SettingsSyncMain : Disposable {
                       ideMediator: SettingsSyncIdeMediator): SettingsSyncControls {
       val settingsLog = GitSettingsLog(settingsSyncStorage, appConfigPath, parentDisposable,
                                        ideMediator.collectFilesToExportFromSettings(appConfigPath))
-      val updateChecker = SettingsSyncUpdateChecker(application, remoteCommunicator)
+      val updateChecker = SettingsSyncUpdateChecker(remoteCommunicator)
       val bridge = SettingsSyncBridge(parentDisposable, settingsLog, ideMediator, remoteCommunicator, updateChecker)
       return SettingsSyncControls(ideMediator, updateChecker, bridge, remoteCommunicator, settingsSyncStorage)
     }

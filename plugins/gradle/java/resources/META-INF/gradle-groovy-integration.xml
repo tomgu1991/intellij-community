@@ -23,7 +23,6 @@
     <frameworkSupport implementation="org.jetbrains.plugins.gradle.frameworkSupport.GradleGroovyFrameworkSupportProvider"/>
     <kotlinDslFrameworkSupport implementation="org.jetbrains.plugins.gradle.frameworkSupport.KotlinDslGradleGroovyFrameworkSupportProvider" />
     <testLocationCustomizer implementation="org.jetbrains.plugins.gradle.execution.test.runner.spock.SpockGradleTestLocationCustomizer"/>
-    <projectResolve implementation="org.jetbrains.plugins.gradle.service.project.VersionCatalogProjectResolver"/>
   </extensions>
 
   <extensions defaultExtensionNs="com.intellij">
@@ -58,12 +57,12 @@
                      enabledByDefault="true" level="WARNING"
                      implementationClass="org.jetbrains.plugins.gradle.codeInspection.JCenterRepositoryInspection"/>
 
-    <localInspection language="Groovy" groupPath="Gradle" shortName="IncompleteLibrary"
+    <localInspection language="Groovy" groupPath="Gradle" shortName="DependencyNotationArgument"
                      bundle="messages.GradleInspectionBundle"
-                     key="inspection.display.name.incomplete.version.catalog.dependency.accessor"
-                     groupKey="group.names.probable.bugs" groupBundle="messages.InspectionsBundle" level="WARNING"
-                     enabledByDefault="true"
-                     implementationClass="org.jetbrains.plugins.gradle.codeInspection.GradleIncompleteVersionCatalogDependencyAccessorInspection"/>
+                     key="inspection.display.name.unrecognized.dependency.notation" groupKey="group.names.probable.bugs" groupBundle="messages.InspectionsBundle"
+                     enabledByDefault="true" level="WARNING"
+                     implementationClass="org.jetbrains.plugins.gradle.codeInspection.GradleIncorrectDependencyNotationArgumentInspection"/>
+
 
     <runConfigurationProducer implementation="org.jetbrains.plugins.gradle.execution.GradleGroovyScriptRunConfigurationProducer"
                               order="last"/>

@@ -1,6 +1,7 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.roots.impl
 
+import com.intellij.ide.plugins.IdeaPluginDescriptor
 import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.internal.statistic.beans.MetricEvent
 import com.intellij.internal.statistic.eventLog.EventLogGroup
@@ -11,16 +12,20 @@ import com.intellij.internal.statistic.eventLog.validator.rules.impl.CustomValid
 import com.intellij.internal.statistic.service.fus.collectors.ProjectUsagesCollector
 import com.intellij.internal.statistic.utils.getPluginInfoByDescriptor
 import com.intellij.openapi.application.PathManager
+import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.OrderEnumerator
 import com.intellij.openapi.roots.OrderRootType
 import com.intellij.openapi.roots.libraries.Library
 import com.intellij.openapi.util.io.FileUtil
+import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.util.concurrency.NonUrgentExecutor
 import com.intellij.util.io.URLUtil
 import com.intellij.util.io.exists
 import com.intellij.util.io.isDirectory
+import org.jetbrains.concurrency.*
 import java.nio.file.Path
-import java.nio.file.Paths
 
 /**
  * Reports references to resources bundled with IDE or plugin distribution from users' projects (e.g. libraries which include IDE_HOME/lib/junit.jar). 
@@ -30,13 +35,13 @@ internal class BundledResourceUsageCollector : ProjectUsagesCollector() {
     val GROUP = EventLogGroup("bundled.resource.reference", 1)
 
     /**
-     * Records path to a file located in IDE installation directory or a bundled plugin and referenced from a library.
+     * Records path to a file located under 'lib' subdirectory of IDE installation directory and referenced from a library.
      */
     @JvmField
     val IDE_FILE = GROUP.registerEvent("ide.file", EventFields.StringValidatedByCustomRule<BundledResourcePathValidationRule>("path"))
 
     /**
-     * Records path to a file located in an installation directory for a non-bundled plugin and referenced from a library.
+     * Records path to a file located in an installation directory for a plugin and referenced from a library.
      */
     @JvmField
     val PLUGIN_FILE = GROUP.registerEvent("plugin.file", EventFields.PluginInfo, EventFields.StringValidatedByCustomRule<BundledResourcePathValidationRule>("path"))
@@ -44,40 +49,51 @@ internal class BundledResourceUsageCollector : ProjectUsagesCollector() {
 
   override fun getGroup(): EventLogGroup = GROUP
 
-  override fun getMetrics(project: Project): MutableSet<MetricEvent> {
-    val usedLibraries = LinkedHashSet<Library>()
-    OrderEnumerator.orderEntries(project).librariesOnly().forEachLibrary { usedLibraries.add(it) }
-    val metrics = LinkedHashSet<MetricEvent>()
-    usedLibraries.forEach { library ->
-      library.getFiles(OrderRootType.CLASSES).mapNotNullTo(metrics) { file -> 
-        convertToMetric(file.path.substringBefore(URLUtil.JAR_SEPARATOR)) 
-      } 
-    }
-    return metrics
+  override fun getMetrics(project: Project, indicator: ProgressIndicator): CancellablePromise<Set<MetricEvent>> {
+    @Suppress("UNCHECKED_CAST")
+    return ReadAction.nonBlocking<Set<VirtualFile>> { collectLibraryFiles(project) }
+        .wrapProgress(indicator)
+        .expireWith(project)
+        .submit(NonUrgentExecutor.getInstance())
+        .thenAsync { files ->
+          runAsync {
+            files.mapNotNullTo(LinkedHashSet()) { convertToMetric(it.path.substringBefore(URLUtil.JAR_SEPARATOR)) }
+          }
+        } as CancellablePromise<Set<MetricEvent>>
   }
 
-  override fun requiresReadAccess(): Boolean = true
+  private fun collectLibraryFiles(project: Project): Set<VirtualFile> {
+    val usedLibraries = LinkedHashSet<Library>()
+    OrderEnumerator.orderEntries(project).librariesOnly().forEachLibrary { usedLibraries.add(it) }
+    val files = LinkedHashSet<VirtualFile>()
+    usedLibraries.flatMapTo(files) { library ->
+      library.getFiles(OrderRootType.CLASSES).asList()
+    }
+    return files
+  }
 
-  private val pluginByDirectory by lazy {
+  private val pluginByKindAndDirectory by lazy {
     PluginManagerCore.getLoadedPlugins()
-      .filter { !it.isBundled && it.pluginPath.isDirectory() }
-      .associateBy { it.pluginPath.fileName.toString() }
+      .filter { it.pluginPath.isDirectory() }
+      .associateBy { it.kind to it.pluginPath.fileName.toString() }
   }
 
   private fun convertToMetric(path: String): MetricEvent? {
-    if (FileUtil.isAncestor(ideHomePath, path, false)) {
-      val relativePath = FileUtil.getRelativePath(ideHomePath, path, '/')!!
+    if (FileUtil.isAncestor(ideLibPath, path, false)) {
+      val relativePath = FileUtil.getRelativePath(ideLibPath, path, '/')!!
       return IDE_FILE.metric(relativePath)
     }
-    if (FileUtil.isAncestor(pluginsHomePath, path, true)) {
-      val relativePath = FileUtil.getRelativePath(pluginsHomePath, path, '/')!!
-      val firstName = relativePath.substringBefore('/')
-      val pathInPlugin = relativePath.substringAfter('/')
-      val plugin = pluginByDirectory[firstName]
-      if (plugin != null) {
-        val pluginInfo = getPluginInfoByDescriptor(plugin)
-        if (pluginInfo.isSafeToReport()) {
-          return PLUGIN_FILE.metric(pluginInfo, pathInPlugin)
+    for (kind in PluginKind.values()) {
+      if (FileUtil.isAncestor(kind.homePath, path, true)) {
+        val relativePath = FileUtil.getRelativePath(kind.homePath, path, '/')!!
+        val firstName = relativePath.substringBefore('/')
+        val pathInPlugin = relativePath.substringAfter('/')
+        val plugin = pluginByKindAndDirectory[kind to firstName]
+        if (plugin != null) {
+          val pluginInfo = getPluginInfoByDescriptor(plugin)
+          if (pluginInfo.isSafeToReport()) {
+            return PLUGIN_FILE.metric(pluginInfo, pathInPlugin)
+          }
         }
       }
     }
@@ -85,14 +101,27 @@ internal class BundledResourceUsageCollector : ProjectUsagesCollector() {
   }
 }
 
-private val ideHomePath by lazy { FileUtil.toSystemIndependentName(PathManager.getHomePath()) }
-private val pluginsHomePath by lazy { FileUtil.toSystemIndependentName(PathManager.getPluginsPath()) }
+private enum class PluginKind {
+  Bundled {
+    override val homePath: String by lazy { FileUtil.toSystemIndependentName(PathManager.getPreInstalledPluginsPath()) }
+  }, 
+  Custom {
+    override val homePath: String by lazy { FileUtil.toSystemIndependentName(PathManager.getPluginsPath()) }
+  };
+  
+  abstract val homePath: String
+}
+
+private val IdeaPluginDescriptor.kind: PluginKind
+  get() = if (isBundled) PluginKind.Bundled else PluginKind.Custom
+
+private val ideLibPath by lazy { FileUtil.toSystemIndependentName(PathManager.getLibPath()) }
 
 internal class BundledResourcePathValidationRule : CustomValidationRule() {
-  private val pluginDirectoryById by lazy {
+  private val pluginKindAndDirectoryById by lazy {
     PluginManagerCore.getLoadedPlugins()
-      .filter { !it.isBundled && it.pluginPath.isDirectory() }
-      .associateBy({ it.pluginId.idString }, { it.pluginPath.fileName.toString() })
+      .filter { it.pluginPath.isDirectory() }
+      .associateBy({ it.pluginId.idString }, { it.kind to it.pluginPath.fileName.toString() })
   }
 
   override fun getRuleId(): String {
@@ -104,13 +133,13 @@ internal class BundledResourcePathValidationRule : CustomValidationRule() {
       if (!isReportedByJetBrainsPlugin(context)) {
         return ValidationResultType.REJECTED
       }
-      val pluginDirectoryName = pluginDirectoryById[context.eventData["plugin"]]
-      if (Path.of(pluginsHomePath, pluginDirectoryName, data).exists()) {
+      val (kind, pluginDirectoryName) = pluginKindAndDirectoryById[context.eventData["plugin"]] ?: return ValidationResultType.REJECTED
+      if (Path.of(kind.homePath, pluginDirectoryName, data).exists()) {
         return ValidationResultType.ACCEPTED
       }
       return ValidationResultType.REJECTED
     }
-    if (Path.of(ideHomePath, data).exists()) {
+    if (Path.of(ideLibPath, data).exists()) {
       return ValidationResultType.ACCEPTED
     }
     return ValidationResultType.REJECTED

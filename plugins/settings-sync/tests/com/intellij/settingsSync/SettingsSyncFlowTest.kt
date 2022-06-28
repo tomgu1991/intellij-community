@@ -41,7 +41,7 @@ internal class SettingsSyncFlowTest : SettingsSyncTestBase() {
 
     initSettingsSync(SettingsSyncBridge.InitMode.PushToServer)
 
-    val pushedSnapshot = remoteCommunicator.pushed
+    val pushedSnapshot = remoteCommunicator.latestPushedSnapshot
     assertNotNull("Nothing has been pushed", pushedSnapshot)
     pushedSnapshot!!.assertSettingsSnapshot {
       fileState(fileName, initialContent)
@@ -62,10 +62,55 @@ internal class SettingsSyncFlowTest : SettingsSyncTestBase() {
 
     initSettingsSync()
 
-    val pushedSnapshot = remoteCommunicator.pushed
+    val pushedSnapshot = remoteCommunicator.latestPushedSnapshot
     assertNotNull("Nothing has been pushed", pushedSnapshot)
     pushedSnapshot!!.assertSettingsSnapshot {
       fileState(fileName, contentBetweenSessions)
+    }
+  }
+
+  @Test fun `first push after IDE start should update from server if needed`() {
+    // prepare settings on server
+    val editorXml = "options/editor.xml"
+    val editorContent = "Editor from Server"
+    remoteCommunicator.prepareFileOnServer(settingsSnapshot {
+      fileState(editorXml, editorContent)
+    })
+
+    // prepare local settings
+    val lafXml = "options/laf.xml"
+    val lafContent = "LaF Initial"
+    configDir.resolve(lafXml).write(lafContent)
+
+    initSettingsSync()
+
+    val pushedSnapshot = remoteCommunicator.latestPushedSnapshot
+    assertNotNull("Nothing has been pushed", pushedSnapshot)
+    pushedSnapshot!!.assertSettingsSnapshot {
+      fileState(lafXml, lafContent)
+      fileState(editorXml, editorContent)
+    }
+  }
+
+  @Test fun `enable settings sync with Push to Server should overwrite server snapshot instead of merging with it`() {
+    // prepare settings on server
+    val editorXml = "options/editor.xml"
+    val editorContent = "Editor from Server"
+    remoteCommunicator.prepareFileOnServer(settingsSnapshot {
+      fileState(editorXml, editorContent)
+    })
+
+    // prepare local settings
+    val lafXml = "options/laf.xml"
+    val lafContent = "LaF Initial"
+    configDir.resolve(lafXml).write(lafContent)
+
+    initSettingsSync(SettingsSyncBridge.InitMode.PushToServer)
+
+    val pushedSnapshot = remoteCommunicator.latestPushedSnapshot
+    assertNotNull("Nothing has been pushed", pushedSnapshot)
+    pushedSnapshot!!.assertSettingsSnapshot {
+      fileState(lafXml, lafContent)
     }
   }
 

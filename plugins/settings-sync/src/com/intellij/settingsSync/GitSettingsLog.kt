@@ -9,7 +9,6 @@ import com.intellij.util.PathUtil
 import com.intellij.util.io.*
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.MergeResult.MergeStatus.CONFLICTING
-import org.eclipse.jgit.api.MergeResult.MergeStatus.FAST_FORWARD
 import org.eclipse.jgit.api.ResetCommand
 import org.eclipse.jgit.api.errors.EmptyCommitException
 import org.eclipse.jgit.lib.Constants
@@ -113,7 +112,7 @@ internal class GitSettingsLog(private val settingsSyncStorage: Path,
       override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
         val target = targetDir.resolve(dirToCopy.parent.relativize(file))  // file is mykeymap.xml => target is keymaps/mykeymap.xml
         NioFiles.createDirectories(target.parent)
-        Files.copy(file, target, LinkOption.NOFOLLOW_LINKS)
+        Files.copy(file, target, StandardCopyOption.REPLACE_EXISTING)
         return FileVisitResult.CONTINUE
       }
     })
@@ -179,17 +178,29 @@ internal class GitSettingsLog(private val settingsSyncStorage: Path,
   }
 
   private fun commit(message: String, dateCreated: Instant) {
-    // Don't allow empty commit: sometimes the stream provider can notify about changes but there are no actual changes on disk
     try {
+      // Don't allow empty commit: sometimes the stream provider can notify about changes but there are no actual changes on disk
       val commit = git.commit().setMessage(message).setAllowEmpty(false).call()
 
-      // emulating --author-date since there is no API in JGit to provide this information,
-      // and because the date is 1-second granularity on some OSs
-      git.notesAdd().setMessage("$DATE_PREFIX${dateCreated.toEpochMilli()}").setObjectId(commit).call()
+      recordCreationDate(commit, dateCreated)
     }
     catch (e: EmptyCommitException) {
       LOG.info("No actual changes in the settings")
     }
+  }
+
+  // emulating --author-date since there is no API in JGit to provide this information,
+  // and because the date is 1-second granularity on some OSs
+  private fun recordCreationDate(commit: RevCommit, dateCreated: Instant) {
+    val date = if (dateCreated <= Instant.now()) {
+      dateCreated
+    }
+    else {
+      LOG.error("Date of the snapshot happens in future: $dateCreated")
+      Instant.now()
+    }
+
+    git.notesAdd().setMessage("$DATE_PREFIX${date.toEpochMilli()}").setObjectId(commit).call()
   }
 
   override fun dispose() {
@@ -242,28 +253,8 @@ internal class GitSettingsLog(private val settingsSyncStorage: Path,
     return repository.findRef(ref.name)!!
   }
 
-  private fun fastForwardMaster(branchOnSamePosition: Ref, targetBranch: Ref): BranchPosition {
-      LOG.info("Advancing master. Its position is equal to ${branchOnSamePosition.short}: ${master.objectId.short}. " +
-               "Fast-forwarding to ${targetBranch.short} ${targetBranch.objectId.short}")
-      val mergeResult = git.merge().include(targetBranch).call()
-      if (mergeResult.mergeStatus != FAST_FORWARD) {
-        LOG.warn("Non-fast-forward result: $mergeResult")
-        // todo check consistency here
-      }
-      return getPosition(master)
-  }
-
   override fun advanceMaster(): SettingsLog.Position {
     git.checkout().setName(MASTER_REF_NAME).call()
-
-    if (master.objectId == ide.objectId) {
-      return fastForwardMaster(ide, cloud)
-    }
-
-    if (master.objectId == cloud.objectId) {
-      return fastForwardMaster(cloud, ide)
-    }
-
     LOG.info("Advancing master@${master.objectId.short}. Need merge of ide@${ide.objectId.short} and cloud@${cloud.objectId.short}")
     // 1. move master to ide
     git.reset().setRef(IDE_REF_NAME).setMode(ResetCommand.ResetType.HARD).call()
@@ -309,7 +300,9 @@ internal class GitSettingsLog(private val settingsSyncStorage: Path,
         }
       }
       else {
-        LOG.warn("No note assigned to commit $commit")
+        if (commit.parentCount == 1) { // merge happens locally, so the commit time is accurate enough, no note is needed
+          LOG.warn("No note assigned to commit $commit")
+        }
       }
     }
     catch (e: Throwable) {
@@ -333,7 +326,7 @@ internal class GitSettingsLog(private val settingsSyncStorage: Path,
 
   private val ObjectId.short get() = this.name.substring(0, 8)
 
-  private data class BranchPosition(override val id: String): SettingsLog.Position {
+  private data class BranchPosition(override val id: String) : SettingsLog.Position {
     override fun toString(): String = id.substring(0, 8)
   }
 

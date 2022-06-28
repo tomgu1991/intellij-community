@@ -46,6 +46,7 @@ import com.intellij.openapi.ui.Splitter;
 import com.intellij.openapi.ui.popup.JBPopup;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.openapi.ui.popup.PopupChooserBuilder;
+import com.intellij.openapi.ui.popup.util.PopupUtil;
 import com.intellij.openapi.util.*;
 import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.util.text.HtmlBuilder;
@@ -78,10 +79,9 @@ import com.intellij.util.messages.MessageBusConnection;
 import com.intellij.util.ui.*;
 import com.intellij.xml.util.XmlStringUtil;
 import org.jetbrains.annotations.*;
-import org.jetbrains.concurrency.Promise;
-import org.jetbrains.concurrency.Promises;
 
 import javax.swing.*;
+import javax.swing.border.Border;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.TableColumn;
 import java.awt.*;
@@ -91,6 +91,8 @@ import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeListener;
 import java.util.List;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -715,7 +717,7 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
 
     PropertiesComponent properties = PropertiesComponent.getInstance(project);
     boolean addCodePreview = properties.isValueSet(PREVIEW_PROPERTY_KEY);
-    JBSplitter contentSplitter = null;
+    OnePixelSplitter contentSplitter = null;
     if (addCodePreview) {
       contentSplitter = new OnePixelSplitter(true, .6f);
       contentSplitter.setSplitterProportionKey(SPLITTER_SERVICE_KEY);
@@ -808,14 +810,14 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
     DefaultActionGroup settingsGroup = new DefaultActionGroup(
       new SettingsAction(project, () -> cancel(popupRef.get()), showDialogAndRestartRunnable(parameters, actionHandler)));
     actionToolbar = createActionToolbar(table, settingsGroup);
-    toolbarComponent = actionToolbar.getComponent();
-    toolbarComponent.setOpaque(false);
+    JComponent settingsToolbarComponent = actionToolbar.getComponent();
+    settingsToolbarComponent.setOpaque(false);
 
     if (Registry.is("ide.usages.popup.show.options.string")) {
       JLabel optionsLabel = new JLabel(actionHandler.getPresentation().getOptionsString());
       northPanel.add(optionsLabel, gc.next());
     }
-    northPanel.add(toolbarComponent, gc.next());
+    northPanel.add(settingsToolbarComponent, gc.next());
 
     builder.setNorthComponent(northPanel);
 
@@ -827,7 +829,7 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
 
     if (addCodePreview) {
       SimpleColoredComponent previewTitle = new SimpleColoredComponent();
-      previewTitle.setBorder(JBUI.Borders.empty(3, 8, 4, 8));
+      PopupUtil.applyPreviewTitleInsets(previewTitle);
       UsagePreviewPanel usagePreviewPanel = new UsagePreviewPanel(project, usageView.getPresentation(), false) {
         @Override
         public Dimension getPreferredSize() {
@@ -858,6 +860,11 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
       previewPanel.add(usagePreviewPanel.createComponent(), BorderLayout.CENTER);
       contentSplitter.setSecondComponent(previewPanel);
 
+      if (ExperimentalUI.isNewUI()) {
+        previewPanel.setBackground(JBUI.CurrentTheme.Popup.BACKGROUND);
+        previewTitle.setOpaque(false);
+      }
+
       new DoubleClickListener() {
         @Override
         protected boolean onDoubleClick(@NotNull MouseEvent event) {
@@ -873,7 +880,7 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
       Runnable updatePreviewRunnable = () -> {
         if (popupRef.get().isDisposed()) return;
         int[] selectedRows = table.getSelectedRows();
-        final List<Promise<UsageInfo[]>> selectedUsagePromises = new SmartList<>();
+        final List<CompletableFuture<UsageInfo[]>> selectedUsagePromises = new SmartList<>();
         String file = null;
         for (int row : selectedRows) {
           Object value = table.getModel().getValueAt(row, 0);
@@ -891,10 +898,16 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
         }
 
         String selectedFile = file;
-        Promises.collectResults(selectedUsagePromises).onSuccess(data -> {
-          final List<UsageInfo> selectedUsages = new SmartList<>();
-          for (UsageInfo[] usageInfos : data) {
-            Collections.addAll(selectedUsages, usageInfos);
+        CompletableFuture.allOf(selectedUsagePromises.toArray(new CompletableFuture[0])).thenAccept(__ -> {
+          final List<UsageInfo> selectedUsages = new ArrayList<>(selectedUsagePromises.size());
+          for (CompletableFuture<UsageInfo[]> f : selectedUsagePromises) {
+            try {
+              UsageInfo[] usageInfos = f.get();
+              Collections.addAll(selectedUsages, usageInfos);
+            }
+            catch (InterruptedException | ExecutionException e) {
+              throw new RuntimeException(e);
+            }
           }
 
           usagePreviewPanel.updateLayout(selectedUsages);
@@ -926,6 +939,22 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
       Insets insets = JBUI.CurrentTheme.Popup.headerInsets();
       //noinspection UseDPIAwareBorders
       statusPanel.getLabel().setBorder(new EmptyBorder(insets.top, 0, insets.bottom, JBUI.scale(10)));
+      popup.getTitle().setBorder(JBUI.Borders.customLineBottom(JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground()));
+      popup.getTitle().setBackground(JBUI.CurrentTheme.ComplexPopup.HEADER_BACKGROUND);
+      // Cannot use opaque: TitlePanel ignores it
+      statusPanel.setBackground(JBUI.CurrentTheme.ComplexPopup.HEADER_BACKGROUND);
+      northPanel.setBackground(JBUI.CurrentTheme.Popup.BACKGROUND);
+      table.setBackground(JBUI.CurrentTheme.Popup.BACKGROUND);
+      northPanel.setBorder(createComplexPopupToolbarBorder());
+      toolbarComponent.setBorder(JBUI.Borders.emptyRight(16));
+      settingsToolbarComponent.setBorder(JBUI.Borders.emptyLeft(12));
+      if (contentSplitter != null) {
+        contentSplitter.setBackground(JBUI.CurrentTheme.Popup.BACKGROUND);
+        contentSplitter.setOpaque(true);
+        Insets textFieldBorderInsets = JBUI.CurrentTheme.ComplexPopup.textFieldBorderInsets();
+        //noinspection UseDPIAwareInsets
+        contentSplitter.setBlindZone(() -> new Insets(0, textFieldBorderInsets.left, 0, textFieldBorderInsets.right));
+      }
     }
 
     // Set title text alignment
@@ -960,6 +989,13 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
     return popup;
   }
 
+  private static Border createComplexPopupToolbarBorder() {
+    Insets textFieldBorderInsets = JBUI.CurrentTheme.ComplexPopup.textFieldBorderInsets();
+    //noinspection UseDPIAwareBorders
+    return JBUI.Borders.compound(new EmptyBorder(0, textFieldBorderInsets.left, 4, textFieldBorderInsets.right),
+                                 JBUI.Borders.customLineBottom(JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground()),
+                                 JBUI.Borders.empty(6, 4));
+  }
 
   @NotNull
   private static ActionToolbar createActionToolbar(@NotNull JTable table, @NotNull DefaultActionGroup group) {
@@ -1037,6 +1073,8 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
         scopeComboBox.putClientProperty("JComboBox.isBorderless", Boolean.TRUE);
       });
     scopeChooserCombo.setButtonVisible(false);
+    scopeChooserCombo.setOpaque(false);
+    scopeChooserCombo.getComboBox().setOpaque(false);
     return scopeChooserCombo;
   }
 

@@ -1,6 +1,4 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-@file:Suppress("ReplaceGetOrSet")
-
 package org.jetbrains.intellij.build.impl
 
 import com.intellij.diagnostic.telemetry.useWithScope
@@ -340,9 +338,9 @@ internal fun generateUnixScripts(context: BuildContext,
                                  distBinDir: Path,
                                  osFamily: OsFamily) {
   val classPathJars = context.bootClassPathJarNames.addAll(extraJarNames)
-  var classPath = "CLASS_PATH=\"\$IDE_HOME/lib/${classPathJars.get(0)}\""
+  var classPath = "CLASS_PATH=\"\$IDE_HOME/lib/${classPathJars[0]}\""
   for (i in 1 until classPathJars.size) {
-    classPath += "\nCLASS_PATH=\"\$CLASS_PATH:\$IDE_HOME/lib/${classPathJars.get(i)}\""
+    classPath += "\nCLASS_PATH=\"\$CLASS_PATH:\$IDE_HOME/lib/${classPathJars[i]}\""
   }
 
   val additionalJvmArguments = context.getAdditionalJvmArguments(OsFamily.LINUX).toMutableList()
@@ -435,6 +433,7 @@ private fun copyScript(sourceFile: Path,
       Pair("ide_default_xmx", defaultXmxParameter.trim()),
       Pair("class_path", classPath),
       Pair("script_name", scriptName),
+      Pair("main_class_name", context.productProperties.mainClassName),
     ),
     mustUseAllPlaceholders = false,
     convertToUnixLineEndings = true,

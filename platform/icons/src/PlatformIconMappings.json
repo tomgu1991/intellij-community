@@ -3,7 +3,8 @@
     "bookmarks": {
       "addBookmarksList.svg": "actions/addList.svg",
       "bookmark.svg": "nodes/bookmark.svg",
-      "bookmarksList.svg": "nodes/bookmarkGroup.svg"
+      "bookmarksList.svg": "nodes/bookmarkGroup.svg",
+      "mnemonic.svg": "nodes/mnemonic.svg"
     },
     "breakpoints": {
       "breakpoint.svg": "debugger/db_set_breakpoint.svg",
@@ -96,7 +97,6 @@
       "html.svg": "fileTypes/html.svg",
       "ideaModule.svg": "nodes/ideaModule.svg",
       "ignored.svg": "vcs/ignore_file.svg",
-      "image.svg": "org/intellij/images/icons/ImagesFileType.svg",
       "java.svg": "fileTypes/java.svg",
       "javascript.svg": [
         "fileTypes/javaScript.svg",
@@ -282,6 +282,7 @@
       "extAnnotation.svg": "gutter/extAnnotation.svg",
       "javadocEdit.svg": "gutter/javadocEdit.svg",
       "javadocRead.svg":  "gutter/javadocRead.svg",
+      "mnemonic.svg": "gutter/mnemonic.svg",
       "readAccess.svg": "gutter/readAccess.svg",
       "rerun.svg": "runConfigurations/testState/run_run.svg",
       "run.svg": "runConfigurations/testState/run.svg",
@@ -495,8 +496,6 @@
       "bookmarks.svg": "toolwindows/toolWindowBookmarks.svg",
       "build.svg": "toolwindows/toolWindowBuild.svg",
       "commit.svg": "toolwindows/toolWindowCommit.svg",
-      "database.svg": "icons/toolWindowDatabase.svg",
-      "databaseChanges.svg": "icons/toolwindowDatabaseChanges.svg",
       "debug.svg": "toolwindows/toolWindowDebugger.svg",
       "dependencies.svg": [
         "icons/artifact.svg",

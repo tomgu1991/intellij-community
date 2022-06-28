@@ -28,10 +28,11 @@ import javax.xml.transform.dom.DOMSource
 import javax.xml.transform.stream.StreamResult
 import kotlin.io.path.*
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 
 data class IDETestContext(
   val paths: IDEDataPaths,
-  val ide: InstalledIDE,
+  val ide: InstalledIde,
   val testCase: TestCase,
   val testName: String,
   private val _resolvedProjectHome: Path?,
@@ -227,7 +228,7 @@ data class IDETestContext(
     commandLine: IDECommandLine? = null,
     commands: Iterable<MarshallableCommand> = CommandChain(),
     codeBuilder: (CodeInjector.() -> Unit)? = null,
-    runTimeout: Duration = Duration.minutes(10),
+    runTimeout: Duration = 10.minutes,
     useStartupScript: Boolean = true,
     launchName: String = "",
     expectedKill: Boolean = false,
@@ -304,7 +305,7 @@ data class IDETestContext(
     commandLine: IDECommandLine? = null,
     commands: Iterable<MarshallableCommand>,
     codeBuilder: (CodeInjector.() -> Unit)? = null,
-    runTimeout: Duration = Duration.minutes(10),
+    runTimeout: Duration = 10.minutes,
     useStartupScript: Boolean = true,
     launchName: String = "",
     expectedKill: Boolean = false,
@@ -333,7 +334,7 @@ data class IDETestContext(
   fun warmUp(
     patchVMOptions: VMOptions.() -> VMOptions = { this },
     commands: Iterable<MarshallableCommand>,
-    runTimeout: Duration = Duration.minutes(10)
+    runTimeout: Duration = 10.minutes
   ): IDEStartResult {
 
     return runIDE(
@@ -345,6 +346,11 @@ data class IDETestContext(
       runTimeout = runTimeout,
       launchName = "warmUp"
     )
+  }
+
+  fun removeAndUnpackProject(): IDETestContext {
+    testCase.markNotReusable().projectInfo?.downloadAndUnpackProject()
+    return this
   }
 
   fun setProviderMemoryOnlyOnLinux(): IDETestContext {
@@ -448,8 +454,12 @@ data class IDETestContext(
     return this
   }
 
-  fun updateBuildProcessHeapSize(): IDETestContext {
+  fun setBuildProcessHeapSize(heapSizeValue: String): IDETestContext {
     if (_resolvedProjectHome != null) {
+      val heapSize = when (heapSizeValue.isEmpty()) {
+        true -> "2000"
+        else -> heapSizeValue
+      }
       val ideaDir = resolvedProjectHome.resolve(".idea")
       val compilerXml = ideaDir.resolve("compiler.xml")
       if (compilerXml.toFile().exists()) {
@@ -458,7 +468,18 @@ data class IDETestContext(
         if (!readText.contains("BUILD_PROCESS_HEAP_SIZE")) {
           compilerXml.toFile().readLines().forEach {
             if (it.contains("<component name=\"CompilerConfiguration\">")) {
-              val newLine = "<component name=\"CompilerConfiguration\">\n<option name=\"BUILD_PROCESS_HEAP_SIZE\" value=\"2000\" />"
+              val newLine = "<component name=\"CompilerConfiguration\">\n<option name=\"BUILD_PROCESS_HEAP_SIZE\" value=\"$heapSize\" />"
+              newContent.appendLine(newLine)
+            }
+            else {
+              newContent.appendLine(it)
+            }
+          }
+          compilerXml.writeText(newContent.toString())
+        } else if (heapSizeValue.isNotEmpty()) {
+          compilerXml.toFile().readLines().forEach {
+            if (it.contains("BUILD_PROCESS_HEAP_SIZE")) {
+              val newLine = it.replace("value=\"\\d*\"".toRegex(), "value=\"$heapSize\"")
               newContent.appendLine(newLine)
             }
             else {

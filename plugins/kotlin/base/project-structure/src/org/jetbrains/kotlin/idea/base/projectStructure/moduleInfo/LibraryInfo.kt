@@ -1,6 +1,7 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.kotlin.idea.base.projectStructure.moduleInfo
 
+import com.intellij.openapi.module.Module
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.OrderRootType
 import com.intellij.openapi.roots.impl.libraries.LibraryEx
@@ -8,6 +9,7 @@ import com.intellij.openapi.roots.libraries.Library
 import com.intellij.openapi.util.ModificationTracker
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.serviceContainer.AlreadyDisposedException
 import com.intellij.util.PathUtil
 import org.jetbrains.kotlin.analyzer.*
 import org.jetbrains.kotlin.idea.base.projectStructure.*
@@ -67,8 +69,17 @@ abstract class LibraryInfo(
             ResolutionAnchorAwareLibraryModificationTracker(this)
         }
 
+    internal val isDisposed
+        get() = if (library is LibraryEx) library.isDisposed else false
+
+    fun checkValidity() {
+        if (isDisposed) {
+            throw AlreadyDisposedException("Library '${name}' is already disposed")
+        }
+    }
+
     override fun toString() =
-        "${this::class.simpleName}(libraryName=${library.name}${if (library !is LibraryEx || !library.isDisposed) ", libraryRoots=${getLibraryRoots()})" else ""}"
+        "${this::class.simpleName}(libraryName=${library.name}${if (isDisposed) ", libraryRoots=${getLibraryRoots()})" else ""}"
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -80,12 +91,16 @@ abstract class LibraryInfo(
     override fun hashCode() = libraryWrapper.hashCode()
 }
 
-private class ResolutionAnchorAwareLibraryModificationTracker(private val libraryInfo: LibraryInfo) : ModificationTracker {
-    override fun getModificationCount(): Long {
-        val dependencyModules = ResolutionAnchorCacheService.getInstance(libraryInfo.project)
+private class ResolutionAnchorAwareLibraryModificationTracker(libraryInfo: LibraryInfo) : ModificationTracker {
+    private val dependencyModules: List<Module> = if (!libraryInfo.isDisposed) {
+        ResolutionAnchorCacheService.getInstance(libraryInfo.project)
             .getDependencyResolutionAnchors(libraryInfo)
             .map { it.module }
+    } else {
+        emptyList()
+    }
 
+    override fun getModificationCount(): Long {
         if (dependencyModules.isEmpty()) {
             return ModificationTracker.NEVER_CHANGED.modificationCount
         }

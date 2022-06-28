@@ -226,6 +226,7 @@ The plugin supports Kotlin 1.7 and lower.
 
   <content>
     <module name="kotlin.base.analysis-api-providers"/>
+    <module name="kotlin.base.fe10.plugin"/>
     <module name="kotlin.base.fe10.analysis-api-providers"/>
     <module name="kotlin.groovy"/>
     <module name="kotlin.gradle.gradle-tooling"/>
@@ -240,8 +241,9 @@ The plugin supports Kotlin 1.7 and lower.
     <module name="kotlin.properties"/>
     <module name="kotlin.jvm-decompiler"/>
     <module name="kotlin.jvm-debugger.sequence"/>
-    <module name="kotlin.junit"/>
-    <module name="kotlin.testng"/>
+    <module name="kotlin.run-configurations.junit"/>
+    <module name="kotlin.run-configurations.junit-fe10"/>
+    <module name="kotlin.run-configurations.testng"/>
     <module name="kotlin.coverage"/>
     <module name="kotlin.i18n"/>
     <module name="kotlin.git"/>

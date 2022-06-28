@@ -1,10 +1,10 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package org.jetbrains.kotlin.idea.inspections
 
+import com.intellij.codeInspection.CleanupLocalInspectionTool
 import com.intellij.codeInspection.LocalQuickFix
 import com.intellij.codeInspection.ProblemDescriptor
-import com.intellij.codeInspection.ProblemHighlightType
 import com.intellij.codeInspection.ProblemsHolder
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElementVisitor
@@ -19,7 +19,7 @@ import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.descriptorUtil.annotationClass
 import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
 
-class RemoveEmptyParenthesesFromAnnotationEntryInspection : AbstractKotlinInspection() {
+class RemoveEmptyParenthesesFromAnnotationEntryInspection : AbstractKotlinInspection(), CleanupLocalInspectionTool {
 
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean): PsiElementVisitor =
         valueArgumentListVisitor(fun(list) {
@@ -36,7 +36,6 @@ class RemoveEmptyParenthesesFromAnnotationEntryInspection : AbstractKotlinInspec
             holder.registerProblem(
                 list,
                 KotlinBundle.message("parentheses.should.be.removed"),
-                ProblemHighlightType.LIKE_UNUSED_SYMBOL,
                 RemoveEmptyParenthesesFromAnnotationEntryFix()
             )
         })

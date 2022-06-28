@@ -14,14 +14,14 @@ import com.intellij.workspaceModel.storage.url.VirtualFileUrlManager
 import org.jetbrains.annotations.Nls
 import org.jetbrains.idea.maven.aether.ArtifactKind
 import org.jetbrains.idea.maven.utils.library.RepositoryLibraryProperties
-import org.jetbrains.kotlin.idea.base.plugin.artifacts.KotlinArtifacts
+import org.jetbrains.kotlin.idea.base.plugin.KotlinBasePluginBundle
 import org.jetbrains.kotlin.idea.base.plugin.artifacts.KotlinArtifactConstants.KOTLIN_DIST_FOR_JPS_META_ARTIFACT_ID
 import org.jetbrains.kotlin.idea.base.plugin.artifacts.KotlinArtifactConstants.KOTLIN_DIST_LOCATION_PREFIX
 import org.jetbrains.kotlin.idea.base.plugin.artifacts.KotlinArtifactConstants.KOTLIN_JPS_PLUGIN_PLUGIN_ARTIFACT_ID
 import org.jetbrains.kotlin.idea.base.plugin.artifacts.KotlinArtifactConstants.KOTLIN_MAVEN_GROUP_ID
 import org.jetbrains.kotlin.idea.base.plugin.artifacts.KotlinArtifactConstants.OLD_KOTLIN_DIST_ARTIFACT_ID
+import org.jetbrains.kotlin.idea.base.plugin.artifacts.KotlinArtifacts
 import org.jetbrains.kotlin.idea.base.plugin.artifacts.LazyZipUnpacker
-import org.jetbrains.kotlin.idea.base.plugin.KotlinBasePluginBundle
 import org.jetbrains.kotlin.idea.compiler.configuration.LazyKotlinMavenArtifactDownloader.DownloadContext
 import org.jetbrains.kotlin.idea.util.application.isUnitTestMode
 import java.awt.EventQueue
@@ -211,10 +211,18 @@ object KotlinArtifactsDownloader {
         require(artifactId == KOTLIN_JPS_PLUGIN_PLUGIN_ARTIFACT_ID || artifactId == KOTLIN_DIST_FOR_JPS_META_ARTIFACT_ID) {
             "$artifactId should be either $KOTLIN_JPS_PLUGIN_PLUGIN_ARTIFACT_ID or $KOTLIN_DIST_FOR_JPS_META_ARTIFACT_ID"
         }
+        val suggestions = listOf(KotlinBasePluginBundle.message("you.can.use.kotlin.compiler.which.is.bundled.into.your.ide")) +
+                FailedToDownloadJpsMavenArtifactSuggestedSolutionsContributor.getAllContributors(project).mapNotNull { it.getSuggestion() }
+        val suggestion = if (suggestions.size == 1) {
+            @Suppress("HardCodedStringLiteral") // Suppress because it's false positive
+            suggestions.single()
+        } else {
+            KotlinBasePluginBundle.message("suggested.solutions", suggestions.joinToString("\n") { "- $it" })
+        }
         return KotlinBasePluginBundle.message(
             "failed.to.download.unbundled.jps.maven.artifact",
             "$KOTLIN_MAVEN_GROUP_ID:$artifactId:$version",
             getMavenRepos(project).joinToString("\n") { it.url }.prependIndent()
-        )
+        ) + "\n\n" + suggestion
     }
 }

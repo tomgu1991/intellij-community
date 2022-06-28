@@ -1,6 +1,4 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-@file:Suppress("ReplaceGetOrSet")
-
 package org.jetbrains.intellij.build.impl
 
 import com.intellij.diagnostic.telemetry.createTask
@@ -20,7 +18,6 @@ import org.jetbrains.intellij.build.io.copyFileToDir
 import org.jetbrains.intellij.build.io.runProcess
 import org.jetbrains.intellij.build.io.substituteTemplatePlaceholders
 import org.jetbrains.intellij.build.io.transformFile
-import org.jetbrains.jps.model.library.JpsOrderRootType
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -58,7 +55,8 @@ internal class WindowsDistributionBuilder(
     generateBuildTxt(context, targetPath)
     copyDistFiles(context, targetPath)
 
-    Files.writeString(distBinDir.resolve(ideaProperties!!.fileName), StringUtilRt.convertLineSeparators(Files.readString(ideaProperties), "\r\n"))
+    Files.writeString(distBinDir.resolve(ideaProperties!!.fileName),
+                      StringUtilRt.convertLineSeparators(Files.readString(ideaProperties), "\r\n"))
 
     if (icoFile != null) {
       Files.copy(icoFile, distBinDir.resolve("${context.productProperties.baseFileName}.ico"), StandardCopyOption.REPLACE_EXISTING)
@@ -126,8 +124,12 @@ internal class WindowsDistributionBuilder(
                           installationArchives = emptyList(),
                           context = context)
 
-      exePath = WinExeInstallerBuilder(context, customizer, jreDir)
-        .buildInstaller(osAndArchSpecificDistPath, productJsonDir, "", context)
+      exePath = buildNsisInstaller(winDistPath = osAndArchSpecificDistPath,
+                                   additionalDirectoryToInclude = productJsonDir,
+                                   suffix = "",
+                                   customizer = customizer,
+                                   jreDir = jreDir,
+                                   context = context)
     }
 
     val zipPath = zipPathTask?.join()
@@ -166,9 +168,9 @@ internal class WindowsDistributionBuilder(
     val vmOptionsFileName = "${baseName}64.exe"
 
     val classPathJars = context.bootClassPathJarNames
-    var classPath = "SET \"CLASS_PATH=%IDE_HOME%\\lib\\${classPathJars.get(0)}\""
-    for (i in 1 until  classPathJars.size) {
-      classPath += "\nSET \"CLASS_PATH=%CLASS_PATH%;%IDE_HOME%\\lib\\${classPathJars.get(i)}\""
+    var classPath = "SET \"CLASS_PATH=%IDE_HOME%\\lib\\${classPathJars[0]}\""
+    for (i in 1 until classPathJars.size) {
+      classPath += "\nSET \"CLASS_PATH=%CLASS_PATH%;%IDE_HOME%\\lib\\${classPathJars[i]}\""
     }
 
     var additionalJvmArguments = context.getAdditionalJvmArguments(OsFamily.WINDOWS)
@@ -180,6 +182,7 @@ internal class WindowsDistributionBuilder(
 
     val winScripts = context.paths.communityHomeDir.communityRoot.resolve("platform/build-scripts/resources/win/scripts")
     val actualScriptNames = Files.newDirectoryStream(winScripts).use { dirStream -> dirStream.map { it.fileName.toString() }.sorted() }
+
     @Suppress("SpellCheckingInspection")
     val expectedScriptNames = listOf("executable-template.bat", "format.bat", "inspect.bat", "ltedit.bat")
     check(actualScriptNames == expectedScriptNames) {
@@ -201,6 +204,7 @@ internal class WindowsDistributionBuilder(
         Pair("ide_jvm_args", additionalJvmArguments.joinToString(separator = " ")),
         Pair("class_path", classPath),
         Pair("base_name", baseName),
+        Pair("main_class_name", context.productProperties.mainClassName),
       )
     )
 
@@ -232,6 +236,7 @@ internal class WindowsDistributionBuilder(
       .enumerate()
       .forEach { file ->
         transformFile(file) { target ->
+          @Suppress("BlockingMethodInNonBlockingContext")
           Files.writeString(target, toDosLineEndings(Files.readString(file)))
         }
       }
@@ -249,6 +254,7 @@ internal class WindowsDistributionBuilder(
       val executableBaseName = "${context.productProperties.baseFileName}64"
       val launcherPropertiesPath = context.paths.tempDir.resolve("launcher.properties")
       val upperCaseProductName = context.applicationInfo.upperCaseProductName
+
       @Suppress("SpellCheckingInspection")
       val vmOptions = context.getAdditionalJvmArguments(OsFamily.WINDOWS) + listOf("-Dide.native.launcher=true")
       val productName = context.applicationInfo.shortProductName
@@ -259,9 +265,9 @@ internal class WindowsDistributionBuilder(
       val appInfoForLauncher = generateApplicationInfoForLauncher(patchedApplicationInfo, icoFilesDirectory)
       @Suppress("SpellCheckingInspection")
       Files.writeString(launcherPropertiesPath, """
-        IDS_JDK_ONLY=$context.productProperties.toolsJarRequired
+        IDS_JDK_ONLY=${context.productProperties.toolsJarRequired}
         IDS_JDK_ENV_VAR=${envVarBaseName}_JDK
-        IDS_APP_TITLE=$productName Launcher
+        IDS_APP_TITLE=${productName} Launcher
         IDS_VM_OPTIONS_PATH=%APPDATA%\\\\${context.applicationInfo.shortCompanyName}\\\\${context.systemSelector}
         IDS_VM_OPTION_ERRORFILE=-XX:ErrorFile=%USERPROFILE%\\\\java_error_in_${executableBaseName}_%p.log
         IDS_VM_OPTION_HEAPDUMPPATH=-XX:HeapDumpPath=%USERPROFILE%\\\\java_error_in_${executableBaseName}.hprof
@@ -272,6 +278,8 @@ internal class WindowsDistributionBuilder(
         IDS_VM_OPTIONS=${vmOptions.joinToString(separator = " ")}
         IDS_CLASSPATH_LIBS=${classPath}
         IDS_BOOTCLASSPATH_LIBS=${bootClassPath}
+        IDS_INSTANCE_ACTIVATION=${context.productProperties.fastInstanceActivation}
+        IDS_MAIN_CLASS=${context.productProperties.mainClassName.replace('.', '/')}
         """.trimIndent().trim())
 
       val communityHome = context.paths.communityHome

@@ -270,6 +270,7 @@ abstract class Cell : BaseBuilder {
     return component(result)
   }
 
+  @Deprecated("Use Kotlin UI DSL Version 2")
   fun buttonFromAction(@Button text: String, @NonNls actionPlace: String, action: AnAction): CellBuilder<JButton> {
     val button = JButton(BundleBase.replaceMnemonicAmpersand(text))
     button.addActionListener { ActionUtil.invokeAction(action, button, actionPlace, null, null) }
@@ -328,6 +329,7 @@ abstract class Cell : BaseBuilder {
     return component(comment = comment)
   }
 
+  @Deprecated("Use Kotlin UI DSL Version 2")
   open fun radioButton(@RadioButton text: String, getter: () -> Boolean, setter: (Boolean) -> Unit, @Nls comment: String? = null): CellBuilder<JBRadioButton> {
     val component = JBRadioButton(text, getter())
     return component(comment = comment).withSelectedBinding(PropertyBinding(getter, setter))

@@ -1,6 +1,4 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-@file:Suppress("ReplaceJavaStaticMethodWithKotlinAnalog", "ReplacePutWithAssignment", "ReplaceGetOrSet")
-
 package org.jetbrains.intellij.build.impl
 
 import com.intellij.diagnostic.telemetry.use
@@ -18,6 +16,7 @@ import io.opentelemetry.api.trace.StatusCode
 import io.opentelemetry.context.Context
 import kotlinx.collections.immutable.toImmutableSet
 import org.apache.commons.compress.archivers.zip.Zip64Mode
+import org.apache.commons.compress.archivers.zip.ZipArchiveEntry
 import org.jetbrains.idea.maven.aether.ArtifactKind
 import org.jetbrains.idea.maven.aether.ArtifactRepositoryManager
 import org.jetbrains.idea.maven.aether.ProgressConsumer
@@ -189,7 +188,7 @@ private fun getLocalArtifactRepositoryRoot(global: JpsGlobal): Path {
 }
 
 /**
- * Build a list with modules that the IDE will provide for plugins.
+ * Building a list of modules that the IDE will provide for plugins.
  */
 private fun buildProvidedModuleList(targetFile: Path, state: DistributionBuilderState, context: BuildContext) {
   context.executeStep(spanBuilder("build provided module list"), BuildOptions.PROVIDED_MODULES_LIST_STEP) {
@@ -221,7 +220,7 @@ private fun patchIdeaPropertiesFile(buildContext: BuildContext): Path {
   val temp = builder.toString()
   builder.setLength(0)
   val map = LinkedHashMap<String, String>(1)
-  map.put("settings_dir", settingsDir)
+  map["settings_dir"] = settingsDir
   builder.append(BuildUtils.replaceAll(temp, map, "@@"))
   if (buildContext.applicationInfo.isEAP) {
     builder.append(
@@ -494,13 +493,13 @@ fun zipSourcesOfModules(modules: Collection<String>, targetFile: Path, includeLi
       for (root in module.getSourceRoots(JavaSourceRootType.SOURCE)) {
         if (root.file.absoluteFile.exists()) {
           val sourceFiles = filterSourceFilesOnly(root.file.name, context) { FileUtil.copyDirContent(root.file.absoluteFile, it.toFile()) }
-          zipFileMap.put(sourceFiles, root.properties.packagePrefix.replace(".", "/"))
+          zipFileMap[sourceFiles] = root.properties.packagePrefix.replace(".", "/")
         }
       }
       for (root in module.getSourceRoots(JavaResourceRootType.RESOURCE)) {
         if (root.file.absoluteFile.exists()) {
           val sourceFiles = filterSourceFilesOnly(root.file.name, context) { FileUtil.copyDirContent(root.file.absoluteFile, it.toFile()) }
-          zipFileMap.put(sourceFiles, root.properties.relativeOutputPath)
+          zipFileMap[sourceFiles] = root.properties.relativeOutputPath
         }
       }
     }
@@ -515,7 +514,7 @@ fun zipSourcesOfModules(modules: Collection<String>, targetFile: Path, includeLi
           val sourceFiles = filterSourceFilesOnly(file.name, context) { tempDir ->
             Decompressor.Zip(file).filter(Predicate { isSourceFile(it) }).extract(tempDir)
           }
-          zipFileMap.put(sourceFiles, "")
+          zipFileMap[sourceFiles] = ""
         }
         else {
           context.messages.debug("  skipped root $file: file doesn\'t exist")
@@ -553,7 +552,7 @@ private inline fun filterSourceFilesOnly(name: String, context: BuildContext, co
 
 private fun buildAdditionalArtifacts(projectStructureMapping: ProjectStructureMapping, context: BuildContext) {
   val productProperties = context.productProperties
-  if (productProperties.generateLibrariesLicensesTable &&
+  if (productProperties.generateLibraryLicensesTable &&
       !context.options.buildStepsToSkip.contains(BuildOptions.THIRD_PARTY_LIBRARIES_LIST_STEP)) {
     val artifactNamePrefix = productProperties.getBaseArtifactName(context.applicationInfo, context.buildNumber)
     val artifactDir = context.paths.artifactDir
@@ -600,9 +599,9 @@ private fun compileModulesForDistribution(pluginsToPublish: Set<PluginLayout>, c
   CompilationTasks.create(context).compileModules(toCompile)
 
   if (context.shouldBuildDistributions()) {
-    val providedModulesFile = context.paths.artifactDir.resolve("${context.applicationInfo.productCode}-builtinModules.json")
+    val providedModuleFile = context.paths.artifactDir.resolve("${context.applicationInfo.productCode}-builtinModules.json")
     val state = compilePlatformAndPluginModules(pluginsToPublish, context)
-    buildProvidedModuleList(targetFile = providedModulesFile, state = state, context = context)
+    buildProvidedModuleList(targetFile = providedModuleFile, state = state, context = context)
     if (!productProperties.productLayout.buildAllCompatiblePlugins) {
       return state
     }
@@ -612,7 +611,7 @@ private fun compileModulesForDistribution(pluginsToPublish: Set<PluginLayout>, c
     }
     else {
       return compilePlatformAndPluginModules(
-        pluginsToPublish = pluginsToPublish + collectCompatiblePluginsToPublish(providedModulesFile, context),
+        pluginsToPublish = pluginsToPublish + collectCompatiblePluginsToPublish(providedModuleFile, context),
         context = context
       )
     }
@@ -662,6 +661,7 @@ fun buildDistributions(context: BuildContext) {
       if (context.shouldBuildDistributions()) {
         layoutShared(context)
         val distDirs = buildOsSpecificDistributions(context)
+        @Suppress("SpellCheckingInspection")
         if (java.lang.Boolean.getBoolean("intellij.build.toolbox.litegen")) {
           @Suppress("SENSELESS_COMPARISON")
           if (context.buildNumber == null) {
@@ -1032,7 +1032,6 @@ private fun buildCrossPlatformZip(distDirs: List<DistributionForOsTaskResult>, c
   val dependenciesFile = copyDependenciesFile(context)
   crossPlatformZip(
     macX64DistDir = distDirs.first { it.os == OsFamily.MACOS && it.arch == JvmArchitecture.x64 }.outDir,
-    macAarch64DistDir = distDirs.first { it.os == OsFamily.MACOS && it.arch == JvmArchitecture.aarch64 }.outDir,
     linuxX64DistDir = distDirs.first { it.os == OsFamily.LINUX && it.arch == JvmArchitecture.x64 }.outDir,
     winX64DistDir = distDirs.first { it.os == OsFamily.WINDOWS && it.arch == JvmArchitecture.x64 }.outDir,
     targetFile = targetFile,
@@ -1086,7 +1085,6 @@ internal fun getLinuxFrameClass(context: BuildContext): String {
 }
 
 private fun crossPlatformZip(macX64DistDir: Path,
-                             macAarch64DistDir: Path,
                              linuxX64DistDir: Path,
                              winX64DistDir: Path,
                              targetFile: Path,
@@ -1165,67 +1163,42 @@ private fun crossPlatformZip(macX64DistDir: Path,
       }
 
       val extraExecutablesSet = java.util.Set.copyOf(macExtraExecutables + linuxExtraExecutables)
-      val entryCustomizer: EntryCustomizer = { entry, _, relativeFile ->
-        if (extraExecutablesSet.contains(relativeFile.toString())) {
+      val entryCustomizer: (ZipArchiveEntry, Path, String) -> Unit = { entry, _, relativePath ->
+        if (extraExecutablesSet.contains(relativePath)) {
           entry.unixMode = executableFileUnixMode
         }
       }
 
-      out.dir(startDir = distAllDir, prefix = "", fileFilter = { _, relativeFile ->
-        relativeFile.toString() != "bin/idea.properties"
-      }, entryCustomizer = entryCustomizer)
+      val commonFilter: (String) -> Boolean = { relPath ->
+        !relPath.startsWith("bin/fsnotifier") &&
+        !relPath.startsWith("bin/repair") &&
+        !relPath.startsWith("bin/restart") &&
+        !relPath.startsWith("bin/printenv") &&
+        !(relPath.startsWith("bin/") && (relPath.endsWith(".sh") || relPath.endsWith(".vmoptions")) && relPath.count { it == '/' } == 1) &&
+        relPath != "bin/idea.properties" &&
+        !relPath.startsWith("help/")
+      }
 
       val zipFiles = LinkedHashMap<String, Path>()
-      out.dir(startDir = macX64DistDir, prefix = "", fileFilter = { _, relativeFile ->
-        val p = relativeFile.toString().replace('\\', '/')
-        !p.startsWith("bin/fsnotifier") &&
-        !p.startsWith("bin/repair") &&
-        !p.startsWith("bin/restarter") &&
-        !p.startsWith("bin/printenv") &&
-        p != "bin/idea.properties" &&
-        !(p.startsWith("bin/") && (p.endsWith(".sh") || p.endsWith(".vmoptions"))) &&
-        // do not copy common files, error if they are different
-        filterFileIfAlreadyInZip(p, macX64DistDir.resolve(p), zipFiles)
+
+      out.dir(distAllDir, "", fileFilter = { _, relPath -> relPath != "bin/idea.properties" }, entryCustomizer = entryCustomizer)
+
+      out.dir(macX64DistDir, "", fileFilter = { _, relPath ->
+        commonFilter.invoke(relPath) &&
+        filterFileIfAlreadyInZip(relPath, macX64DistDir.resolve(relPath), zipFiles)
       }, entryCustomizer = entryCustomizer)
 
-      out.dir(startDir = macAarch64DistDir, prefix = "", fileFilter = { _, relativeFile ->
-        val p = relativeFile.toString().replace('\\', '/')
-        !p.startsWith("bin/fsnotifier") &&
-        !p.startsWith("bin/repair") &&
-        !p.startsWith("bin/restarter") &&
-        !p.startsWith("bin/printenv") &&
-        p != "bin/idea.properties" &&
-        !(p.startsWith("bin/") && (p.endsWith(".sh") || p.endsWith(".vmoptions"))) &&
-        // do not copy common files, error if they are different
-        filterFileIfAlreadyInZip(p, macAarch64DistDir.resolve(p), zipFiles)
-      }, entryCustomizer = entryCustomizer)
-
-      out.dir(startDir = linuxX64DistDir, prefix = "", fileFilter = { _, relativeFile ->
-        val p = relativeFile.toString().replace('\\', '/')
-        !p.startsWith("bin/fsnotifier") &&
-        !p.startsWith("bin/repair") &&
-        !p.startsWith("bin/printenv") &&
-        !p.startsWith("help/") &&
-        p != "bin/idea.properties" &&
-        !(p.startsWith("bin/") && listOf(".sh", ".vmoptions", ".py").any { p.endsWith(it) } && p.count { it == '/' } == 1) &&
-        // do not copy common files, error if they are different
-        filterFileIfAlreadyInZip(p, linuxX64DistDir.resolve(p), zipFiles)
+      out.dir(linuxX64DistDir, "", fileFilter = { _, relPath ->
+        commonFilter.invoke(relPath) &&
+        filterFileIfAlreadyInZip(relPath, linuxX64DistDir.resolve(relPath), zipFiles)
       }, entryCustomizer = entryCustomizer)
 
       val winExcludes = distFiles.mapTo(HashSet(distFiles.size)) { "${it.value}/${it.key.fileName}" }
-      out.dir(startDir = winX64DistDir, prefix = "", fileFilter = { _, relativeFile ->
-        val p = relativeFile.toString().replace('\\', '/')
-        !p.startsWith("bin/fsnotifier") &&
-        !p.startsWith("bin/repair") &&
-        !p.startsWith("bin/printenv") &&
-        !p.startsWith("help/") &&
-        p != "bin/idea.properties" &&
-        p != "build.txt" &&
-        !(p.startsWith("bin/") && p.endsWith(".exe.vmoptions")) &&
-        !(p.startsWith("bin/$executableName") && p.endsWith(".exe")) &&
-        !winExcludes.contains(p) &&
-        // do not copy common files, error if they are different
-        filterFileIfAlreadyInZip(p, winX64DistDir.resolve(p), zipFiles)
+      out.dir(winX64DistDir, "", fileFilter = { _, relPath ->
+        commonFilter.invoke(relPath) &&
+        !(relPath.startsWith("bin/${executableName}") && relPath.endsWith(".exe")) &&
+        !winExcludes.contains(relPath) &&
+        filterFileIfAlreadyInZip(relPath, winX64DistDir.resolve(relPath), zipFiles)
       }, entryCustomizer = entryCustomizer)
     }
   }

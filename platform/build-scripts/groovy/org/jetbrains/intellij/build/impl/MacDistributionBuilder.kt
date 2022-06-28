@@ -3,12 +3,12 @@ package org.jetbrains.intellij.build.impl
 
 import com.intellij.diagnostic.telemetry.createTask
 import com.intellij.diagnostic.telemetry.use
-import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.util.SystemInfoRt
 import com.intellij.openapi.util.io.FileUtilRt
 import com.intellij.util.SystemProperties
 import io.opentelemetry.api.common.AttributeKey
 import io.opentelemetry.api.trace.Span
+import org.apache.commons.compress.archivers.zip.ZipArchiveEntry
 import org.jetbrains.intellij.build.*
 import org.jetbrains.intellij.build.TraceManager.spanBuilder
 import org.jetbrains.intellij.build.impl.productInfo.ProductInfoLaunchData
@@ -18,7 +18,10 @@ import org.jetbrains.intellij.build.io.copyDir
 import org.jetbrains.intellij.build.io.copyFile
 import org.jetbrains.intellij.build.io.substituteTemplatePlaceholders
 import org.jetbrains.intellij.build.io.writeNewFile
-import org.jetbrains.intellij.build.tasks.*
+import org.jetbrains.intellij.build.tasks.NoDuplicateZipArchiveOutputStream
+import org.jetbrains.intellij.build.tasks.dir
+import org.jetbrains.intellij.build.tasks.entry
+import org.jetbrains.intellij.build.tasks.executableFileUnixMode
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -78,7 +81,7 @@ class MacDistributionBuilder(private val context: BuildContext,
   }
 
   private fun doCopyExtraFiles(macDistDir: Path, arch: JvmArchitecture?, copyDistFiles: Boolean) {
-    //noinspection SpellCheckingInspection
+    @Suppress("SpellCheckingInspection")
     val platformProperties = mutableListOf(
       "\n#---------------------------------------------------------------------",
       "# macOS-specific system properties",
@@ -185,7 +188,7 @@ class MacDistributionBuilder(private val context: BuildContext,
     //todo[nik] improve
     val minor = context.applicationInfo.minorVersion
     val isNotRelease = context.applicationInfo.isEAP && !minor.contains("RC") && !minor.contains("Beta")
-    val version = if (isNotRelease) "EAP $context.fullBuildNumber" else "${context.applicationInfo.majorVersion}.${minor}"
+    val version = if (isNotRelease) "EAP ${context.fullBuildNumber}" else "${context.applicationInfo.majorVersion}.${minor}"
     val isEap = if (isNotRelease) "-EAP" else ""
 
     val properties = Files.readAllLines(ideaPropertiesFile)
@@ -250,6 +253,7 @@ class MacDistributionBuilder(private val context: BuildContext,
         Pair("vm_options", optionsToXml(launcherVmOptions)),
         Pair("vm_properties", propertiesToXml(launcherProperties, mapOf("idea.executable" to context.productProperties.baseFileName))),
         Pair("class_path", classPath),
+        Pair("main_class_name", context.productProperties.mainClassName.replace('.', '/')),
         Pair("url_schemes", urlSchemesString),
         Pair("architectures", "<key>LSArchitecturePriority</key>\n    <array>\n" +
                               macCustomizer.architectures.joinToString(separator = "\n") { "      <string>$it</string>\n" } +
@@ -330,8 +334,14 @@ private fun buildForArch(builtinModule: BuiltinModulesFileData?,
       context
     ) {
       val jreArchive = jreManager.findArchive(BundledRuntimeImpl.getProductPrefix(context), OsFamily.MACOS, arch)
-      MacDmgBuilder.signAndBuildDmg(builtinModule, context, customizer, context.proprietaryBuildTools.macHostProperties, macZip,
-                                    jreArchive, suffix, notarize)
+      signAndBuildDmg(builtinModule = builtinModule,
+                      context = context,
+                      customizer = customizer,
+                      macHostProperties = context.proprietaryBuildTools.macHostProperties,
+                      macZip = macZip,
+                      jreArchivePath = jreArchive,
+                      suffix = suffix,
+                      notarize = notarize)
     })
   }
 
@@ -341,8 +351,14 @@ private fun buildForArch(builtinModule: BuiltinModulesFileData?,
       spanBuilder("build DMG without JRE").setAttribute("arch", archStr), "${BuildOptions.MAC_ARTIFACTS_STEP}_no_jre_$archStr",
       context
     ) {
-      MacDmgBuilder.signAndBuildDmg(builtinModule, context, customizer, context.proprietaryBuildTools.macHostProperties, macZip,
-                                    null, "-no-jdk$suffix", notarize)
+      signAndBuildDmg(builtinModule = builtinModule,
+                      context = context,
+                      customizer = customizer,
+                      macHostProperties = context.proprietaryBuildTools.macHostProperties,
+                      macZip = macZip,
+                      jreArchivePath = null,
+                      suffix = "-no-jdk$suffix",
+                      notarize = notarize)
     })
   }
   return tasks.filterNotNull()
@@ -370,9 +386,8 @@ private fun propertiesToXml(properties: List<String>, moreProperties: Map<String
   return buff.toString().trim()
 }
 
-private fun getExecutableFilePatterns(customizer: MacDistributionCustomizer): List<String> {
-  //noinspection SpellCheckingInspection
-  return listOf(
+private fun getExecutableFilePatterns(customizer: MacDistributionCustomizer): List<String> =
+  listOf(
     "bin/*.sh",
     "bin/*.py",
     "bin/fsnotifier",
@@ -381,11 +396,9 @@ private fun getExecutableFilePatterns(customizer: MacDistributionCustomizer): Li
     "bin/repair",
     "MacOS/*"
   ) + customizer.extraExecutables
-}
 
-internal fun getMacZipRoot(customizer: MacDistributionCustomizer, context: BuildContext): String {
-  return "${customizer.getRootDirectoryName(context.applicationInfo, context.buildNumber)}/Contents"
-}
+internal fun getMacZipRoot(customizer: MacDistributionCustomizer, context: BuildContext): String =
+  "${customizer.getRootDirectoryName(context.applicationInfo, context.buildNumber)}/Contents"
 
 internal fun generateMacProductJson(builtinModule: BuiltinModulesFileData?, context: BuildContext, javaExecutablePath: String?): String {
   val executable = context.productProperties.baseFileName
@@ -405,14 +418,14 @@ internal fun generateMacProductJson(builtinModule: BuiltinModulesFileData?, cont
 }
 
 private fun buildMacZip(targetFile: Path,
-                zipRoot: String,
-                productJson: String,
-                allDist: Path,
-                macDist: Path,
-                extraFiles: Collection<Map.Entry<Path, String>>,
-                executableFilePatterns: List<String>,
-                compressionLevel: Int,
-                errorsConsumer: (String) -> Unit) {
+                        zipRoot: String,
+                        productJson: String,
+                        allDist: Path,
+                        macDist: Path,
+                        extraFiles: Collection<Map.Entry<Path, String>>,
+                        executableFilePatterns: List<String>,
+                        compressionLevel: Int,
+                        errorsConsumer: (String) -> Unit) {
   spanBuilder("build zip archive for macOS")
     .setAttribute("file", targetFile.toString())
     .setAttribute("zipRoot", zipRoot)
@@ -421,11 +434,11 @@ private fun buildMacZip(targetFile: Path,
       val fs = targetFile.fileSystem
       val patterns = executableFilePatterns.map { fs.getPathMatcher("glob:$it") }
 
-      val entryCustomizer: EntryCustomizer = { entry, file, relativeFile ->
+      val entryCustomizer: (ZipArchiveEntry, Path, String) -> Unit = { entry, file, relativePath ->
         when {
-          patterns.any { it.matches(relativeFile) } -> entry.unixMode = executableFileUnixMode
-          SystemInfo.isUnix && PosixFilePermission.OWNER_EXECUTE in Files.getPosixFilePermissions (file) -> {
-            errorsConsumer("Executable permissions of $relativeFile won't be set in $targetFile. " +
+          patterns.any { it.matches(Path.of(relativePath)) } -> entry.unixMode = executableFileUnixMode
+          SystemInfoRt.isUnix && PosixFilePermission.OWNER_EXECUTE in Files.getPosixFilePermissions (file) -> {
+            errorsConsumer("Executable permissions of $relativePath won't be set in $targetFile. " +
                            "Please make sure that executable file patterns are updated.")
           }
         }
@@ -437,10 +450,9 @@ private fun buildMacZip(targetFile: Path,
 
           zipOutStream.entry("$zipRoot/Resources/product-info.json", productJson.encodeToByteArray())
 
-          val fileFilter: (Path, Path) -> Boolean = { sourceFile, relativeFile ->
-            val path = relativeFile.toString()
-            if (path.endsWith(".txt") && !path.contains('/')) {
-              zipOutStream.entry("$zipRoot/Resources/${FileUtilRt.toSystemIndependentName(path)}", sourceFile)
+          val fileFilter: (Path, String) -> Boolean = { sourceFile, relativePath ->
+            if (relativePath.endsWith(".txt") && !relativePath.contains('/')) {
+              zipOutStream.entry("$zipRoot/Resources/${relativePath}", sourceFile)
               false
             }
             else {

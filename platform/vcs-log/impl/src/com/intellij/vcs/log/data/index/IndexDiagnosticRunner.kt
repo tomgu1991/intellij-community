@@ -16,14 +16,14 @@ import com.intellij.vcs.log.data.DataPack
 import com.intellij.vcs.log.data.VcsLogStorage
 import com.intellij.vcs.log.data.index.IndexDiagnostic.getDiffFor
 import com.intellij.vcs.log.data.index.IndexDiagnostic.getFirstCommits
-import com.intellij.vcs.log.impl.FatalErrorHandler
+import com.intellij.vcs.log.impl.VcsLogErrorHandler
 
 internal class IndexDiagnosticRunner(private val index: VcsLogModifiableIndex,
                                      private val storage: VcsLogStorage,
                                      private val roots: Collection<VirtualFile>,
                                      private val dataPackGetter: () -> DataPack,
                                      private val commitDetailsGetter: CommitDetailsGetter,
-                                     private val errorHandler: FatalErrorHandler,
+                                     private val errorHandler: VcsLogErrorHandler,
                                      parent: Disposable) : Disposable {
   private val indexingListener = VcsLogIndex.IndexingFinishedListener { root -> runDiagnostic(listOf(root)) }
   private val checkedRoots = ConcurrentCollectionFactory.createConcurrentSet<VirtualFile>(HashingStrategy.canonical())
@@ -53,7 +53,7 @@ internal class IndexDiagnosticRunner(private val index: VcsLogModifiableIndex,
           val exception = RuntimeException("Index is corrupted")
           thisLogger().error(exception.message, exception, Attachment("VcsLogIndexDiagnosticReport.txt", diffReport))
           index.markCorrupted()
-          errorHandler.consume(this, exception)
+          errorHandler.handleError(VcsLogErrorHandler.Source.Index, exception)
         }
       }
     }, thisLogger()::error, EmptyProgressIndicator())

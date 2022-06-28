@@ -11,20 +11,17 @@ import com.intellij.openapi.ui.SimpleToolWindowPanel;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.NlsActions;
-import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vcs.*;
 import com.intellij.openapi.vcs.changes.*;
 import com.intellij.openapi.vcs.changes.actions.diff.ChangeDiffRequestProducer;
+import com.intellij.openapi.vcs.changes.actions.diff.CombinedDiffPreview;
 import com.intellij.openapi.vcs.changes.ui.*;
 import com.intellij.openapi.vcs.changes.ui.browser.ChangesFilterer;
 import com.intellij.openapi.vcs.changes.ui.browser.FilterableChangesBrowser;
 import com.intellij.openapi.vcs.history.VcsDiffUtil;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.ui.ComponentUtil;
-import com.intellij.ui.GuiUtils;
-import com.intellij.ui.SideBorder;
-import com.intellij.ui.SimpleTextAttributes;
+import com.intellij.ui.*;
 import com.intellij.ui.components.panels.Wrapper;
 import com.intellij.ui.switcher.QuickActionProvider;
 import com.intellij.util.EventDispatcher;
@@ -77,7 +74,7 @@ public final class VcsLogChangesBrowser extends FilterableChangesBrowser {
   @NotNull private Consumer<StatusText> myUpdateEmptyText = this::updateEmptyText;
   @NotNull private final Wrapper myToolbarWrapper;
   @NotNull private final EventDispatcher<Listener> myDispatcher = EventDispatcher.create(Listener.class);
-  @Nullable private DiffPreview myEditorDiffPreview;
+  @Nullable private DiffPreviewController myEditorDiffPreviewController;
 
   VcsLogChangesBrowser(@NotNull Project project,
                        @NotNull MainVcsLogUiProperties uiProperties,
@@ -128,7 +125,7 @@ public final class VcsLogChangesBrowser extends FilterableChangesBrowser {
     JComponent centerPanel = super.createCenterPanel();
     JScrollPane scrollPane = UIUtil.findComponentOfType(centerPanel, JScrollPane.class);
     if (scrollPane != null) {
-      ComponentUtil.putClientProperty(scrollPane, UIUtil.KEEP_BORDER_SIDES, SideBorder.TOP);
+      ClientProperty.put(scrollPane, UIUtil.KEEP_BORDER_SIDES, SideBorder.TOP);
     }
     return centerPanel;
   }
@@ -401,20 +398,17 @@ public final class VcsLogChangesBrowser extends FilterableChangesBrowser {
   }
 
   private void setEditorDiffPreview() {
-    DiffPreview preview = myEditorDiffPreview;
+
+    DiffPreviewController editorDiffPreviewController = myEditorDiffPreviewController;
+
     boolean isWithEditorDiffPreview = VcsLogUiUtil.isDiffPreviewInEditor(myProject);
 
-    if (Registry.is("enable.combined.diff") && isWithEditorDiffPreview && preview == null) {
-      preview = new VcsLogCombinedDiffPreview(this);
-      myEditorDiffPreview = preview;
+    if (isWithEditorDiffPreview && editorDiffPreviewController == null) {
+      myEditorDiffPreviewController = new VcsLogChangesBrowserDiffPreviewController();
     }
-    else if (isWithEditorDiffPreview && preview == null) {
-      preview = new VcsLogEditorDiffPreview(myProject, this);
-      myEditorDiffPreview = preview;
-    }
-    else if (!isWithEditorDiffPreview && preview != null) {
-      preview.closePreview();
-      myEditorDiffPreview = null;
+    else if (!isWithEditorDiffPreview && editorDiffPreviewController != null) {
+      editorDiffPreviewController.getActivePreview().closePreview();
+      myEditorDiffPreviewController = null;
     }
   }
 
@@ -425,7 +419,8 @@ public final class VcsLogChangesBrowser extends FilterableChangesBrowser {
 
   @Override
   protected @Nullable DiffPreview getShowDiffActionPreview() {
-    return myEditorDiffPreview;
+    DiffPreviewController editorDiffPreviewController = myEditorDiffPreviewController;
+    return editorDiffPreviewController != null ? editorDiffPreviewController.getActivePreview() : null;
   }
 
   public void selectChange(@NotNull Object userObject, @Nullable ChangesBrowserNode.Tag tag) {
@@ -477,6 +472,20 @@ public final class VcsLogChangesBrowser extends FilterableChangesBrowser {
 
   public interface Listener extends EventListener {
     void onModelUpdated();
+  }
+
+  private class VcsLogChangesBrowserDiffPreviewController extends DiffPreviewControllerBase {
+    @NotNull
+    @Override
+    protected DiffPreview getSimplePreview() {
+      return new VcsLogEditorDiffPreview(myProject, VcsLogChangesBrowser.this);
+    }
+
+    @NotNull
+    @Override
+    protected CombinedDiffPreview createCombinedDiffPreview() {
+      return new VcsLogCombinedDiffPreview(VcsLogChangesBrowser.this);
+    }
   }
 
   private static class ParentTag extends ChangesBrowserNode.ValueTag<Hash> {

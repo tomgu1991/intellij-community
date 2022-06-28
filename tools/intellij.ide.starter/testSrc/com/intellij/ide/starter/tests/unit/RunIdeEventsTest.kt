@@ -5,7 +5,7 @@ import com.intellij.ide.starter.bus.StarterListener
 import com.intellij.ide.starter.bus.subscribe
 import com.intellij.ide.starter.di.di
 import com.intellij.ide.starter.ide.IDETestContext
-import com.intellij.ide.starter.ide.InstalledIDE
+import com.intellij.ide.starter.ide.InstalledIde
 import com.intellij.ide.starter.ide.command.CommandChain
 import com.intellij.ide.starter.models.TestCase
 import com.intellij.ide.starter.path.IDEDataPaths
@@ -27,7 +27,7 @@ import org.kodein.di.instance
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import java.nio.file.Path
-import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 
 @ExtendWith(MockitoExtension::class)
@@ -40,7 +40,7 @@ class RunIdeEventsTest {
   private lateinit var testCase: TestCase
 
   @Mock
-  private lateinit var ide: InstalledIDE
+  private lateinit var ide: InstalledIde
 
   @Disabled("Rewrite the test to be more stable")
   @Test
@@ -48,7 +48,7 @@ class RunIdeEventsTest {
     val testName = object {}.javaClass.enclosingMethod.name.hyphenateTestName()
     val paths = IDEDataPaths.createPaths(testName, testDirectory, useInMemoryFs = false)
 
-    val projectHome = testCase.projectInfo?.resolveProjectHome()
+    val projectHome = testCase.projectInfo?.downloadAndUnpackProject()
     val context = IDETestContext(paths = paths,
                                  ide = ide,
                                  testCase = testCase,
@@ -65,7 +65,7 @@ class RunIdeEventsTest {
       context.runIDE(commands = CommandChain())
     }
 
-    runBlocking { delay(Duration.seconds(3)) }
+    runBlocking { delay(3.seconds) }
 
     assertSoftly {
       withClue("During IDE run should be fired 2 events: before ide start and after ide finished") {

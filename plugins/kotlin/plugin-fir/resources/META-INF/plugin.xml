@@ -20,14 +20,12 @@ The Kotlin FIR plugin provides language support in IntelliJ IDEA and Android Stu
   <depends optional="true" config-file="dep-groovy.xml">org.intellij.groovy</depends>
   <depends optional="true" config-file="maven-common.xml">org.jetbrains.idea.maven</depends>
   <depends optional="true" config-file="dep-maven.xml">org.jetbrains.idea.maven</depends>
-  <depends optional="true" config-file="dep-git.xml">Git4Idea</depends>
   <depends optional="true" config-file="dep-jvm-decompiler.xml">org.jetbrains.java.decompiler</depends>
 
   <!-- ULTIMATE-PLUGIN-PLACEHOLDER -->
 
   <depends>com.intellij.modules.idea</depends>
   <depends>com.intellij.modules.java</depends>
-  <depends optional="true" config-file="dep-copyright.xml">com.intellij.copyright</depends>
 
   <xi:include href="navigation.xml" xpointer="xpointer(/idea-plugin/*)"/>
   <xi:include href="highlighting.xml" xpointer="xpointer(/idea-plugin/*)"/>
@@ -50,6 +48,15 @@ The Kotlin FIR plugin provides language support in IntelliJ IDEA and Android Stu
   <content>
     <module name="kotlin.base.analysis-api-providers"/>
     <module name="kotlin.base.fir.analysis-api-providers"/>
+    <module name="kotlin.copyright"/>
+    <module name="kotlin.coverage"/>
+    <module name="kotlin.git"/>
+    <module name="kotlin.grazie"/>
+    <module name="kotlin.gradle.gradle-tooling"/>
+    <module name="kotlin.ml-completion"/>
+    <module name="kotlin.properties"/>
+    <module name="kotlin.run-configurations.junit"/>
+    <module name="kotlin.run-configurations.testng"/>
   </content>
 
   <!--  <xi:include href="jvm-common.xml" xpointer="xpointer(/idea-plugin/*)"/>-->
@@ -154,10 +161,6 @@ The Kotlin FIR plugin provides language support in IntelliJ IDEA and Android Stu
 
   <extensions defaultExtensionNs="com.intellij">
     <library.type implementation="org.jetbrains.kotlin.idea.framework.JSLibraryType"/>
-
-    <applicationService
-        serviceInterface="org.jetbrains.kotlin.platform.DefaultIdeTargetPlatformKindProvider"
-        serviceImplementation="org.jetbrains.kotlin.platform.impl.IdeaDefaultIdeTargetPlatformKindProvider"/>
 
     <projectService serviceInterface="org.jetbrains.kotlin.resolve.jvm.modules.JavaModuleResolver"
                     serviceImplementation="org.jetbrains.kotlin.idea.modules.IdeJavaModuleResolver"/>

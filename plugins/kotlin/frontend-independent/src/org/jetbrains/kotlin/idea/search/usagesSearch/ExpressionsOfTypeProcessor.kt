@@ -23,16 +23,16 @@ import org.jetbrains.kotlin.asJava.toLightClass
 import org.jetbrains.kotlin.diagnostics.PsiDiagnosticUtils
 import org.jetbrains.kotlin.idea.KotlinFileType
 import org.jetbrains.kotlin.idea.KotlinLanguage
-import org.jetbrains.kotlin.idea.base.utils.fqname.getKotlinFqName
+import org.jetbrains.kotlin.idea.base.psi.kotlinFqName
+import org.jetbrains.kotlin.idea.base.util.everythingScopeExcludeFileTypes
+import org.jetbrains.kotlin.idea.base.util.excludeFileTypes
+import org.jetbrains.kotlin.idea.base.util.restrictToKotlinSources
 import org.jetbrains.kotlin.idea.references.KtDestructuringDeclarationReference
 import org.jetbrains.kotlin.idea.search.KotlinSearchUsagesSupport.Companion.hasType
 import org.jetbrains.kotlin.idea.search.KotlinSearchUsagesSupport.Companion.isInProjectSource
 import org.jetbrains.kotlin.idea.search.KotlinSearchUsagesSupport.Companion.isSamInterface
-import org.jetbrains.kotlin.idea.search.everythingScopeExcludeFileTypes
-import org.jetbrains.kotlin.idea.search.excludeFileTypes
 import org.jetbrains.kotlin.idea.search.ideaExtensions.KotlinReferencesSearchOptions
 import org.jetbrains.kotlin.idea.search.ideaExtensions.KotlinReferencesSearchParameters
-import org.jetbrains.kotlin.idea.search.restrictToKotlinSources
 import org.jetbrains.kotlin.idea.search.useScope
 import org.jetbrains.kotlin.idea.util.application.isUnitTestMode
 import org.jetbrains.kotlin.idea.util.application.runReadAction
@@ -86,7 +86,7 @@ class ExpressionsOfTypeProcessor(
         fun logPresentation(element: PsiElement): String? {
             return runReadAction {
                 if (element !is KtDeclaration && element !is PsiMember) return@runReadAction element.text
-                val fqName = element.getKotlinFqName()?.asString()
+                val fqName = element.kotlinFqName?.asString()
                     ?: (element as? KtNamedDeclaration)?.name
                 when (element) {
                     is PsiMethod -> fqName + element.parameterList.text

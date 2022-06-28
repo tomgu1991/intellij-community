@@ -6,16 +6,14 @@ import com.intellij.execution.PsiLocation
 import com.intellij.execution.actions.ConfigurationContext
 import com.intellij.execution.actions.RunConfigurationProducer
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.roots.libraries.Library
 import com.intellij.openapi.util.io.FileUtil
 import com.intellij.util.SmartList
-import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
-import org.jetbrains.kotlin.idea.base.platforms.JsStdlibDetectionUtil
 import org.jetbrains.kotlin.idea.base.platforms.KotlinJavaScriptLibraryKind
+import org.jetbrains.kotlin.idea.base.platforms.tooling.IdePlatformKindTooling
+import org.jetbrains.kotlin.idea.caches.resolve.resolveToDescriptorIfAny
 import org.jetbrains.kotlin.idea.framework.JSLibraryStdDescription
 import org.jetbrains.kotlin.idea.js.KotlinJSRunConfigurationData
 import org.jetbrains.kotlin.idea.js.KotlinJSRunConfigurationDataProvider
-import org.jetbrains.kotlin.idea.platform.IdePlatformKindTooling
 import org.jetbrains.kotlin.idea.platform.getGenericTestIcon
 import org.jetbrains.kotlin.idea.projectModel.KotlinPlatform
 import org.jetbrains.kotlin.idea.run.multiplatform.KotlinMultiplatformRunLocationsProvider
@@ -40,14 +38,10 @@ class JsIdePlatformKindTooling : IdePlatformKindTooling() {
     override val libraryKind = KotlinJavaScriptLibraryKind
     override fun getLibraryDescription(project: Project) = JSLibraryStdDescription(project)
 
-    override fun getTestIcon(
-        declaration: KtNamedDeclaration,
-        descriptorProvider: () -> DeclarationDescriptor?,
-        includeSlowProviders: Boolean?
-    ): Icon? {
-        if (includeSlowProviders == false) return null
+    override fun getTestIcon(declaration: KtNamedDeclaration, allowSlowOperations: Boolean): Icon? {
+        if (!allowSlowOperations) return null
 
-        return getGenericTestIcon(declaration, descriptorProvider) {
+        return getGenericTestIcon(declaration, { declaration.resolveToDescriptorIfAny() }) {
             val contexts by lazy { computeConfigurationContexts(declaration) }
 
             val runConfigData = RunConfigurationProducer

@@ -10,7 +10,7 @@ import org.jetbrains.kotlin.idea.KotlinBundle
 import org.jetbrains.kotlin.psi.KtAnnotationEntry
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtValueArgument
-import org.jetbrains.kotlin.resolve.checkers.Experimentality
+import org.jetbrains.kotlin.resolve.checkers.OptInDescription
 import org.jetbrains.kotlin.utils.addToStdlib.safeAs
 
 object RemoveWrongOptInAnnotationTargetFactory : KotlinIntentionActionsFactory() {
@@ -36,13 +36,17 @@ object RemoveWrongOptInAnnotationTargetFactory : KotlinIntentionActionsFactory()
                 WRONG_TARGETS.any { name -> it.text?.contains(name) == true }
             }
 
-            forbiddenArguments.forEach {
-                argumentList.removeArgument(it)
+            if (forbiddenArguments.size == argumentList.arguments.size) {
+                annotationEntry.delete()
+            } else {
+                forbiddenArguments.forEach {
+                    argumentList.removeArgument(it)
+                }
             }
         }
 
         companion object {
-            private val WRONG_TARGETS: List<String> = Experimentality.WRONG_TARGETS_FOR_MARKER.map {it.toString() }
+            private val WRONG_TARGETS: List<String> = OptInDescription.WRONG_TARGETS_FOR_MARKER.map {it.toString() }
         }
     }
 }

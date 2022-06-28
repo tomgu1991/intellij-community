@@ -16,6 +16,7 @@ import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.CommandProcessor;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.fileEditor.FileEditorLocation;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.util.ProgressWrapper;
 import com.intellij.openapi.project.DumbService;
@@ -28,6 +29,7 @@ import com.intellij.openapi.util.*;
 import com.intellij.openapi.vcs.FileStatusListener;
 import com.intellij.openapi.vcs.FileStatusManager;
 import com.intellij.openapi.vfs.ReadonlyStatusHandler;
+import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.pom.Navigatable;
 import com.intellij.psi.*;
@@ -99,7 +101,7 @@ public class UsageViewImpl implements UsageViewEx {
 
   private final UsageViewPresentation myPresentation;
   private final UsageTarget[] myTargets;
-  protected UsageGroupingRule[] myGroupingRules;
+  private UsageGroupingRule[] myGroupingRules;
   private final UsageFilteringRuleState myFilteringRulesState = UsageFilteringRuleStateService.createFilteringRuleState();
   private final Factory<? extends UsageSearcher> myUsageSearcherFactory;
   private final Project myProject;
@@ -130,8 +132,25 @@ public class UsageViewImpl implements UsageViewEx {
     if (o1 instanceof UsageInfo2UsageAdapter && o2 instanceof UsageInfo2UsageAdapter) {
       return ((UsageInfo2UsageAdapter)o1).compareTo((UsageInfo2UsageAdapter)o2);
     }
+    if (o1 == null) return -1;
+    if (o2 == null) return 1;
+    int c = compareByOffsetInFile(o1, o2);
+    if (c != 0) return c;
     return o1.toString().compareTo(o2.toString());
   };
+
+  private static int compareByOffsetInFile(@NotNull Usage o1, @NotNull Usage o2) {
+    FileEditorLocation location1 = o1.getLocation();
+    FileEditorLocation location2 = o2.getLocation();
+    VirtualFile file1 = location1 == null ? null : location1.getEditor().getFile();
+    VirtualFile file2 = location2 == null ? null : location2.getEditor().getFile();
+    if (file1 == null || file2 == null) return 0;
+    if (file1.equals(file2)) {
+      return location1.compareTo(location2);
+    }
+    return VfsUtilCore.compareByPath(file1, file2);
+  }
+
   @NonNls public static final String HELP_ID = "ideaInterface.find";
   private UsageContextPanel myCurrentUsageContextPanel; // accessed in EDT only
   private final List<UsageContextPanel> myAllUsageContextPanels = new ArrayList<>(); // accessed in EDT only
@@ -145,10 +164,10 @@ public class UsageViewImpl implements UsageViewEx {
   private Splitter myPreviewSplitter; // accessed in EDT only
   private volatile ProgressIndicator associatedProgress; // the progress that current find usages is running under
 
-  // true if usages tree is currently expanding or collapsing
-  // (either at the end of find usages thanks to the 'expand usages after find' setting or
+  // true if usages tree is currently expanding or collapsing,
+  // either at the end of find usages thanks to the 'expand usages after find' setting, or
   // because the user pressed 'expand all' or 'collapse all' button. During this, some ugly hacks applied
-  // to speed up the expanding (see getExpandedDescendants() here and UsageViewTreeCellRenderer.customizeCellRenderer())
+  // to speed up the expanding (see getExpandedDescendants() here and UsageViewTreeCellRenderer.customizeCellRenderer()
   private boolean myExpandingCollapsing;
   private final UsageViewTreeCellRenderer myUsageViewTreeCellRenderer;
   @Nullable private Action myRerunAction;
@@ -538,9 +557,10 @@ public class UsageViewImpl implements UsageViewEx {
 
     //first grouping changes by parent node
     Map<Node, List<NodeChange>> groupByParent = nodeChanges.stream().collect(Collectors.groupingBy(NodeChange::getParentNode));
-    for (Node parentNode : groupByParent.keySet()) {
+    for (Map.Entry<Node, List<NodeChange>> entry : groupByParent.entrySet()) {
+      Node parentNode = entry.getKey();
       synchronized (parentNode) {
-        List<NodeChange> changes = groupByParent.get(parentNode);
+        List<NodeChange> changes = entry.getValue();
         List<NodeChange> addedToThisNode = new ArrayList<>();
         //removing node
         for (NodeChange change : changes) {
@@ -564,7 +584,6 @@ public class UsageViewImpl implements UsageViewEx {
         }
 
         //adding children nodes in batch
-
         if (!addedToThisNode.isEmpty()) {
           for (NodeChange change : addedToThisNode) {
             Node childNode = change.childNode;
@@ -2220,7 +2239,7 @@ public class UsageViewImpl implements UsageViewEx {
     return USAGE_INFO_LIST_KEY.getData(DataManager.getInstance().getDataContext(myRootPanel));
   }
 
-  public @NotNull Set<@NotNull GroupNode> selectedGroupNodes() {
+  @NotNull Set<@NotNull GroupNode> selectedGroupNodes() {
     return selectedNodes().stream().filter(node -> node instanceof GroupNode).map(node -> (GroupNode)node)
       .collect(Collectors.toCollection(HashSet::new));
   }

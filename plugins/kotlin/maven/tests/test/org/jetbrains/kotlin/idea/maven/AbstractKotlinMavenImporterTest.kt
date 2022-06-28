@@ -2267,7 +2267,7 @@ abstract class AbstractKotlinMavenImporterTest : KotlinMavenImportingTestCase() 
             try {
                 val version = "1.1.0"
                 val notifications = catchNotifications(myProject) {
-                    doUnsupportedVersionTest(version)
+                    doUnsupportedVersionTest(version, KotlinJpsPluginSettings.fallbackVersionForOutdatedCompiler)
                 }
 
                 assertNull(notifications.find { it.title == "Unsupported Kotlin JPS plugin version" })
@@ -2275,7 +2275,6 @@ abstract class AbstractKotlinMavenImporterTest : KotlinMavenImportingTestCase() 
                 MavenRunner.getInstance(myProject).settings.isDelegateBuildToMaven = isBuildDelegatedToMaven
             }
         }
-
     }
 
     class MultiModuleImport : AbstractKotlinMavenImporterTest() {

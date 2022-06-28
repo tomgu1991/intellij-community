@@ -11,9 +11,11 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Before
+import org.junit.Ignore
 import org.junit.Test
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 class EventBusTest {
   private var isEventHappened: AtomicBoolean = AtomicBoolean(false)
@@ -24,7 +26,7 @@ class EventBusTest {
     withClue("Event should $shouldNotMessage be fired") {
       runBlocking {
         try {
-          withTimeout(timeout = Duration.seconds(10)) {
+          withTimeout(timeout = 10.seconds) {
             while (shouldEventBeFired != isEventFiredGetter()) {
               delay(Duration.milliseconds(500))
             }
@@ -48,6 +50,7 @@ class EventBusTest {
     StarterListener.unsubscribe()
   }
 
+  @Ignore("Seems this event implementation will not produce stable results in producer/consumer terms. Need to find another lib/approach")
   @Test
   fun filteringEventsByTypeIsWorking() {
     StarterListener.subscribe { event: Signal ->

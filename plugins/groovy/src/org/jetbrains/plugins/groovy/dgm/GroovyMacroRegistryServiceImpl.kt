@@ -13,7 +13,10 @@ import com.intellij.psi.search.FileTypeIndex
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.util.PsiUtilBase
 import com.intellij.util.castSafelyTo
+import com.intellij.util.indexing.DumbModeAccessType
+import com.intellij.util.indexing.FileBasedIndex
 import com.intellij.util.lazyPub
+import com.intellij.workspaceModel.ide.WorkspaceModelTopics
 import org.jetbrains.plugins.groovy.lang.psi.api.auxiliary.GrListOrMap
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.blocks.GrClosableBlock
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.GrMethodCall
@@ -31,7 +34,9 @@ class GroovyMacroRegistryServiceImpl(val project: Project) : GroovyMacroRegistry
 
   init {
     val connection = project.messageBus.connect()
-    connection.subscribe(ProjectTopics.PROJECT_ROOTS, GroovyMacroModuleListener())
+    val listener = GroovyMacroModuleListener()
+    connection.subscribe(ProjectTopics.PROJECT_ROOTS, listener)
+    WorkspaceModelTopics.getInstance(project).subscribeAfterModuleLoading(connection, listener)
   }
 
   override fun resolveAsMacro(call: GrMethodCall): PsiMethod? {
@@ -53,10 +58,12 @@ class GroovyMacroRegistryServiceImpl(val project: Project) : GroovyMacroRegistry
   private fun collectModuleRegistry(): Map<Module, MacroRegistry> {
     val modules = mutableMapOf<Module, MacroRegistry>()
     DumbService.getInstance(project).runWithAlternativeResolveEnabled<Throwable> {
-      for (module in ModuleManager.getInstance(project).modules) {
-        val registry = computeModuleRegistry(module)
-        if (registry.isNotEmpty()) {
-          modules[module] = registry
+      FileBasedIndex.getInstance().ignoreDumbMode(DumbModeAccessType.RAW_INDEX_DATA_ACCEPTABLE) {
+        for (module in ModuleManager.getInstance(project).modules) {
+          val registry = computeModuleRegistry(module)
+          if (registry.isNotEmpty()) {
+            modules[module] = registry
+          }
         }
       }
     }

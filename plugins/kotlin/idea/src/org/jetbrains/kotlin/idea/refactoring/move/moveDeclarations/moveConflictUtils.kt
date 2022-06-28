@@ -41,7 +41,9 @@ import org.jetbrains.kotlin.idea.base.facet.implementedModules
 import org.jetbrains.kotlin.idea.base.facet.platform.platform
 import org.jetbrains.kotlin.idea.base.platforms.forcedTargetPlatform
 import org.jetbrains.kotlin.idea.base.projectStructure.*
-import org.jetbrains.kotlin.idea.base.utils.fqname.getKotlinFqName
+import org.jetbrains.kotlin.idea.base.psi.kotlinFqName
+import org.jetbrains.kotlin.idea.base.util.and
+import org.jetbrains.kotlin.idea.base.util.not
 import org.jetbrains.kotlin.idea.caches.resolve.*
 import org.jetbrains.kotlin.idea.caches.resolve.util.getJavaMemberDescriptor
 import org.jetbrains.kotlin.idea.caches.resolve.util.hasJavaResolutionFacade
@@ -55,8 +57,6 @@ import org.jetbrains.kotlin.idea.refactoring.getUsageContext
 import org.jetbrains.kotlin.idea.refactoring.move.KotlinMoveUsage
 import org.jetbrains.kotlin.idea.refactoring.pullUp.renderForConflicts
 import org.jetbrains.kotlin.idea.resolve.languageVersionSettings
-import org.jetbrains.kotlin.idea.search.and
-import org.jetbrains.kotlin.idea.search.not
 import org.jetbrains.kotlin.idea.search.usagesSearch.descriptor
 import org.jetbrains.kotlin.idea.util.projectStructure.getModule
 import org.jetbrains.kotlin.js.resolve.diagnostics.findPsi
@@ -850,7 +850,7 @@ class MoveConflictChecker(
             return members.mapNotNull { it.findPsi() as? KtClassOrObject }.toMutableList()
         }
 
-        private fun List<PsiElement>.toNamesList(): List<String> = mapNotNull { el -> el.getKotlinFqName()?.asString() }.toList()
+        private fun List<PsiElement>.toNamesList(): List<String> = mapNotNull { el -> el.kotlinFqName?.asString() }.toList()
     }
 }
 

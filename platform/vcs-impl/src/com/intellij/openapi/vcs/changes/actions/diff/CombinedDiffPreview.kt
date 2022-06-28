@@ -11,6 +11,7 @@ import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.NlsContexts
+import com.intellij.openapi.util.registry.Registry
 import com.intellij.openapi.vcs.changes.ChangeViewDiffRequestProcessor.Wrapper
 import com.intellij.openapi.vcs.changes.DiffPreviewUpdateProcessor
 import com.intellij.openapi.vcs.changes.DiffRequestProcessorWithProducers
@@ -37,10 +38,11 @@ class CombinedDiffPreviewVirtualFile(sourceId: String) : CombinedDiffVirtualFile
 abstract class CombinedDiffPreview(protected val tree: ChangesTree,
                                    targetComponent: JComponent,
                                    isOpenEditorDiffPreviewWithSingleClick: Boolean,
+                                   needSetupOpenPreviewListeners: Boolean,
                                    parentDisposable: Disposable) :
   EditorTabPreviewBase(tree.project, parentDisposable) {
 
-  constructor(tree: ChangesTree, parentDisposable: Disposable) : this(tree, tree, false, parentDisposable)
+  constructor(tree: ChangesTree, parentDisposable: Disposable) : this(tree, tree, false, false, parentDisposable)
 
   override val previewFile: VirtualFile by lazy { CombinedDiffPreviewVirtualFile(tree.id) }
 
@@ -66,8 +68,10 @@ abstract class CombinedDiffPreview(protected val tree: ChangesTree,
       closePreview()
       returnFocusToTree()
     }
-    installListeners(tree, isOpenEditorDiffPreviewWithSingleClick)
-    installNextDiffActionOn(targetComponent)
+    if (needSetupOpenPreviewListeners) {
+      installListeners(tree, isOpenEditorDiffPreviewWithSingleClick)
+      installNextDiffActionOn(targetComponent)
+    }
     UIUtil.putClientProperty(tree, ExpandableItemsHandler.IGNORE_ITEM_SELECTION, true)
     installCombinedDiffModelListener()
   }
@@ -86,6 +90,9 @@ abstract class CombinedDiffPreview(protected val tree: ChangesTree,
 
   open fun returnFocusToTree() = Unit
 
+  override fun isPreviewOnDoubleClickAllowed(): Boolean = isCombinedPreviewAllowed() && super.isPreviewOnDoubleClickAllowed()
+  override fun isPreviewOnEnterAllowed(): Boolean = isCombinedPreviewAllowed() && super.isPreviewOnEnterAllowed()
+
   protected abstract fun createModel(): CombinedDiffPreviewModel
 
   protected abstract fun getCombinedDiffTabTitle(): String
@@ -97,7 +104,11 @@ abstract class CombinedDiffPreview(protected val tree: ChangesTree,
   override fun getCurrentName(): String? = model.selected?.presentableName
   override fun hasContent(): Boolean = model.requests.isNotEmpty()
 
+  internal fun getFileSize(): Int = model.requests.size
+
   protected val ChangesTree.id: @NonNls String get() = javaClass.name + "@" + Integer.toHexString(hashCode())
+
+  private fun isCombinedPreviewAllowed() = Registry.`is`("enable.combined.diff")
 }
 
 abstract class CombinedDiffPreviewModel(protected val tree: ChangesTree,
@@ -111,6 +122,7 @@ abstract class CombinedDiffPreviewModel(protected val tree: ChangesTree,
       scrollToChange(change)
     }
   }
+
 companion object {
   @JvmStatic
   fun prepareCombinedDiffModelRequests(project: Project, changes: List<Wrapper>): Map<CombinedBlockId, DiffRequestProducer> {

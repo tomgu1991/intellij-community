@@ -19,14 +19,13 @@ import com.intellij.openapi.wm.ex.WindowManagerEx
 import com.intellij.util.flow.throttle
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flowOn
 import java.awt.Component
 import javax.swing.SwingUtilities
 
 internal class PlatformTaskSupport : TaskSupport {
 
-  override fun taskCancellationNonCancellableInternal(): TaskCancellation = NonCancellableTaskCancellation
+  override fun taskCancellationNonCancellableInternal(): TaskCancellation.NonCancellable = NonCancellableTaskCancellation
 
   override fun taskCancellationCancellableInternal(): TaskCancellation.Cancellable = defaultCancellable
 
@@ -116,8 +115,8 @@ private suspend fun ProgressIndicatorEx.updateFromSink(stateFlow: Flow<ProgressS
     if (state.fraction >= 0.0) {
       // first fraction update makes the indicator determinate
       isIndeterminate = false
+      fraction = state.fraction
     }
-    fraction = state.fraction
   }
   error("collect call must be cancelled")
 }

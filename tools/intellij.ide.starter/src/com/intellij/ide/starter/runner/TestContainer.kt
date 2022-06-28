@@ -8,6 +8,7 @@ import com.intellij.ide.starter.models.IdeProduct
 import com.intellij.ide.starter.models.TestCase
 import com.intellij.ide.starter.path.GlobalPaths
 import com.intellij.ide.starter.path.IDEDataPaths
+import com.intellij.ide.starter.plugins.PluginInstalledState
 import com.intellij.ide.starter.utils.catchAll
 import com.intellij.ide.starter.utils.logOutput
 import org.kodein.di.direct
@@ -46,8 +47,17 @@ interface TestContainer<T> : Closeable {
     useLatestDownloadedIdeBuild = true
   } as T
 
-  fun resolveIDE(ideInfo: IdeInfo): Pair<String, InstalledIDE> {
+  fun resolveIDE(ideInfo: IdeInfo): Pair<String, InstalledIde> {
     return di.direct.factory<IdeInfo, IdeInstallator>().invoke(ideInfo).install(ideInfo)
+  }
+
+  fun installPerformanceTestingPluginIfMissing(context: IDETestContext, ide: InstalledIde) {
+    val performancePluginId = "com.jetbrains.performancePlugin"
+
+    context.pluginConfigurator.apply {
+      if (getPluginInstalledState(performancePluginId) != PluginInstalledState.INSTALLED)
+        setupPluginFromPluginManager(performancePluginId, ideBuild = ide.build)
+    }
   }
 
   /** Starting point to run your test */
@@ -65,7 +75,7 @@ interface TestContainer<T> : Closeable {
     logOutput("Using IDE paths for $testName: $paths")
     logOutput("IDE to run for $testName: $ide")
 
-    val projectHome = testCase.projectInfo?.resolveProjectHome()
+    val projectHome = testCase.projectInfo?.downloadAndUnpackProject()
     val context = IDETestContext(paths, ide, testCase, testName, projectHome, patchVMOptions = { this }, ciServer = ciServer)
     allContexts += context
 
@@ -88,6 +98,9 @@ interface TestContainer<T> : Closeable {
           overrideDirectories(paths)
         }
     }
-    return setupHooks.fold(baseContext.updateGeneralSettings()) { acc, hook -> acc.hook() }
+
+    return setupHooks
+      .fold(baseContext.updateGeneralSettings()) { acc, hook -> acc.hook() }
+      .apply { installPerformanceTestingPluginIfMissing(this, ide) }
   }
 }
