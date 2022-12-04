@@ -67,6 +67,8 @@ class UISettingsState : BaseState() {
 
   @get:OptionTag("WIDESCREEN_SUPPORT")
   var wideScreenSupport by property(false)
+  @get:OptionTag("REMEMBER_SIZE_FOR_EACH_TOOL_WINDOW")
+  var rememberSizeForEachToolWindow by property(false)
   @get:OptionTag("LEFT_HORIZONTAL_SPLIT")
   var leftHorizontalSplit by property(false)
   @get:OptionTag("RIGHT_HORIZONTAL_SPLIT")
@@ -89,8 +91,6 @@ class UISettingsState : BaseState() {
   var navigationBarLocation by enum(NavBarLocation.BOTTOM)
   @get:OptionTag("SHOW_NAVIGATION_BAR_MEMBERS")
   var showMembersInNavigationBar by property(true)
-  @get:OptionTag("SELECTED_TABS_LAYOUT_INFO_ID")
-  var selectedTabsLayoutInfoId by string(null)
   @get:OptionTag("SCROLL_TAB_LAYOUT_IN_EDITOR")
   var scrollTabLayoutInEditor by property(true)
   @get:OptionTag("HIDE_TABS_IF_NEED")
@@ -102,6 +102,7 @@ class UISettingsState : BaseState() {
   @get:OptionTag("CLOSE_TAB_BUTTON_ON_THE_RIGHT")
   var closeTabButtonOnTheRight by property(true)
   @get:OptionTag("EDITOR_TAB_PLACEMENT")
+  @get:ReportValue
   var editorTabPlacement: Int by property(SwingConstants.TOP)
   @get:OptionTag("SHOW_FILE_ICONS_IN_TABS")
   var showFileIconInTabs by property(true)

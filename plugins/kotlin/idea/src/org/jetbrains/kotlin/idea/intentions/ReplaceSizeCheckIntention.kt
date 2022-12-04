@@ -1,9 +1,10 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.intentions
 
 import com.intellij.openapi.editor.Editor
 import org.jetbrains.kotlin.idea.base.psi.replaced
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.intentions.SelfTargetingOffsetIndependentIntention
 import org.jetbrains.kotlin.psi.KtBinaryExpression
 import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
 import org.jetbrains.kotlin.psi.KtExpression
@@ -44,7 +45,7 @@ abstract class ReplaceSizeCheckIntention(textGetter: () -> String) : SelfTargeti
         fun newExpression(): KtExpression {
             val excl = if (negate) "!" else ""
             val receiver = if (targetExpression is KtDotQualifiedExpression) "${targetExpression.receiverExpression.text}." else ""
-            return KtPsiFactory(targetExpression).createExpression("$excl$receiver$newFunctionCall")
+            return KtPsiFactory(targetExpression.project).createExpression("$excl$receiver$newFunctionCall")
         }
     }
 

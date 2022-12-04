@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.intentions
 
@@ -13,9 +13,10 @@ import org.jetbrains.kotlin.descriptors.CallableMemberDescriptor
 import org.jetbrains.kotlin.descriptors.ConstructorDescriptor
 import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
 import org.jetbrains.kotlin.descriptors.PackageFragmentDescriptor
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.core.quoteSegmentsIfNeeded
 import org.jetbrains.kotlin.idea.base.psi.replaced
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.intentions.SelfTargetingIntention
 import org.jetbrains.kotlin.idea.imports.importableFqName
 import org.jetbrains.kotlin.idea.references.resolveMainReferenceToDescriptors
 import org.jetbrains.kotlin.idea.util.application.executeWriteCommand
@@ -68,7 +69,7 @@ class AddFullQualifierIntention : SelfTargetingIntention<KtNameReferenceExpressi
         fun applyTo(referenceExpression: KtNameReferenceExpression, fqName: FqName): KtElement {
             val qualifier = fqName.parent().quoteSegmentsIfNeeded()
             return referenceExpression.project.executeWriteCommand(KotlinBundle.message("add.full.qualifier"), groupId = null) {
-                val psiFactory = KtPsiFactory(referenceExpression)
+                val psiFactory = KtPsiFactory(referenceExpression.project)
                 when (val parent = referenceExpression.parent) {
                     is KtCallableReferenceExpression -> addOrReplaceQualifier(psiFactory, parent, qualifier)
                     is KtCallExpression -> replaceExpressionWithDotQualifier(psiFactory, parent, qualifier)

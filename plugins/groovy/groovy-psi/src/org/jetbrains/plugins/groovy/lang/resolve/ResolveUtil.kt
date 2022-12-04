@@ -11,7 +11,7 @@ import com.intellij.psi.scope.NameHint
 import com.intellij.psi.scope.PsiScopeProcessor
 import com.intellij.psi.util.CachedValueProvider.Result
 import com.intellij.psi.util.CachedValuesManager.getCachedValue
-import com.intellij.util.castSafelyTo
+import com.intellij.util.asSafely
 import org.jetbrains.plugins.groovy.lang.psi.GrReferenceElement
 import org.jetbrains.plugins.groovy.lang.psi.GroovyFileBase
 import org.jetbrains.plugins.groovy.lang.psi.api.GroovyResolveResult
@@ -35,9 +35,15 @@ val NON_CODE: Key<Boolean?> = Key.create("groovy.process.non.code.members")
 @JvmField
 val sorryCannotKnowElementKind: Key<Boolean> = Key.create("groovy.skip.kind.check.please")
 
+private val IGNORE_IMPORTS : Key<Unit> = Key.create("groovy.defer.imports")
+
 fun initialState(processNonCodeMembers: Boolean): ResolveState = ResolveState.initial().put(NON_CODE, processNonCodeMembers)
 
 fun ResolveState.processNonCodeMembers(): Boolean = get(NON_CODE).let { it == null || it }
+
+fun ResolveState.ignoreImports() : ResolveState = put(IGNORE_IMPORTS, Unit)
+
+fun ResolveState.areImportsIgnored(): Boolean = get(IGNORE_IMPORTS) != null
 
 fun treeWalkUp(place: PsiElement, processor: PsiScopeProcessor, state: ResolveState): Boolean {
   return ResolveUtil.treeWalkUp(place, place, processor, state)
@@ -146,7 +152,7 @@ fun GrCodeReferenceElement.isAnnotationReference(): Boolean {
 }
 
 fun getName(state: ResolveState, element: PsiElement): String? {
-  return state[importedNameKey] ?: element.castSafelyTo<PsiNamedElement>()?.name ?: element.castSafelyTo<GrReferenceElement<*>>()?.referenceName
+  return state[importedNameKey] ?: element.asSafely<PsiNamedElement>()?.name ?: element.asSafely<GrReferenceElement<*>>()?.referenceName
 }
 
 fun <T : GroovyResolveResult> valid(allCandidates: Collection<T>): List<T> = allCandidates.filter {

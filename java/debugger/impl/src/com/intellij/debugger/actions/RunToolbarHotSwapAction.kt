@@ -1,13 +1,14 @@
 // Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.debugger.actions
 
-import com.intellij.application.options.RegistryManager
+import com.intellij.openapi.util.registry.RegistryManager
 import com.intellij.debugger.DebuggerManagerEx
 import com.intellij.debugger.impl.DebuggerSession
 import com.intellij.debugger.settings.DebuggerSettings
 import com.intellij.debugger.ui.HotSwapUI
 import com.intellij.debugger.ui.HotSwapUIImpl
 import com.intellij.execution.runToolbar.*
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.ShortcutSet
@@ -68,5 +69,9 @@ class RunToolbarHotSwapAction : AnAction(), RTBarAction {
     }
 
     //LOG.info(getLog(e))
+  }
+
+  override fun getActionUpdateThread(): ActionUpdateThread {
+    return ActionUpdateThread.BGT
   }
 }

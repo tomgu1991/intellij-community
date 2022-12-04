@@ -33,7 +33,7 @@ kotlin {
             kotlinOptions.jvmTarget = "1.8"
         }
     }
-    js() {
+    js(IR) {
         nodejs()
     }
 
@@ -89,7 +89,7 @@ kotlin {
         compilations.all {
             kotlinOptions {
                 freeCompilerArgs +=
-                        ["-Xprogressive", "-XXLanguage:+NewInference", "-XXLanguage:+SamConversionForKotlinFunctions", "-Xuse-experimental=kotlin.ExperimentalMultiplatform"]
+                        ["-Xprogressive", "-Xuse-experimental=kotlin.ExperimentalMultiplatform"]
             }
         }
     }

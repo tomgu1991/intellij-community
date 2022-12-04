@@ -1,11 +1,6 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.testFramework;
 
-import com.intellij.concurrency.IdeaForkJoinWorkerThreadFactory;
-import com.intellij.configurationStore.StateStorageManagerKt;
-import com.intellij.configurationStore.StoreReloadManager;
-import com.intellij.diagnostic.LoadingState;
-import com.intellij.diagnostic.StartUpMeasurer;
 import com.intellij.diagnostic.ThreadDumper;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.Executor;
@@ -29,14 +24,10 @@ import com.intellij.ide.DataManager;
 import com.intellij.ide.IdeEventQueue;
 import com.intellij.ide.fileTemplates.FileTemplateManager;
 import com.intellij.ide.fileTemplates.impl.FileTemplateManagerImpl;
-import com.intellij.ide.plugins.PluginManagerCore;
-import com.intellij.ide.plugins.PluginSet;
 import com.intellij.ide.util.treeView.AbstractTreeBuilder;
 import com.intellij.ide.util.treeView.AbstractTreeNode;
 import com.intellij.ide.util.treeView.AbstractTreeStructure;
 import com.intellij.ide.util.treeView.AbstractTreeUi;
-import com.intellij.idea.ApplicationLoader;
-import com.intellij.idea.Main;
 import com.intellij.model.psi.PsiSymbolReferenceService;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.*;
@@ -45,7 +36,6 @@ import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.PathManager;
-import com.intellij.openapi.application.impl.ApplicationImpl;
 import com.intellij.openapi.application.impl.LaterInvocator;
 import com.intellij.openapi.application.impl.NonBlockingReadActionImpl;
 import com.intellij.openapi.diagnostic.Logger;
@@ -65,20 +55,17 @@ import com.intellij.openapi.project.ex.ProjectManagerEx;
 import com.intellij.openapi.ui.Queryable;
 import com.intellij.openapi.util.*;
 import com.intellij.openapi.util.io.FileUtil;
-import com.intellij.openapi.util.io.FileUtilRt;
-import com.intellij.openapi.util.registry.Registry;
-import com.intellij.openapi.util.registry.RegistryKeyBean;
+import com.intellij.openapi.util.io.NioFiles;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.VirtualFileFilter;
 import com.intellij.openapi.vfs.ex.temp.TempFileSystem;
-import com.intellij.openapi.vfs.newvfs.persistent.PersistentFS;
-import com.intellij.openapi.vfs.newvfs.persistent.PersistentFSImpl;
 import com.intellij.psi.*;
 import com.intellij.psi.impl.source.resolve.reference.impl.PsiMultiReference;
 import com.intellij.rt.execution.junit.FileComparisonFailure;
+import com.intellij.testFramework.common.TestApplicationKt;
 import com.intellij.testFramework.fixtures.IdeaTestExecutionPolicy;
 import com.intellij.ui.tree.AsyncTreeModel;
 import com.intellij.util.*;
@@ -95,6 +82,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.concurrency.AsyncPromise;
 import org.jetbrains.concurrency.Promise;
+import org.junit.AssumptionViolatedException;
 
 import javax.swing.*;
 import javax.swing.tree.TreeModel;
@@ -128,7 +116,6 @@ import static com.intellij.testFramework.UsefulTestCase.assertSameLines;
 import static com.intellij.util.ObjectUtils.consumeIfNotNull;
 import static com.intellij.util.containers.ContainerUtil.map2List;
 import static com.intellij.util.containers.ContainerUtil.sorted;
-import static java.util.Objects.requireNonNullElse;
 import static org.junit.Assert.*;
 
 @SuppressWarnings("UseOfSystemOutOrSystemErr")
@@ -165,52 +152,12 @@ public final class PlatformTestUtil {
     return uppercaseChars >= 3;
   }
 
-  static void loadApp(@NotNull Runnable setupEventQueue) throws Throwable {
-    var isHeadless = true;
-    if ("false".equals(System.getProperty("java.awt.headless"))) {
-      isHeadless = false;
-    }
-    else {
-      UITestUtil.setHeadlessProperty(true);
-    }
-    Main.setHeadlessInTestMode(isHeadless);
-    PluginManagerCore.isUnitTestMode = true;
-    IdeaForkJoinWorkerThreadFactory.setupForkJoinCommonPool(true);
-
-    PluginManagerCore.scheduleDescriptorLoading();
-    var loadedModuleFuture = PluginManagerCore.getInitPluginFuture();
-
-    setupEventQueue.run();
-
-    var app = new ApplicationImpl(true, true, isHeadless, true);
-
-    if (SystemProperties.getBooleanProperty("tests.assertOnMissedCache", true)) {
-      RecursionManager.assertOnMissedCache(app);
-    }
-
-    PluginSet pluginSet;
-    try {
-      // 40 seconds - tests maybe executed on cloud agents where I/O is very slow
-      pluginSet = loadedModuleFuture.get(40, TimeUnit.SECONDS);
-      app.registerComponents(pluginSet.getEnabledModules(), app, null, null);
-      ApplicationLoader.initConfigurationStore(app);
-      RegistryKeyBean.addKeysFromPlugins();
-      Registry.markAsLoaded();
-      var preloadServiceFuture = ApplicationLoader.preloadServices(pluginSet.getEnabledModules(), app, "", false);
-      app.loadComponents();
-
-      preloadServiceFuture.get(40, TimeUnit.SECONDS);
-      ForkJoinTask.invokeAll(ApplicationLoader.callAppInitialized(app));
-      StartUpMeasurer.setCurrentState(LoadingState.APP_STARTED);
-
-      ((PersistentFSImpl)PersistentFS.getInstance()).cleanPersistedContents();
-    }
-    catch (TimeoutException e) {
-      throw new RuntimeException("Cannot preload services in 40 seconds: ${ThreadDumper.dumpThreadsToString()}", e);
-    }
-    catch (InterruptedException e) {
-      throw requireNonNullElse(e.getCause(), e);
-    }
+  /**
+   * @deprecated moved to {@link TestApplicationKt#loadApp(Runnable)}
+   */
+  @Deprecated
+  static void loadApp(@NotNull Runnable setupEventQueue) {
+    TestApplicationKt.loadApp(setupEventQueue);
   }
 
   /**
@@ -358,7 +305,7 @@ public final class PlatformTestUtil {
     }
     else {
       assert !application.isWriteAccessAllowed() : "do not wait under write action to avoid possible deadlock";
-      assert application.isDispatchThread();
+      ApplicationManager.getApplication().assertIsDispatchThread();
     }
   }
 
@@ -736,12 +683,11 @@ public final class PlatformTestUtil {
   }
 
   public static void saveProject(@NotNull Project project) {
-    saveProject(project, false);
+    OpenProjectTaskBuilderKt.saveProject(project, false);
   }
 
   public static void saveProject(@NotNull Project project, boolean isForceSavingAllSettings) {
-    StoreReloadManager.getInstance().flushChangedProjectFileAlarm();
-    StateStorageManagerKt.saveComponentManager(project, isForceSavingAllSettings);
+    OpenProjectTaskBuilderKt.saveProject(project, isForceSavingAllSettings);
   }
 
   static void waitForAllBackgroundActivityToCalmDown() {
@@ -859,21 +805,18 @@ public final class PlatformTestUtil {
     return null;
   }
 
-  private static void assertJarFilesEqual(@NotNull File file1, @NotNull File file2) throws IOException {
-    File tempDir = null;
+  private static void assertJarFilesEqual(File file1, File file2) throws IOException {
+    Path tempDir = Files.createTempDirectory("assert_jar_tmp_");
     try (JarFile jarFile1 = new JarFile(file1); JarFile jarFile2 = new JarFile(file2)) {
-      tempDir = FileUtilRt.createTempDirectory("assert_jar_tmp", null, false);
-      File tempDirectory1 = new File(tempDir, "tmp1");
-      File tempDirectory2 = new File(tempDir, "tmp2");
-      FileUtilRt.createDirectory(tempDirectory1);
-      FileUtilRt.createDirectory(tempDirectory2);
+      Path tempDirectory1 = Files.createDirectory(tempDir.resolve("tmp1"));
+      Path tempDirectory2 = Files.createDirectory(tempDir.resolve("tmp2"));
 
       new Decompressor.Zip(new File(jarFile1.getName())).extract(tempDirectory1);
       new Decompressor.Zip(new File(jarFile2.getName())).extract(tempDirectory2);
 
-      VirtualFile dirAfter = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(tempDirectory1);
+      VirtualFile dirAfter = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(tempDirectory1);
       assertNotNull(tempDirectory1.toString(), dirAfter);
-      VirtualFile dirBefore = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(tempDirectory2);
+      VirtualFile dirBefore = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(tempDirectory2);
       assertNotNull(tempDirectory2.toString(), dirBefore);
       ApplicationManager.getApplication().runWriteAction(() -> {
         dirAfter.refresh(false, true);
@@ -882,9 +825,7 @@ public final class PlatformTestUtil {
       assertDirectoriesEqual(dirAfter, dirBefore);
     }
     finally {
-      if (tempDir != null) {
-        FileUtilRt.delete(tempDir);
-      }
+      NioFiles.deleteRecursively(tempDir);
     }
   }
 
@@ -1065,9 +1006,11 @@ public final class PlatformTestUtil {
   public static void setLongMeaninglessFileIncludeTemplateTemporarilyFor(@NotNull Project project, @NotNull Disposable parentDisposable) {
     FileTemplateManagerImpl templateManager = (FileTemplateManagerImpl)FileTemplateManager.getInstance(project);
     templateManager.setDefaultFileIncludeTemplateTextTemporarilyForTest(FileTemplateManager.FILE_HEADER_TEMPLATE_NAME,
-    "/**\n" +
-    " * Created by ${USER} on ${DATE}.\n" +
-    " */\n", parentDisposable);
+                                                                        """
+                                                                          /**
+                                                                           * Created by ${USER} on ${DATE}.
+                                                                           */
+                                                                          """, parentDisposable);
   }
 
   /**
@@ -1128,7 +1071,7 @@ public final class PlatformTestUtil {
     ProcessHandler processHandler = result.second.getProcessHandler();
     assertNotNull("Process handler must not be null!", processHandler);
     waitWithEventsDispatching("Process failed to finish in " + timeoutInSeconds + " seconds: " + processHandler,
-                              processHandler::isProcessTerminated, 60);
+                              processHandler::isProcessTerminated, Math.toIntExact(timeoutInSeconds));
     return result.first;
   }
 
@@ -1280,16 +1223,6 @@ public final class PlatformTestUtil {
     return project;
   }
 
-  public static void openProject(@NotNull Project project) {
-    if (!ProjectManagerEx.getInstanceEx().openProject(project)) {
-      throw new IllegalStateException("openProject returned false");
-    }
-
-    if (ApplicationManager.getApplication().isDispatchThread()) {
-      dispatchAllInvocationEventsInIdeEventQueue();
-    }
-  }
-
   @SuppressWarnings("deprecation")
   public static boolean isUnderCommunityClassPath() {
     // StdFileTypes.JSPX is assigned to PLAIN_TEXT in IDEA Community
@@ -1303,6 +1236,20 @@ public final class PlatformTestUtil {
     }
     finally {
       SystemProperties.setProperty(key, original);
+    }
+  }
+
+  /**
+   * throws if the CPU cores number is too low for parallel tests
+   */
+  public static void assumeEnoughParallelism() throws AssumptionViolatedException {
+    int N = Math.min(Runtime.getRuntime().availableProcessors(), Math.min(ForkJoinPool.getCommonPoolParallelism(), ForkJoinPool.commonPool().getParallelism()));
+    if (N < 4) {
+      throw new AssumptionViolatedException(
+        "not enough parallelism, couldn't test parallel performance: " +
+        "available CPU cores=" + Runtime.getRuntime().availableProcessors() +
+        "; FJP configured parallelism=" + ForkJoinPool.getCommonPoolParallelism() +
+        "; FJP actual common pool parallelism=" + ForkJoinPool.commonPool().getParallelism());
     }
   }
 }

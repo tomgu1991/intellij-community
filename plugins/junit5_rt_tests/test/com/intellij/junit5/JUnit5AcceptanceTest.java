@@ -56,7 +56,7 @@ public class JUnit5AcceptanceTest extends JUnit5CodeInsightTest {
     assertFalse(JUnitUtil.isTestClass(aClass, false, false));
     assertFalse(JUnitUtil.isTestMethod(MethodLocation.elementInClass(aClass.getMethods()[0], aClass)));
   }
-  
+
   @Test
   void rejectPrivateMethods() {
     PsiClass aClass =
@@ -73,7 +73,7 @@ public class JUnit5AcceptanceTest extends JUnit5CodeInsightTest {
     assertNotNull(framework, "No test framework detected");
     assertTrue(framework instanceof JUnit5Framework, framework.getName());
   }
-  
+
   @Test
   void testFrameworkDetectionWithMixedJunit4Junit5() throws ExecutionException {
     myFixture.addClass("package org.junit; public @interface Test {}");
@@ -85,6 +85,61 @@ public class JUnit5AcceptanceTest extends JUnit5CodeInsightTest {
     configuration.beClassConfiguration(aClass);
     JavaParameters parameters = configuration.getTestObject().createJavaParameters4Tests();
     assertTrue(parameters.getProgramParametersList().hasParameter("-junit5"));
+  }
+
+  @Test
+  void testClassWithDisabledCondition() throws ExecutionException {
+    myFixture.addClass("package org.junit.jupiter.api; public @interface Disabled {}");
+    PsiClass aClass = myFixture.addClass(
+      """
+        /** @noinspection ALL*/
+        @org.junit.jupiter.api.Disabled
+        public class MyTest {@org.junit.jupiter.api.Test void method() {}}""");
+    assertNotNull(aClass);
+    TestFramework framework = TestFrameworks.detectFramework(aClass);
+    assertTrue(framework instanceof JUnit5Framework, framework.getName());
+    JUnitConfiguration configuration = new JUnitConfiguration("", myFixture.getProject());
+    configuration.beClassConfiguration(aClass);
+    JavaParameters parameters = configuration.getTestObject().createJavaParameters4Tests();
+    assertTrue(parameters.getVMParametersList().hasParameter("-Djunit.jupiter.conditions.deactivate=org.junit.*DisabledCondition"));
+  }
+
+  @Test
+  void testMetaDisabledClass() throws ExecutionException {
+    myFixture.addClass("""
+                         package org.test.sample;
+                         @org.junit.jupiter.api.Disabled
+                         public @interface MetaDisabled {}""");
+    PsiClass aClass = myFixture.addClass(
+      """
+        /** @noinspection ALL*/
+        @org.test.sample.MetaDisabled
+        public class MyTest {@org.junit.jupiter.api.Test void method() {}}""");
+    assertNotNull(aClass);
+    TestFramework framework = TestFrameworks.detectFramework(aClass);
+    assertTrue(framework instanceof JUnit5Framework, framework.getName());
+    JUnitConfiguration configuration = new JUnitConfiguration("", myFixture.getProject());
+    configuration.beClassConfiguration(aClass);
+    JavaParameters parameters = configuration.getTestObject().createJavaParameters4Tests();
+    assertTrue(parameters.getVMParametersList().hasParameter("-Djunit.jupiter.conditions.deactivate=org.junit.*DisabledCondition"));
+  }
+
+  @Test
+  void testWithDisabledCondition() throws ExecutionException {
+    PsiClass aClass = myFixture.addClass(
+      """
+        /** @noinspection ALL*/
+        public class MyTest {
+          @org.junit.jupiter.api.Disabled
+          @org.junit.jupiter.api.Test void method() {}}""");
+    assertNotNull(aClass);
+    TestFramework framework = TestFrameworks.detectFramework(aClass);
+    assertTrue(framework instanceof JUnit5Framework, framework.getName());
+    JUnitConfiguration configuration = new JUnitConfiguration("", myFixture.getProject());
+    @SuppressWarnings("OptionalGetWithoutIsPresent") PsiMethod method = Arrays.stream(aClass.getMethods()).findFirst().get();
+    configuration.beMethodConfiguration(MethodLocation.elementInClass(method, aClass));
+    JavaParameters parameters = configuration.getTestObject().createJavaParameters4Tests();
+    assertTrue(parameters.getVMParametersList().hasParameter("-Djunit.jupiter.conditions.deactivate=org.junit.*DisabledCondition"));
   }
 
   @Test
@@ -129,16 +184,19 @@ public class JUnit5AcceptanceTest extends JUnit5CodeInsightTest {
 
   @Test
   void metaAnnotations() {
-    myFixture.addClass("package a;\n" +
-                       "import java.lang.annotation.Retention;\n" +
-                       "import java.lang.annotation.RetentionPolicy;\n" +
-                       "@Retention(RetentionPolicy.RUNTIME)\n" +
-                       "@org.junit.jupiter.api.Test\n" +
-                       "@interface MyTest {}");
-    PsiClass aClass = myFixture.addClass("class ATest {\n" +
-                                         "    @a.MyTest\n" +
-                                         "    void foo() {}\n" +
-                                         "}\n");
+    myFixture.addClass("""
+                         package a;
+                         import java.lang.annotation.Retention;
+                         import java.lang.annotation.RetentionPolicy;
+                         @Retention(RetentionPolicy.RUNTIME)
+                         @org.junit.jupiter.api.Test
+                         @interface MyTest {}""");
+    PsiClass aClass = myFixture.addClass("""
+                                           class ATest {
+                                               @a.MyTest
+                                               void foo() {}
+                                           }
+                                           """);
     assertTrue(JUnitUtil.isTestClass(aClass, false, false));
     assertTrue(JUnitUtil.isTestMethod(MethodLocation.elementInClass(aClass.getMethods()[0], aClass)));
   }

@@ -29,6 +29,8 @@ class WindowInfoImpl : Cloneable, WindowInfo, BaseState() {
   @get:Attribute("active")
   override var isActiveOnStart by property(false)
 
+  override var toolWindowPaneId by string(WINDOW_INFO_DEFAULT_TOOL_WINDOW_PANE_ID)
+
   @get:Attribute(converter = ToolWindowAnchorConverter::class)
   override var anchor by property(ToolWindowAnchor.LEFT) { it == ToolWindowAnchor.LEFT }
 
@@ -123,7 +125,7 @@ class WindowInfoImpl : Cloneable, WindowInfo, BaseState() {
   }
 
   override fun hashCode(): Int {
-    return anchor.hashCode() + id!!.hashCode() + type.hashCode() + order
+    return anchor.hashCode() + safeToolWindowPaneId.hashCode() + id!!.hashCode() + type.hashCode() + order
   }
 
   override fun toString() = "id: $id, ${super.toString()}"
@@ -152,12 +154,12 @@ private class ToolWindowAnchorConverter : Converter<ToolWindowAnchor>() {
 }
 
 private fun canActivateOnStart(id: String): Boolean {
-  val ep = findEp(ToolWindowEP.EP_NAME.iterable, id)
-           ?: findEp(FacetDependentToolWindow.EXTENSION_POINT_NAME.iterable, id)
-           ?: findEp(LibraryDependentToolWindow.EXTENSION_POINT_NAME.iterable, id)
+  val ep = findEp(ToolWindowEP.EP_NAME.lazySequence(), id)
+           ?: findEp(FacetDependentToolWindow.EXTENSION_POINT_NAME.lazySequence(), id)
+           ?: findEp(LibraryDependentToolWindow.EXTENSION_POINT_NAME.lazySequence(), id)
   return ep == null || !ep.isDoNotActivateOnStart
 }
 
-private fun findEp(list: Iterable<ToolWindowEP>, id: String): ToolWindowEP? {
+private fun findEp(list: Sequence<ToolWindowEP>, id: String): ToolWindowEP? {
   return list.firstOrNull { id == it.id }
 }

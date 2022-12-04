@@ -14,6 +14,8 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.util.Comparing;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.pom.Navigatable;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
@@ -21,6 +23,8 @@ import java.util.List;
 import static com.intellij.openapi.fileEditor.OpenFileDescriptor.unfoldCurrentLine;
 
 public class FileNavigatorImpl implements FileNavigator {
+  private final ThreadLocal<Boolean> myIgnoreContextEditor = new ThreadLocal<>();
+
   @Override
   public boolean canNavigate(@NotNull OpenFileDescriptor descriptor) {
     VirtualFile file = descriptor.getFile();
@@ -42,11 +46,13 @@ public class FileNavigatorImpl implements FileNavigator {
       throw new IllegalStateException("target not valid");
     }
 
-    if (!descriptor.getFile().isDirectory()) {
-      if (navigateInEditorOrNativeApp(descriptor, requestFocus)) return;
+    if (!descriptor.getFile().isDirectory() && navigateInEditorOrNativeApp(descriptor, requestFocus)) {
+      return;
     }
 
-    if (navigateInProjectView(descriptor.getProject(), descriptor.getFile(), requestFocus)) return;
+    if (navigateInProjectView(descriptor.getProject(), descriptor.getFile(), requestFocus)) {
+      return;
+    }
 
     String message = IdeBundle.message("error.files.of.this.type.cannot.be.opened", ApplicationNamesInfo.getInstance().getProductName());
     Messages.showErrorDialog(descriptor.getProject(), message, IdeBundle.message("title.cannot.open.file"));
@@ -54,7 +60,9 @@ public class FileNavigatorImpl implements FileNavigator {
 
   private boolean navigateInEditorOrNativeApp(@NotNull OpenFileDescriptor descriptor, boolean requestFocus) {
     FileType type = FileTypeManager.getInstance().getKnownFileTypeOrAssociate(descriptor.getFile(), descriptor.getProject());
-    if (type == null || !descriptor.getFile().isValid()) return false;
+    if (type == null || !descriptor.getFile().isValid()) {
+      return false;
+    }
 
     if (type instanceof INativeFileType) {
       return ((INativeFileType)type).openFileInAssociatedApplication(descriptor.getProject(), descriptor.getFile());
@@ -79,6 +87,7 @@ public class FileNavigatorImpl implements FileNavigator {
   }
 
   private boolean navigateInRequestedEditor(@NotNull OpenFileDescriptor descriptor) {
+    if (myIgnoreContextEditor.get() == Boolean.TRUE) return false;
     @SuppressWarnings("deprecation") DataContext ctx = DataManager.getInstance().getDataContext();
     Editor e = OpenFileDescriptor.NAVIGATE_IN_EDITOR.getData(ctx);
     if (e == null) return false;
@@ -102,5 +111,18 @@ public class FileNavigatorImpl implements FileNavigator {
       }
     }
     return !editors.isEmpty();
+  }
+
+  @ApiStatus.Experimental
+  public boolean navigateIgnoringContextEditor(@NotNull Navigatable navigatable) {
+    if (!navigatable.canNavigate()) return false;
+    myIgnoreContextEditor.set(Boolean.TRUE);
+    try {
+      navigatable.navigate(true);
+    }
+    finally {
+      myIgnoreContextEditor.set(null);
+    }
+    return true;
   }
 }

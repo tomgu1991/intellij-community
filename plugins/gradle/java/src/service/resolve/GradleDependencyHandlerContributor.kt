@@ -39,23 +39,40 @@ class GradleDependencyHandlerContributor : NonCodeMembersContributor() {
     val objectVarargType = PsiEllipsisType(TypesUtil.getJavaLangObject(place))
 
     val configurationsMap = if (qualifierType.buildscript) data.buildScriptConfigurations else data.configurations
-    val configurations = if (methodName == null) configurationsMap.values else listOf(configurationsMap[methodName] ?: return)
+    val configurations = if (methodName == null) configurationsMap.values else configurationsMap[methodName]?.let{ listOf(it) } ?: emptyList()
+
     for (configuration in configurations) {
       val configurationName = configuration.name ?: continue
-      val method = GrLightMethodBuilder(manager, configurationName).apply {
-        methodKind = dependencyMethodKind
-        containingClass = clazz
-        returnType = TypesUtil.createType(GradleCommonClassNames.GRADLE_API_ARTIFACTS_EXTERNAL_MODULE_DEPENDENCY, place)
-        originInfo = DEPENDENCY_NOTATION
-        addParameter("dependencyNotation", objectVarargType)
-        setBaseIcon(GradleIcons.Gradle)
-        putUserData(NonCodeMembersHolder.DOCUMENTATION, configuration.getDescription())
-        if (worthLifting(place)) {
-          GradleLookupWeigher.setGradleCompletionPriority(this, 10)
-        }
-      }
-      if (!processor.execute(method, state)) return
+      if (!addMethod(manager, configurationName, clazz, place, objectVarargType, configuration.getDescription(), processor, state, configuration.declarationAlternatives)) return
     }
+  }
+
+  private fun addMethod(manager: PsiManager?,
+                configurationName: String,
+                clazz: PsiClass?,
+                place: PsiElement,
+                objectVarargType: PsiEllipsisType,
+                description: String?,
+                processor: PsiScopeProcessor,
+                state: ResolveState,
+                declarationAlternatives: List<String>): Boolean {
+    val method = GrLightMethodBuilder(manager, configurationName).apply {
+      methodKind = dependencyMethodKind
+      containingClass = clazz
+      returnType = TypesUtil.createType(GradleCommonClassNames.GRADLE_API_ARTIFACTS_EXTERNAL_MODULE_DEPENDENCY, place)
+      originInfo = DEPENDENCY_NOTATION
+      addParameter("dependencyNotation", objectVarargType)
+      setBaseIcon(GradleIcons.Gradle)
+      if (declarationAlternatives.isNotEmpty()) {
+        putUserData(DECLARATION_ALTERNATIVES, declarationAlternatives)
+        modifierList.addAnnotation(CommonClassNames.JAVA_LANG_DEPRECATED)
+      }
+      putUserData(NonCodeMembersHolder.DOCUMENTATION, description)
+      if (worthLifting(place)) {
+        GradleLookupWeigher.setGradleCompletionPriority(this, GradleLookupWeigher.DEFAULT_COMPLETION_PRIORITY * 2)
+      }
+    }
+    return processor.execute(method, state)
   }
 
   private fun worthLifting(place: PsiElement): Boolean {

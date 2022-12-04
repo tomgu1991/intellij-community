@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.j2k
 
@@ -61,6 +61,9 @@ abstract class AbstractJavaToKotlinConverterSingleFileTest : AbstractJavaToKotli
             }
             directives["OPEN_BY_DEFAULT"]?.let {
                 settings.openByDefault = it.toBoolean()
+            }
+            directives["PUBLIC_BY_DEFAULT"]?.let {
+                settings.publicByDefault = it.toBoolean()
             }
 
             val rawConverted = WriteCommandAction.runWriteCommandAction(project, Computable {
@@ -155,9 +158,9 @@ abstract class AbstractJavaToKotlinConverterSingleFileTest : AbstractJavaToKotli
     override fun getProjectDescriptor(): LightProjectDescriptor {
         val testName = getTestName(false)
         return if (testName.contains("WithFullJdk") || testName.contains("withFullJdk"))
-            KotlinWithJdkAndRuntimeLightProjectDescriptor.INSTANCE_FULL_JDK
+            KotlinWithJdkAndRuntimeLightProjectDescriptor.getInstanceFullJdk()
         else
-            KotlinWithJdkAndRuntimeLightProjectDescriptor.INSTANCE
+            KotlinWithJdkAndRuntimeLightProjectDescriptor.getInstance()
     }
 
     private fun String.removeFirstLine() = substringAfter('\n', "")

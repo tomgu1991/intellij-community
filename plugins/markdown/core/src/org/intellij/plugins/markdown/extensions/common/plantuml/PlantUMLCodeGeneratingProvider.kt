@@ -27,11 +27,11 @@ class PlantUMLCodeGeneratingProvider(
     get() = dowloadableFiles
 
   override fun isApplicable(language: String): Boolean {
-    return isEnabled && isAvailable && (language == "puml" || language == "plantuml")
+    return isEnabled && isAvailable && PlantUMLCodeFenceLanguageProvider.isPlantUmlInfoString(language.lowercase())
   }
 
   override fun generateHtml(language: String, raw: String, node: ASTNode): String {
-    val key = getUniqueFile(language, raw, "png").toFile()
+    val key = getUniqueFile(language.lowercase(), raw, "png").toFile()
     cacheDiagram(key, raw)
     collector?.addAliveCachedFile(this, key)
     return "<img src=\"${key.toURI()}\"/>"

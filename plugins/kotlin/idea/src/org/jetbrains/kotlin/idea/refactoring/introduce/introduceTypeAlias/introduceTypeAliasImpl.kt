@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring.introduce.introduceTypeAlias
 
@@ -10,7 +10,7 @@ import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.util.containers.LinkedMultiMap
 import com.intellij.util.containers.MultiMap
 import org.jetbrains.kotlin.descriptors.TypeAliasDescriptor
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.core.CollectingNameValidator
 import org.jetbrains.kotlin.idea.base.fe10.codeInsight.newDeclaration.Fe10KotlinNameSuggester
 import org.jetbrains.kotlin.idea.base.psi.unifier.KotlinPsiRange
@@ -43,7 +43,7 @@ sealed class IntroduceTypeAliasAnalysisResult {
 private fun IntroduceTypeAliasData.getTargetScope() = targetSibling.getResolutionScope(bindingContext, resolutionFacade)
 
 fun IntroduceTypeAliasData.analyze(): IntroduceTypeAliasAnalysisResult {
-    val psiFactory = KtPsiFactory(originalTypeElement)
+    val psiFactory = KtPsiFactory(originalTypeElement.project)
 
     val contextExpression = originalTypeElement.getStrictParentOfType<KtExpression>()!!
     val targetScope = getTargetScope()
@@ -148,7 +148,7 @@ fun findDuplicates(typeAlias: KtTypeAlias): Map<KotlinPsiRange, () -> Unit> {
     val unifierParameters = typeAliasDescriptor.declaredTypeParameters.map { UnifierParameter(it, null) }
     val unifier = KotlinPsiUnifier(unifierParameters)
 
-    val psiFactory = KtPsiFactory(typeAlias)
+    val psiFactory = KtPsiFactory(typeAlias.project)
 
     fun replaceTypeElement(occurrence: KtTypeElement, typeArgumentsText: String) {
         occurrence.replace(psiFactory.createType("$aliasName$typeArgumentsText").typeElement!!)
@@ -239,7 +239,7 @@ private var KtTypeReference.typeParameterInfo: TypeParameter? by CopyablePsiUser
 
 fun IntroduceTypeAliasDescriptor.generateTypeAlias(previewOnly: Boolean = false): KtTypeAlias {
     val originalElement = originalData.originalTypeElement
-    val psiFactory = KtPsiFactory(originalElement)
+    val psiFactory = KtPsiFactory(originalElement.project)
 
     for (typeParameter in typeParameters)
         for (it in typeParameter.typeReferenceInfos) {

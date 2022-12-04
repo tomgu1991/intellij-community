@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring.introduce.introduceVariable
 
@@ -8,7 +8,7 @@ import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.psi.PsiNamedElement
 import org.jetbrains.kotlin.builtins.PrimitiveType
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.base.fe10.codeInsight.newDeclaration.Fe10KotlinNameSuggester
 import org.jetbrains.kotlin.idea.caches.resolve.analyzeInContext
 import org.jetbrains.kotlin.idea.caches.resolve.getResolutionFacade
@@ -47,7 +47,7 @@ private fun getApplicableComponentFunctions(
 
     val scope = contextExpression.getResolutionScope(context, facade)
 
-    val psiFactory = KtPsiFactory(contextExpression)
+    val psiFactory = KtPsiFactory(contextExpression.project)
     @Suppress("UNCHECKED_CAST")
     return generateSequence(1) { it + 1 }.map {
             val componentCallExpr = psiFactory.createExpressionByPattern("$0.$1", receiverExpression ?: contextExpression, "component$it()")

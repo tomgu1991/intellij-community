@@ -1,6 +1,7 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.ui.dsl.builder
 
+import com.intellij.openapi.util.registry.RegistryValue
 import com.intellij.ui.dsl.builder.impl.MutablePropertyImpl
 import kotlin.reflect.KMutableProperty0
 
@@ -43,4 +44,12 @@ fun <T> MutableProperty<T>.toNullableProperty(): MutableProperty<T?> {
 
 fun <T> MutableProperty<T>.toNullableProperty(defaultValue: T): MutableProperty<T?> {
   return MutableProperty({ get() }, { set(it ?: defaultValue) })
+}
+
+fun <T> KMutableProperty0<T?>.toNonNullableProperty(defaultValue: T): MutableProperty<T> {
+  return MutableProperty({ get() ?: defaultValue }, { set(it) })
+}
+
+fun RegistryValue.toBooleanProperty(): MutableProperty<Boolean> {
+  return MutableProperty({ asBoolean() }, { setValue(it) })
 }

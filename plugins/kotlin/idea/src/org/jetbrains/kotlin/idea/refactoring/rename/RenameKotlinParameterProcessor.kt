@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring.rename
 
@@ -44,11 +44,13 @@ class RenameKotlinParameterProcessor : RenameKotlinPsiProcessor() {
         searchScope: SearchScope,
         searchInCommentsAndStrings: Boolean
     ): Collection<PsiReference> {
-        if (element !is KtParameter) return super.findReferences(element, searchScope, searchInCommentsAndStrings)
-        val ownerFunction = element.ownerFunction
-            ?: return super.findReferences(element, searchScope, searchInCommentsAndStrings)
-        val newScope = searchScope or ownerFunction.useScope
-        return super.findReferences(element, newScope, searchInCommentsAndStrings)
+        val correctScope = if (element is KtParameter) {
+            searchScope or element.useScopeForRename
+        } else {
+            searchScope
+        }
+
+        return super.findReferences(element, correctScope, searchInCommentsAndStrings)
     }
 
     override fun renameElement(element: PsiElement, newName: String, usages: Array<UsageInfo>, listener: RefactoringElementListener?) {

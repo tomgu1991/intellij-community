@@ -14,11 +14,7 @@ import com.intellij.openapi.util.Pair
 import com.intellij.openapi.util.registry.Registry
 import com.intellij.openapi.util.registry.RegistryValue
 import com.intellij.openapi.util.registry.RegistryValueListener
-import com.intellij.openapi.wm.ToolWindow
-import com.intellij.openapi.wm.ToolWindowAnchor
-import com.intellij.openapi.wm.ToolWindowType
-import com.intellij.openapi.wm.WindowInfo
-import com.intellij.openapi.wm.ex.ToolWindowEx
+import com.intellij.openapi.wm.*
 import com.intellij.openapi.wm.impl.AbstractDroppableStripe
 import com.intellij.openapi.wm.impl.ToolWindowImpl
 import com.intellij.openapi.wm.impl.ToolWindowManagerImpl
@@ -26,19 +22,21 @@ import com.intellij.openapi.wm.impl.ToolWindowManagerImpl.Companion.getAdjustedR
 import com.intellij.openapi.wm.impl.ToolWindowManagerImpl.Companion.getRegisteredMutableInfoOrLogError
 import com.intellij.openapi.wm.impl.WindowInfoImpl
 import com.intellij.reference.SoftReference
+import com.intellij.ui.JBColor
 import com.intellij.ui.OnePixelSplitter
+import com.intellij.ui.awt.DevicePoint
 import com.intellij.ui.components.JBLayeredPane
 import com.intellij.ui.paint.PaintUtil
 import com.intellij.ui.scale.JBUIScale
 import com.intellij.ui.scale.ScaleContext
 import com.intellij.util.IJSwingUtilities
+import com.intellij.util.concurrency.annotations.RequiresEdt
 import com.intellij.util.ui.ImageUtil
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import java.awt.*
 import java.awt.geom.Point2D
 import java.awt.image.BufferedImage
-import java.beans.PropertyChangeEvent
 import java.util.*
 import java.util.function.Function
 import javax.swing.JComponent
@@ -52,38 +50,41 @@ private val LOG = logger<ToolWindowPane>()
 /**
  * This panel contains all tool stripes and JLayeredPane at the center area. All tool windows are
  * located inside this layered pane.
- *
- * @author Anton Katilin
- * @author Vladimir Kondratyev
  */
-class ToolWindowPane internal constructor(frame: JFrame,
-                                          parentDisposable: Disposable,
-                                          @field:JvmField internal val buttonManager: ToolWindowButtonManager) : JBLayeredPane(), UISettingsListener {
+class ToolWindowPane internal constructor(
+  frame: JFrame,
+  parentDisposable: Disposable,
+  val paneId: String,
+  @field:JvmField internal val buttonManager: ToolWindowButtonManager,
+) : JBLayeredPane(), UISettingsListener {
   companion object {
     const val TEMPORARY_ADDED = "TEMPORARY_ADDED"
 
-    //The size of topmost 'resize' area when toolwindow caption is used for both resize and drag
+    // the size of topmost 'resize' area when toolwindow caption is used for both resize and drag
     internal val headerResizeArea: Int
       get() = JBUI.scale(Registry.intValue("ide.new.tool.window.resize.area.height", 14, 1, 26))
 
     private fun normalizeWeight(weight: Float): Float {
-      if (weight <= 0) return WindowInfoImpl.DEFAULT_WEIGHT
+      if (weight <= 0) {
+        return WindowInfoImpl.DEFAULT_WEIGHT
+      }
       return if (weight >= 1) 1 - WindowInfoImpl.DEFAULT_WEIGHT else weight
     }
   }
 
   private var isLookAndFeelUpdated = false
-  private val frame: JFrame
   private var state = ToolWindowPaneState()
+
+  internal val frame: JFrame
 
   /**
    * This panel is the layered pane where all sliding tool windows are located. The DEFAULT
    * layer contains splitters. The PALETTE layer contains all sliding tool windows.
    */
-  private val layeredPane: MyLayeredPane
+  private val layeredPane: FrameLayeredPane
 
   /*
-   * Splitters.
+   * Splitters
    */
   private val verticalSplitter: ThreeComponentsSplitter
   private val horizontalSplitter: ThreeComponentsSplitter
@@ -95,6 +96,8 @@ class ToolWindowPane internal constructor(frame: JFrame,
     isOpaque = false
     this.frame = frame
 
+    name = paneId
+
     // splitters
     verticalSplitter = ThreeComponentsSplitter(true, parentDisposable)
     val registryValue = Registry.get("ide.mainSplitter.min.size")
@@ -105,11 +108,11 @@ class ToolWindowPane internal constructor(frame: JFrame,
     }, parentDisposable)
     verticalSplitter.dividerWidth = 0
     verticalSplitter.setDividerMouseZoneSize(Registry.intValue("ide.splitter.mouseZone"))
-    verticalSplitter.background = Color.gray
+    verticalSplitter.background = JBColor.GRAY
     horizontalSplitter = ThreeComponentsSplitter(false, parentDisposable)
     horizontalSplitter.dividerWidth = 0
     horizontalSplitter.setDividerMouseZoneSize(Registry.intValue("ide.splitter.mouseZone"))
-    horizontalSplitter.background = Color.gray
+    horizontalSplitter.background = JBColor.GRAY
     updateInnerMinSize(registryValue)
     val uiSettings = UISettings.getInstance()
     isWideScreen = uiSettings.wideScreenSupport
@@ -124,7 +127,7 @@ class ToolWindowPane internal constructor(frame: JFrame,
     updateToolStripesVisibility(uiSettings)
 
     // layered pane
-    layeredPane = MyLayeredPane(if (isWideScreen) horizontalSplitter else verticalSplitter, frame = frame)
+    layeredPane = FrameLayeredPane(if (isWideScreen) horizontalSplitter else verticalSplitter, frame = frame)
 
     // compose layout
     buttonManager.addToToolWindowPane(this)
@@ -163,7 +166,7 @@ class ToolWindowPane internal constructor(frame: JFrame,
     if (info.isDocked) {
       val side = !info.isSplit
       val anchor = info.anchor
-      val sideInfo = manager.getDockedInfoAt(anchor, side)
+      val sideInfo = manager.getDockedInfoAt(paneId, anchor, side)
       if (sideInfo == null) {
         setComponent(decorator, anchor, normalizeWeight(info.weight))
         if (!dirtyMode) {
@@ -191,7 +194,7 @@ class ToolWindowPane internal constructor(frame: JFrame,
     }
     else if (component != null && component.isShowing) {
       val anchor = info.anchor
-      val sideInfo = manager.getDockedInfoAt(anchor, !info.isSplit)
+      val sideInfo = manager.getDockedInfoAt(paneId, anchor, !info.isSplit)
       if (sideInfo == null) {
         setComponent(null, anchor, 0f)
       }
@@ -223,32 +226,36 @@ class ToolWindowPane internal constructor(frame: JFrame,
   }
 
   private fun setComponent(component: JComponent?, anchor: ToolWindowAnchor, weight: Float) {
+    when (anchor) {
+      ToolWindowAnchor.TOP -> verticalSplitter.firstComponent = component
+      ToolWindowAnchor.LEFT -> horizontalSplitter.firstComponent = component
+      ToolWindowAnchor.BOTTOM -> verticalSplitter.lastComponent = component
+      ToolWindowAnchor.RIGHT -> horizontalSplitter.lastComponent = component
+      else -> LOG.error("unknown anchor: $anchor")
+    }
+    setWeight(anchor, weight)
+  }
+
+  fun setWeight(window: ToolWindow, weight: Float) {
+    if (window.type != ToolWindowType.DOCKED) {
+      return
+    }
+    setWeight(window.anchor, normalizeWeight(weight))
+  }
+
+  private fun setWeight(anchor: ToolWindowAnchor, weight: Float) {
     val size = rootPane.size
     when (anchor) {
-      ToolWindowAnchor.TOP -> {
-        verticalSplitter.firstComponent = component
-        verticalSplitter.firstSize = (size.getHeight() * weight).toInt()
-      }
-      ToolWindowAnchor.LEFT -> {
-        horizontalSplitter.firstComponent = component
-        horizontalSplitter.firstSize = (size.getWidth() * weight).toInt()
-      }
-      ToolWindowAnchor.BOTTOM -> {
-        verticalSplitter.lastComponent = component
-        verticalSplitter.lastSize = (size.getHeight() * weight).toInt()
-      }
-      ToolWindowAnchor.RIGHT -> {
-        horizontalSplitter.lastComponent = component
-        horizontalSplitter.lastSize = (size.getWidth() * weight).toInt()
-      }
-      else -> {
-        LOG.error("unknown anchor: $anchor")
-      }
+      ToolWindowAnchor.TOP -> verticalSplitter.firstSize = (size.getHeight() * weight).toInt()
+      ToolWindowAnchor.LEFT -> horizontalSplitter.firstSize = (size.getWidth() * weight).toInt()
+      ToolWindowAnchor.BOTTOM -> verticalSplitter.lastSize = (size.getHeight() * weight).toInt()
+      ToolWindowAnchor.RIGHT -> horizontalSplitter.lastSize = (size.getWidth() * weight).toInt()
+      else -> LOG.error("unknown anchor: $anchor")
     }
   }
 
   private fun getComponentAt(anchor: ToolWindowAnchor): JComponent? {
-    return when(anchor) {
+    return when (anchor) {
       ToolWindowAnchor.TOP -> verticalSplitter.firstComponent
       ToolWindowAnchor.LEFT -> horizontalSplitter.firstComponent
       ToolWindowAnchor.BOTTOM -> verticalSplitter.lastComponent
@@ -260,8 +267,14 @@ class ToolWindowPane internal constructor(frame: JFrame,
     }
   }
 
+  @RequiresEdt
   fun setDocumentComponent(component: JComponent?) {
     (if (isWideScreen) verticalSplitter else horizontalSplitter).innerComponent = component
+  }
+
+  @RequiresEdt
+  fun getDocumentComponent(): JComponent? {
+    return (if (isWideScreen) verticalSplitter else horizontalSplitter).innerComponent
   }
 
   private fun updateToolStripesVisibility(uiSettings: UISettings) {
@@ -277,8 +290,8 @@ class ToolWindowPane internal constructor(frame: JFrame,
   val isBottomSideToolWindowsVisible: Boolean
     get() = getComponentAt(ToolWindowAnchor.BOTTOM) != null
 
-  internal fun getStripeFor(screenPoint: Point, preferred: AbstractDroppableStripe): AbstractDroppableStripe? {
-    return buttonManager.getStripeFor(screenPoint, preferred, this)
+  internal fun getStripeFor(devicePoint: DevicePoint, preferred: AbstractDroppableStripe): AbstractDroppableStripe? {
+    return buttonManager.getStripeFor(devicePoint, preferred, this)
   }
 
   fun stretchWidth(window: ToolWindow, value: Int) {
@@ -289,11 +302,11 @@ class ToolWindowPane internal constructor(frame: JFrame,
     stretch(window, value)
   }
 
-  private fun stretch(wnd: ToolWindow, value: Int) {
-    val pair = findResizerAndComponent(wnd) ?: return
-    val vertical = wnd.anchor == ToolWindowAnchor.TOP || wnd.anchor == ToolWindowAnchor.BOTTOM
+  private fun stretch(window: ToolWindow, value: Int) {
+    val pair = findResizerAndComponent(window) ?: return
+    val vertical = window.anchor == ToolWindowAnchor.TOP || window.anchor == ToolWindowAnchor.BOTTOM
     val actualSize = (if (vertical) pair.second.height else pair.second.width) + value
-    val first = wnd.anchor == ToolWindowAnchor.LEFT || wnd.anchor == ToolWindowAnchor.TOP
+    val first = window.anchor == ToolWindowAnchor.LEFT || window.anchor == ToolWindowAnchor.TOP
     val maxValue = if (vertical) verticalSplitter.getMaxSize(first) else horizontalSplitter.getMaxSize(first)
     val minValue = if (vertical) verticalSplitter.getMinSize(first) else horizontalSplitter.getMinSize(first)
     pair.first.setSize(max(minValue, min(maxValue, actualSize)))
@@ -489,12 +502,14 @@ class ToolWindowPane internal constructor(frame: JFrame,
       override fun toString() = "[$firstComponent|$secondComponent]"
     }
 
-    val splitter: Splitter = MySplitter()
+    val splitter = MySplitter()
     splitter.orientation = anchor.isSplitVertically
     if (!anchor.isHorizontal) {
       splitter.setAllowSwitchOrientationByMouseClick(true)
-      splitter.addPropertyChangeListener { evt: PropertyChangeEvent ->
-        if (Splitter.PROP_ORIENTATION != evt.propertyName) return@addPropertyChangeListener
+      splitter.addPropertyChangeListener { event ->
+        if (Splitter.PROP_ORIENTATION != event.propertyName) {
+          return@addPropertyChangeListener
+        }
         val isSplitterHorizontalNow = !splitter.isVertical
         val settings = UISettings.getInstance()
         if (anchor == ToolWindowAnchor.LEFT) {
@@ -516,13 +531,13 @@ class ToolWindowPane internal constructor(frame: JFrame,
     // if all components are hidden for anchor we should find the second component to put in a splitter
     // otherwise we add empty splitter
     if (c == null) {
-      val toolWindows = manager.getToolWindowsOn(anchor, info.id!!)
-      toolWindows.removeIf { window: ToolWindowEx? -> window == null || window.isSplitMode == info.isSplit || !window.isVisible }
+      val toolWindows = manager.getToolWindowsOn(paneId, anchor, info.id!!)
+      toolWindows.removeIf { window -> window.isSplitMode == info.isSplit || !window.isVisible }
       if (!toolWindows.isEmpty()) {
         c = (toolWindows[0] as ToolWindowImpl).decoratorComponent
       }
       if (c == null) {
-        LOG.error("Empty splitter @ " + anchor + " during AddAndSplitDockedComponentCmd for " + info.id)
+        LOG.error("Empty splitter @ $anchor during AddAndSplitDockedComponentCmd for ${info.id}")
       }
     }
 
@@ -538,8 +553,10 @@ class ToolWindowPane internal constructor(frame: JFrame,
       if (info.isSplit) {
         splitter.firstComponent = oldComponent
         splitter.secondComponent = newComponent
-        val proportion = state.getPreferredSplitProportion(Objects.requireNonNull(oldInfo.id), normalizeWeight(
-          oldInfo.sideWeight / (oldInfo.sideWeight + info.sideWeight)))
+        val proportion = state.getPreferredSplitProportion(
+          id = oldInfo.id!!,
+          defaultValue = normalizeWeight(oldInfo.sideWeight / (oldInfo.sideWeight + info.sideWeight)),
+        )
         splitter.proportion = proportion
         newWeight = if (!anchor.isHorizontal && !anchor.isSplitVertically) {
           normalizeWeight(oldInfo.weight + info.weight)
@@ -563,7 +580,7 @@ class ToolWindowPane internal constructor(frame: JFrame,
     else {
       newWeight = normalizeWeight(info.weight)
     }
-    setComponent(splitter, anchor, newWeight)
+    setComponent(component = splitter, anchor = anchor, weight = newWeight)
     if (!dirtyMode) {
       layeredPane.validate()
       layeredPane.repaint()
@@ -595,7 +612,7 @@ class ToolWindowPane internal constructor(frame: JFrame,
       }
 
       // prepare bottom image
-      val bottomImage: Image = layeredPane.bottomImage
+      val bottomImage = layeredPane.bottomImage
       val bottomImageOffset = PaintUtil.getFractOffsetInRootPane(layeredPane)
       UIUtil.useSafely(bottomImage.graphics) { bottomGraphics: Graphics2D ->
         bottomGraphics.setClip(0, 0, bounds.width, bounds.height)
@@ -603,8 +620,13 @@ class ToolWindowPane internal constructor(frame: JFrame,
         layeredPane.paint(bottomGraphics)
       }
 
-      // start animation.
-      val surface = Surface(topImage, bottomImage, PaintUtil.negate(bottomImageOffset), 1, info.anchor, UISettings.ANIMATION_DURATION)
+      // start animation
+      val surface = Surface(myTopImage = topImage,
+                            myBottomImage = bottomImage,
+                            bottomImageOffset = PaintUtil.negate(bottomImageOffset),
+                            direction = 1,
+                            anchor = info.anchor,
+                            desiredTimeToComplete = UISettings.ANIMATION_DURATION)
       layeredPane.add(surface, PALETTE_LAYER, -1)
       surface.bounds = bounds
       layeredPane.validate()
@@ -620,8 +642,7 @@ class ToolWindowPane internal constructor(frame: JFrame,
   }
 
   private fun removeSlidingComponent(component: Component, info: WindowInfo, dirtyMode: Boolean) {
-    val uiSettings = UISettings.getInstance()
-    if (!dirtyMode && uiSettings.animateWindows && !RemoteDesktopService.isRemoteSession()) {
+    if (!dirtyMode && UISettings.getInstance().animateWindows && !RemoteDesktopService.isRemoteSession()) {
       val bounds = component.bounds
       // Prepare top image. This image is scrolling over bottom image. It contains
       // picture of component is being removed.
@@ -679,17 +700,19 @@ private class ImageRef(image: BufferedImage) : SoftReference<BufferedImage?>(ima
   }
 }
 
-private class ImageCache(imageProvider: Function<in ScaleContext, ImageRef>) : ScaleContext.Cache<ImageRef?>(imageProvider) {
+private class ImageCache(imageProvider: Function<ScaleContext, ImageRef>) : ScaleContext.Cache<ImageRef?>(imageProvider) {
   fun get(ctx: ScaleContext): BufferedImage {
     val ref = getOrProvide(ctx)
     val image = SoftReference.dereference(ref)
-    if (image != null) return image
+    if (image != null) {
+      return image
+    }
     clear() // clear to recalculate the image
     return get(ctx) // first recalculated image will be non-null
   }
 }
 
-private class MyLayeredPane(splitter: JComponent, frame: JFrame) : JBLayeredPane() {
+private class FrameLayeredPane(splitter: JComponent, frame: JFrame) : JBLayeredPane() {
   private val imageProvider: Function<ScaleContext, ImageRef> = Function {
     val width = max(max(1, width), frame.width)
     val height = max(max(1, height), frame.height)
@@ -811,7 +834,7 @@ private class Surface(private val myTopImage: Image,
       }
       val onePaintTime = timeSpent.toDouble() / count
       var iterations = ((desiredTimeToComplete - timeSpent) / onePaintTime).toInt()
-      iterations = Math.max(1, iterations)
+      iterations = 1.coerceAtLeast(iterations)
       offset += (distance - offset) / iterations
     }
   }

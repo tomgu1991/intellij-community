@@ -4,8 +4,10 @@ package training.ui.views
 import com.intellij.ide.plugins.newui.VerticalLayout
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
+import com.intellij.ui.ExperimentalUI
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
+import com.intellij.ui.components.panels.NonOpaquePanel
 import com.intellij.util.IconUtil
 import com.intellij.util.ui.EmptyIcon
 import com.intellij.util.ui.JBUI
@@ -60,6 +62,7 @@ class LearningItems(private val project: Project) : JPanel() {
       it.foreground = JBUI.CurrentTheme.Link.Foreground.ENABLED
     }
     val clickAction: () -> Unit = l@{
+      if (ExperimentalUI.isNewUI()) return@l
       val cantBeOpenedInDumb = DumbService.getInstance(project).isDumb && !lesson.properties.canStartInDumbMode
       if (cantBeOpenedInDumb && !LessonManager.instance.lessonShouldBeOpenedCompleted(lesson)) {
         val balloon = createBalloon(LearnBundle.message("indexing.message"))
@@ -68,11 +71,11 @@ class LearningItems(private val project: Project) : JPanel() {
       }
       CourseManager.instance.openLesson(project, lesson, LessonStartingWay.LEARN_TAB)
     }
-    val result = LearningItemPanel(clickAction)
+    val result = if (ExperimentalUI.isNewUI()) NonOpaquePanel() else LearningItemPanel(clickAction)
     result.layout = BoxLayout(result, BoxLayout.X_AXIS)
     result.alignmentX = LEFT_ALIGNMENT
     result.border = EmptyBorder(JBUI.scale(7), JBUI.scale(7), JBUI.scale(6), JBUI.scale(7))
-    val checkmarkIconLabel = createLabelIcon(if (lesson.passed) FeaturesTrainerIcons.Img.GreenCheckmark else EmptyIcon.ICON_16)
+    val checkmarkIconLabel = createLabelIcon(if (lesson.passed) FeaturesTrainerIcons.GreenCheckmark else EmptyIcon.ICON_16)
     result.add(createLabelIcon(EmptyIcon.ICON_16))
     result.add(scaledRigid(UISettings.getInstance().expandAndModuleGap, 0))
     result.add(checkmarkIconLabel)
@@ -85,12 +88,17 @@ class LearningItems(private val project: Project) : JPanel() {
     }
     result.add(Box.createHorizontalGlue())
 
+    if (ExperimentalUI.isNewUI()) {
+      checkmarkIconLabel.isEnabled = false
+      name.foreground = JBUI.CurrentTheme.Link.Foreground.DISABLED
+    }
+
     return result
   }
 
   private fun createModuleItem(module: IftModule): JPanel {
     val modulePanel = JPanel()
-    modulePanel.isOpaque = true
+    modulePanel.isOpaque = false
     modulePanel.layout = BoxLayout(modulePanel, BoxLayout.Y_AXIS)
     modulePanel.alignmentY = TOP_ALIGNMENT
     modulePanel.background = Color(0, 0, 0, 0)
@@ -181,11 +189,11 @@ private class LearningItemPanel(clickAction: () -> Unit) : JPanel() {
       }
 
       override fun mouseEntered(e: MouseEvent) {
-        repaint()
+        parent.repaint()
       }
 
       override fun mouseExited(e: MouseEvent) {
-        repaint()
+        parent.repaint()
       }
     })
   }

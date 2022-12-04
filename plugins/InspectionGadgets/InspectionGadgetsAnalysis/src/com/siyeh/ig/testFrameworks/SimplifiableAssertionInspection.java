@@ -118,7 +118,7 @@ public class SimplifiableAssertionInspection extends BaseInspection implements C
     }
 
     @Override
-    public void doFix(Project project, ProblemDescriptor descriptor) {
+    public void doFix(@NotNull Project project, @NotNull ProblemDescriptor descriptor) {
       final PsiElement methodNameIdentifier = descriptor.getPsiElement();
       final PsiElement parent = methodNameIdentifier.getParent();
       if (parent == null) {
@@ -304,7 +304,7 @@ public class SimplifiableAssertionInspection extends BaseInspection implements C
         return;
       }
       final IElementType tokenType = binaryExpression.getOperationTokenType();
-      if (!(ExpressionUtils.isEvaluatedAtCompileTime(lhs)) && ExpressionUtils.isEvaluatedAtCompileTime(rhs)) {
+      if (!ExpressionUtils.isEvaluatedAtCompileTime(lhs) && ExpressionUtils.isEvaluatedAtCompileTime(rhs)) {
         rhs = lhs;
       }
       @NonNls final String methodName = assertHint.getMethod().getName();

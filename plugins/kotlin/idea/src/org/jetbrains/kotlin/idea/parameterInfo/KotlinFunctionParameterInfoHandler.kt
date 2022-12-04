@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.parameterInfo
 
@@ -18,13 +18,13 @@ import org.jetbrains.kotlin.idea.FrontendInternals
 import org.jetbrains.kotlin.idea.base.projectStructure.languageVersionSettings
 import org.jetbrains.kotlin.idea.caches.resolve.getResolutionFacade
 import org.jetbrains.kotlin.idea.caches.resolve.safeAnalyzeNonSourceRootCode
+import org.jetbrains.kotlin.idea.codeinsights.impl.base.parameterInfo.KotlinParameterInfoBase
 import org.jetbrains.kotlin.idea.completion.canBeUsedWithoutNameInCall
 import org.jetbrains.kotlin.idea.core.OptionalParametersHelper
 import org.jetbrains.kotlin.idea.core.resolveCandidates
 import org.jetbrains.kotlin.idea.resolve.ResolutionFacade
 import org.jetbrains.kotlin.idea.resolve.frontendService
 import org.jetbrains.kotlin.idea.util.ShadowedDeclarationsFilter
-import org.jetbrains.kotlin.idea.util.application.withPsiAttachment
 import org.jetbrains.kotlin.lexer.KtSingleValueToken
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.load.java.NULLABILITY_ANNOTATIONS
@@ -339,18 +339,7 @@ abstract class KotlinParameterInfoWithCallHandlerBase<TArgumentList : KtElement,
     private fun ValueParameterDescriptor.renderDefaultValue(project: Project): String {
         val expression = OptionalParametersHelper.defaultParameterValueExpression(this, project)
         if (expression != null) {
-            val text = expression.text
-            if (text.length <= 32) {
-                return text
-            }
-
-            if (expression is KtConstantExpression || expression is KtStringTemplateExpression) {
-                if (text.startsWith("\"")) {
-                    return "\"...\""
-                } else if (text.startsWith("\'")) {
-                    return "\'...\'"
-                }
-            }
+            return KotlinParameterInfoBase.getDefaultValueStringRepresentation(expression)
         }
         return "..."
     }
@@ -547,7 +536,7 @@ abstract class KotlinParameterInfoWithCallHandlerBase<TArgumentList : KtElement,
         if (currentParameter == null) {
             if (currentArgumentIndex < arguments.lastIndex) {
                 // the current argument is not the last one and it is not mapped to any of the parameters
-                return SignatureInfo(resultingDescriptor, ::argumentToParameter, highlightParameterIndex, isGrey = true)
+                return SignatureInfo(resultingDescriptor, ::argumentToParameter, highlightParameterIndex = null, isGrey = true)
             }
 
             val usedParameters = argumentsBeforeCurrent.mapNotNull { argumentToParameter(it) }.toSet()
@@ -562,11 +551,11 @@ abstract class KotlinParameterInfoWithCallHandlerBase<TArgumentList : KtElement,
                 val supportsTrailingCommas = call.callElement.languageVersionSettings.supportsFeature(LanguageFeature.TrailingCommas)
                 if (!supportsTrailingCommas && noUnusedParametersLeft) {
                     // current argument is empty but there are no unused parameters left and trailing commas are not supported
-                    return SignatureInfo(resultingDescriptor, ::argumentToParameter, highlightParameterIndex, isGrey = true)
+                    return SignatureInfo(resultingDescriptor, ::argumentToParameter, highlightParameterIndex = null, isGrey = true)
                 }
             } else if (noUnusedParametersLeft) {
                 // there are no unused parameters left to which this argument could be matched
-                return SignatureInfo(resultingDescriptor, ::argumentToParameter, highlightParameterIndex, isGrey = true)
+                return SignatureInfo(resultingDescriptor, ::argumentToParameter, highlightParameterIndex = null, isGrey = true)
             }
         }
 

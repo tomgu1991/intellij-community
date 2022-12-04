@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.core.script.dependencies
 
@@ -11,14 +11,14 @@ import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.PsiShortNamesCache
 import com.intellij.psi.stubs.StubIndex
 import com.intellij.util.Processor
-import org.jetbrains.kotlin.idea.core.script.ScriptConfigurationManager
+import org.jetbrains.kotlin.idea.core.script.ucache.getAllScriptsDependenciesClassFilesScope
 
 // Allow searching java classes in jars in script dependencies, this is needed for stuff like completion and autoimport
 class JavaClassesInScriptDependenciesShortNameCache(private val project: Project) : PsiShortNamesCache() {
     override fun getAllClassNames() = emptyArray<String>()
 
     override fun getClassesByName(name: String, scope: GlobalSearchScope): Array<out PsiClass> {
-        val classpathScope = ScriptConfigurationManager.getInstance(project).getAllScriptsDependenciesClassFilesScope()
+        val classpathScope = getAllScriptsDependenciesClassFilesScope(project)
         val classes = StubIndex.getElements(
             JavaShortClassNameIndex.getInstance().key, name, project, classpathScope.intersectWith(scope), PsiClass::class.java
         )

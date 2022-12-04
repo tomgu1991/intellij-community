@@ -246,7 +246,7 @@ public class GroovyBlockGenerator {
       ArrayList<Block> blocks = new ArrayList<>();
 
       PsiElement lbrace = closableBlock.getLBrace();
-      if (lbrace != null) {
+      {
         ASTNode node = lbrace.getNode();
         blocks.add(myContext.createBlock(node, getIndent(node), Wrap.createWrap(WrapType.NONE, false)));
       }
@@ -728,7 +728,6 @@ public class GroovyBlockGenerator {
   /**
    * Generates blocks for binary expressions
    *
-   * @return
    */
   private List<Block> generateForBinaryExpr() {
     final ArrayList<Block> subBlocks = new ArrayList<>();
@@ -744,10 +743,6 @@ public class GroovyBlockGenerator {
   /**
    * Adds all children of specified element to given list
    *
-   * @param elem
-   * @param list
-   * @param indent
-   * @param aligner
    */
   private void addBinaryChildrenRecursively(PsiElement elem, List<Block> list, Indent indent, @Nullable AlignmentProvider.Aligner aligner) {
     if (elem == null) return;

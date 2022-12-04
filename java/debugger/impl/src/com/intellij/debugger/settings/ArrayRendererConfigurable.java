@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.debugger.settings;
 
 import com.intellij.debugger.JavaDebuggerBundle;
@@ -60,26 +60,18 @@ public class ArrayRendererConfigurable implements UnnamedConfigurable, Configura
       throw new ConfigurationException(JavaDebuggerBundle.message("error.array.renderer.configurable.end.index.less.than.start"));
     }
 
-    if (newStartIndex >= 0 && newEndIndex >= 0) {
-      if (newStartIndex > newEndIndex) {
-        int currentStartIndex = renderer.START_INDEX;
-        int currentEndIndex = renderer.END_INDEX;
-        newEndIndex = newStartIndex + (currentEndIndex - currentStartIndex);
-      }
+    if(newLimit <= 0) {
+      newLimit = 1;
+    }
 
-      if(newLimit <= 0) {
-        newLimit = 1;
-      }
-
-      if(showBigRangeWarning && (newEndIndex - newStartIndex > 10000)) {
-        final int answer = Messages.showOkCancelDialog(
-          myPanel.getRootPane(),
-          JavaDebuggerBundle.message("warning.range.too.big", ApplicationNamesInfo.getInstance().getProductName()),
-          JavaDebuggerBundle.message("title.range.too.big"),
-          Messages.getWarningIcon());
-        if(answer != Messages.OK) {
-          return;
-        }
+    if(showBigRangeWarning && (newEndIndex - newStartIndex > 10000)) {
+      final int answer = Messages.showOkCancelDialog(
+        myPanel.getRootPane(),
+        JavaDebuggerBundle.message("warning.range.too.big", ApplicationNamesInfo.getInstance().getProductName()),
+        JavaDebuggerBundle.message("title.range.too.big"),
+        Messages.getWarningIcon());
+      if(answer != Messages.OK) {
+        return;
       }
     }
 
@@ -98,7 +90,6 @@ public class ArrayRendererConfigurable implements UnnamedConfigurable, Configura
 
     final FontMetrics fontMetrics = myStartIndex.getFontMetrics(myStartIndex.getFont());
     final Dimension minSize = new Dimension(myStartIndex.getPreferredSize());
-    //noinspection HardCodedStringLiteral
     minSize.width = fontMetrics.stringWidth("AAAAA");
     myStartIndex.setMinimumSize(minSize);
     myEndIndex.setMinimumSize(minSize);

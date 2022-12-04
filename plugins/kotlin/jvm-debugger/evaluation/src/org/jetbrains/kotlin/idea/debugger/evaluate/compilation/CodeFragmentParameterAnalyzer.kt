@@ -3,6 +3,7 @@
 package org.jetbrains.kotlin.idea.debugger.evaluate.compilation
 
 import com.intellij.debugger.engine.evaluation.EvaluateExceptionUtil
+import com.intellij.openapi.application.runReadAction
 import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
 import org.jetbrains.kotlin.codegen.AsmUtil
@@ -10,12 +11,12 @@ import org.jetbrains.kotlin.codegen.getCallLabelForLambdaArgument
 import org.jetbrains.kotlin.descriptors.*
 import org.jetbrains.kotlin.descriptors.impl.LocalVariableDescriptor
 import org.jetbrains.kotlin.descriptors.impl.SyntheticFieldDescriptor
+import org.jetbrains.kotlin.idea.debugger.base.util.evaluate.ExecutionContext
 import org.jetbrains.kotlin.idea.debugger.evaluate.*
 import org.jetbrains.kotlin.idea.debugger.evaluate.KotlinCodeFragmentFactory.Companion.FAKE_JAVA_CONTEXT_FUNCTION_NAME
 import org.jetbrains.kotlin.idea.debugger.evaluate.compilation.CodeFragmentParameter.*
-import org.jetbrains.kotlin.idea.debugger.safeLocation
-import org.jetbrains.kotlin.idea.debugger.safeMethod
-import org.jetbrains.kotlin.idea.util.application.runReadAction
+import org.jetbrains.kotlin.idea.debugger.base.util.safeLocation
+import org.jetbrains.kotlin.idea.debugger.base.util.safeMethod
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.getParentOfType
 import org.jetbrains.kotlin.psi.psiUtil.isAncestor
@@ -46,8 +47,7 @@ class CodeFragmentParameterInfo(
 class CodeFragmentParameterAnalyzer(
     private val context: ExecutionContext,
     private val codeFragment: KtCodeFragment,
-    private val bindingContext: BindingContext,
-    private val evaluationStatus: EvaluationStatus
+    private val bindingContext: BindingContext
 ) {
     private val parameters = LinkedHashMap<DeclarationDescriptor, Smart>()
     private val crossingBounds = mutableSetOf<Dumb>()
@@ -282,7 +282,6 @@ class CodeFragmentParameterAnalyzer(
 
     private fun processSimpleNameExpression(target: DeclarationDescriptor, expression: KtSimpleNameExpression): Smart? {
         if (target is ValueParameterDescriptor && target.isCrossinline) {
-            evaluationStatus.error(EvaluationError.CrossInlineLambda)
             throw EvaluateExceptionUtil.createEvaluateException(
                 KotlinDebuggerEvaluationBundle.message("error.crossinline.lambda.evaluation")
             )

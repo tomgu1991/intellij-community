@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.core.script.ucache
 
@@ -19,22 +19,35 @@ class ScriptClassRootsBuilder(
     val sdks = ScriptSdksBuilder(project)
 
     private var customDefinitionsUsed: Boolean = false
+    private var shouldWarnAboutDependenciesExistence: Boolean = true
+    private var classpathVfsHint: MutableMap<String, VirtualFile?>? = null
 
     constructor(builder: ScriptClassRootsBuilder) : this(
         builder.project,
         builder.classes.toMutableSet(),
         builder.sources.toMutableSet(),
         builder.scripts.toMutableMap()
-    )
+    ) {
+        sdks.sdks.putAll(builder.sdks.sdks)
+    }
 
     fun build(): ScriptClassRootsCache =
         ScriptClassRootsCache(
             scripts, classes, sources,
-            customDefinitionsUsed, sdks.build()
+            customDefinitionsUsed, sdks.build(),
+            classpathVfsHint
         )
 
     fun useCustomScriptDefinition() {
         customDefinitionsUsed = true
+    }
+
+    fun dontWarnAboutDependenciesExistence() {
+        shouldWarnAboutDependenciesExistence = false
+    }
+
+    fun withClasspathVfsHint(hint: MutableMap<String, VirtualFile?>?) {
+        classpathVfsHint = hint
     }
 
     fun add(
@@ -46,7 +59,7 @@ class ScriptClassRootsBuilder(
         configuration.dependenciesClassPath.forEach { file ->
             val path = file.toPath()
             val absolutePath = path.absolutePathString()
-            if (path.notExists()) {
+            if (shouldWarnAboutDependenciesExistence && path.notExists()) {
                 logger.warn("configuration dependency classpath $absolutePath does not exist")
             }
 
@@ -56,7 +69,7 @@ class ScriptClassRootsBuilder(
         configuration.dependenciesSources.forEach { file ->
             val path = file.toPath()
             val absolutePath = path.absolutePathString()
-            if (path.notExists()) {
+            if (shouldWarnAboutDependenciesExistence && path.notExists()) {
                 logger.warn("configuration dependency sources $absolutePath does not exist")
             }
 
@@ -81,6 +94,10 @@ class ScriptClassRootsBuilder(
 
     fun addTemplateClassesRoots(classesRoots: Collection<String>) {
         classes.addAll(classesRoots)
+    }
+
+    fun addSources(sourcesRoots: Collection<String>) {
+        sources.addAll(sourcesRoots)
     }
 
     @Deprecated("Don't use, used only from DefaultScriptingSupport for saving to storage")

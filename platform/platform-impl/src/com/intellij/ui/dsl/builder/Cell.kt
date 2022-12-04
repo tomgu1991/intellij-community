@@ -1,11 +1,11 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.ui.dsl.builder
 
 import com.intellij.openapi.observable.properties.GraphProperty
 import com.intellij.openapi.ui.DialogPanel
+import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.openapi.ui.validation.DialogValidation
 import com.intellij.openapi.ui.validation.DialogValidationRequestor
-import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.openapi.util.NlsContexts
 import com.intellij.ui.dsl.gridLayout.*
 import com.intellij.ui.layout.*
@@ -25,11 +25,16 @@ enum class LabelPosition {
 }
 
 @ApiStatus.NonExtendable
+@JvmDefaultWithCompatibility
 interface Cell<out T : JComponent> : CellBase<Cell<T>> {
 
+  @Deprecated("Use align method instead")
   override fun horizontalAlign(horizontalAlign: HorizontalAlign): Cell<T>
 
+  @Deprecated("Use align method instead")
   override fun verticalAlign(verticalAlign: VerticalAlign): Cell<T>
+
+  override fun align(align: Align): Cell<T>
 
   override fun resizableColumn(): Cell<T>
 
@@ -66,9 +71,11 @@ interface Cell<out T : JComponent> : CellBase<Cell<T>> {
 
   /**
    * Adds comment under the cell aligned by left edge with appropriate color and font size (macOS and Linux use smaller font).
-   * [comment] can contain HTML tags except &lt;html&gt;, which is added automatically.
-   * \n does not work as new line in html, use &lt;br&gt; instead.
-   * Links with href to http/https are automatically marked with additional arrow icon.
+   * * [comment] can contain HTML tags except &lt;html&gt;, which is added automatically
+   * * \n does not work as new line in html, use &lt;br&gt; instead
+   * * Links with href to http/https are automatically marked with additional arrow icon
+   * * Use bundled icons with `<code>` tag, for example `<icon src='AllIcons.General.Information'>`
+   *
    * The comment occupies the available width before the next comment (if present) or
    * whole remaining width. Visibility and enabled state of the cell affects comment as well.
    *
@@ -83,12 +90,14 @@ interface Cell<out T : JComponent> : CellBase<Cell<T>> {
               action: HyperlinkEventAction = HyperlinkEventAction.HTML_HYPERLINK_INSTANCE): Cell<T>
 
   /**
-   * See doc for overloaded method
+   * Adds the label with optional mnemonic related to the cell component.
+   * See also doc for overloaded method
    */
   fun label(@NlsContexts.Label label: String, position: LabelPosition = LabelPosition.LEFT): Cell<T>
 
   /**
-   * Adds label at specified [position]. [LabelPosition.TOP] labels occupy available width before the next top label (if present) or
+   * Adds the label related to the cell component at specified [position].
+   * [LabelPosition.TOP] labels occupy available width before the next top label (if present) or
    * whole remaining width. Visibility and enabled state of the cell affects the label as well.
    *
    * For layout [RowLayout.LABEL_ALIGNED] labels for two first columns are supported only (there are technical problems,
@@ -209,6 +218,11 @@ interface Cell<out T : JComponent> : CellBase<Cell<T>> {
    * Shows error [message] if [condition] is true. Short version for particular case of [validationOnApply]
    */
   fun errorOnApply(@NlsContexts.DialogMessage message: String, condition: (T) -> Boolean): Cell<T>
+
+  /**
+   * Shows error [message] if [condition] is true. Short version for particular case of [validationOnApply]
+   */
+  fun addValidationRule(@NlsContexts.DialogMessage message: String, condition: (T) -> Boolean): Cell<T>
 
   /**
    * Registers [callback] that will be called for [component] from [DialogPanel.apply] method

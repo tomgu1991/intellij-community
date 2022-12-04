@@ -16,7 +16,6 @@ import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.AbstractList;
@@ -44,23 +43,6 @@ public final class PluginManager {
   public static @Nullable Path getOnceInstalledIfExists() {
     Path onceInstalledFile = PathManager.getConfigDir().resolve(INSTALLED_TXT);
     return Files.isRegularFile(onceInstalledFile) ? onceInstalledFile : null;
-  }
-
-  /**
-   * @deprecated In a plugin code simply throw error or log using {@link Logger#error(Throwable)}.
-   */
-  @Deprecated
-  @ApiStatus.ScheduledForRemoval
-  public static void processException(@NotNull Throwable t) {
-    try {
-      Class<?> aClass = PluginManager.class.getClassLoader().loadClass("com.intellij.ide.plugins.StartupAbortedException");
-      Method method = aClass.getMethod("processException", Throwable.class);
-      method.setAccessible(true);
-      method.invoke(null, t);
-    }
-    catch (ReflectiveOperationException e) {
-      throw new RuntimeException(e);
-    }
   }
 
   /**
@@ -109,12 +91,12 @@ public final class PluginManager {
 
   /**
    * @deprecated Bad API, sorry. Please use {@link PluginManagerCore#isDisabled(PluginId)} to check plugin's state,
-   * {@link DisabledPluginsState#disabledPlugins()} to get an unmodifiable collection of all disabled plugins (rarely needed).
+   * {@link DisabledPluginsState#getDisabledIds()} to get an unmodifiable collection of all disabled plugins (rarely needed).
    */
   @Deprecated
   @ApiStatus.ScheduledForRemoval
   public static @NotNull List<String> getDisabledPlugins() {
-    Set<PluginId> list = DisabledPluginsState.disabledPlugins();
+    Set<PluginId> list = DisabledPluginsState.getDisabledIds();
     return new AbstractList<String>() {
       //<editor-fold desc="Just a list-like immutable wrapper over a set; move along.">
       @Override

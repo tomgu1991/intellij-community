@@ -6,6 +6,7 @@ import com.intellij.codeInsight.daemon.HighlightDisplayKey;
 import com.intellij.codeInsight.daemon.impl.SeverityRegistrar;
 import com.intellij.codeInspection.InspectionEP;
 import com.intellij.codeInspection.InspectionProfileEntry;
+import com.intellij.concurrency.ConcurrentCollectionFactory;
 import com.intellij.configurationStore.SchemeDataHolder;
 import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.openapi.Disposable;
@@ -14,11 +15,13 @@ import com.intellij.openapi.editor.colors.TextAttributesKey;
 import com.intellij.openapi.options.SchemeState;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.project.ProjectType;
+import com.intellij.openapi.project.ProjectTypeService;
 import com.intellij.openapi.util.*;
 import com.intellij.openapi.util.text.Strings;
 import com.intellij.profile.codeInspection.BaseInspectionProfileManager;
 import com.intellij.profile.codeInspection.InspectionProfileManager;
-import com.intellij.profile.codeInspection.ProjectInspectionProfileManager;
+import com.intellij.profile.codeInspection.ProjectBasedInspectionProfileManager;
 import com.intellij.project.ProjectKt;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.search.scope.packageSet.NamedScope;
@@ -48,7 +51,8 @@ public class InspectionProfileImpl extends NewInspectionProfile {
   public static boolean INIT_INSPECTIONS;
   protected final @NotNull InspectionToolsSupplier myToolSupplier;
   protected final Map<String, Element> myUninitializedSettings = new TreeMap<>(); // accessed in EDT
-  protected Map<String, ToolsImpl> myTools = new HashMap<>();
+   //addTool is possible from any thread at any moment
+  protected Map<String, ToolsImpl> myTools = ConcurrentCollectionFactory.createConcurrentMap();
   protected volatile Set<String> myChangedToolNames;
   @Attribute("is_locked")
   protected boolean myLockedProfile;
@@ -188,7 +192,7 @@ public class InspectionProfileImpl extends NewInspectionProfile {
     if (isProjectLevel()) {
       element.setAttribute("version", "1.0");
     }
-    if (isProjectLevel() && ProjectKt.isDirectoryBased(((ProjectInspectionProfileManager)getProfileManager()).getProject())) {
+    if (isProjectLevel() && ProjectKt.isDirectoryBased(((ProjectBasedInspectionProfileManager)getProfileManager()).getProject())) {
       return new Element("component").setAttribute("name", "InspectionProjectProfileManager").addContent(element);
     }
 
@@ -412,9 +416,17 @@ public class InspectionProfileImpl extends NewInspectionProfile {
   @Override
   public @NotNull List<Tools> getAllEnabledInspectionTools(Project project) {
     initInspectionTools();
+
     List<Tools> result = new ArrayList<>();
+    Collection<ProjectType> projectTypes = ProjectTypeService.getProjectTypes(project);
+
     for (ToolsImpl toolList : myTools.values()) {
       if (toolList.isEnabled()) {
+        InspectionToolWrapper<?, ?> toolWrapper = toolList.getTool();
+        if (!toolWrapper.isApplicable(projectTypes)) {
+          continue;
+        }
+
         result.add(toolList);
       }
     }
@@ -690,7 +702,8 @@ public class InspectionProfileImpl extends NewInspectionProfile {
 
   @Override
   public @Nullable TextAttributesKey getEditorAttributes(@NotNull String shortName, @Nullable PsiElement element) {
-    return getTools(shortName, element != null ? element.getProject() : null).getAttributesKey(element);
+    ToolsImpl tools = getToolsOrNull(shortName, element != null ? element.getProject() : null);
+    return tools != null ? tools.getAttributesKey(element) : null;
   }
 
   public void setEditorAttributesKey(@NotNull String shortName, @Nullable String keyName, String scopeName, @Nullable Project project) {

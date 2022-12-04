@@ -9,6 +9,7 @@ import com.intellij.openapi.vcs.FileStatus;
 import com.intellij.openapi.vcs.changes.Change;
 import com.intellij.openapi.vcs.changes.ChangeViewDiffRequestProcessor;
 import com.intellij.openapi.vcs.changes.ChangesUtil;
+import com.intellij.openapi.vcs.changes.ContentRevision;
 import com.intellij.openapi.vcs.changes.savedPatches.SavedPatchesProvider;
 import com.intellij.openapi.vcs.changes.ui.ChangeDiffRequestChain;
 import com.intellij.openapi.vcs.changes.ui.ChangesBrowserNode;
@@ -74,15 +75,26 @@ public class ShelvedWrapper extends ChangeViewDiffRequestProcessor.Wrapper imple
     return chooseNotNull(getAfterPath(), getBeforePath());
   }
 
+  @Nullable
+  @Override
+  public FilePath getOriginalFilePath() {
+    ContentRevision beforeRevision = myShelvedChange != null ? myShelvedChange.getChange().getBeforeRevision() : null;
+    if (beforeRevision != null) {
+      return beforeRevision.getFile();
+    }
+    String beforePath = getBeforePath();
+    if (beforePath == null) return null;
+    return VcsUtil.getFilePath(beforePath);
+  }
+
   @NlsSafe
   public String getRequestName() {
     return FileUtil.toSystemDependentName(getPath());
   }
 
-  @NlsSafe
   @NotNull
   @Override
-  public String getPresentableName() {
+  public @Nls String getPresentableName() {
     if (myShelvedChange == null) {
       return getRequestName();
     }

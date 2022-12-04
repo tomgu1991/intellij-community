@@ -15,7 +15,6 @@ import org.jetbrains.kotlin.asJava.elements.KtLightElement
 import org.jetbrains.kotlin.base.analysis.isExcludedFromAutoImport
 import org.jetbrains.kotlin.descriptors.*
 import org.jetbrains.kotlin.idea.FrontendInternals
-import org.jetbrains.kotlin.idea.base.projectStructure.languageVersionSettings
 import org.jetbrains.kotlin.idea.base.util.excludeKotlinSources
 import org.jetbrains.kotlin.idea.caches.KotlinShortNamesCache
 import org.jetbrains.kotlin.idea.caches.resolve.resolveImportReference
@@ -28,7 +27,6 @@ import org.jetbrains.kotlin.idea.resolve.ResolutionFacade
 import org.jetbrains.kotlin.idea.resolve.frontendService
 import org.jetbrains.kotlin.idea.stubindex.*
 import org.jetbrains.kotlin.idea.util.CallTypeAndReceiver
-import org.jetbrains.kotlin.idea.util.application.withPsiAttachment
 import org.jetbrains.kotlin.idea.util.receiverTypes
 import org.jetbrains.kotlin.idea.util.substituteExtensionIfCallable
 import org.jetbrains.kotlin.incremental.KotlinLookupLocation
@@ -49,6 +47,7 @@ import org.jetbrains.kotlin.resolve.scopes.getDescriptorsFiltered
 import org.jetbrains.kotlin.types.KotlinType
 import org.jetbrains.kotlin.types.isError
 import org.jetbrains.kotlin.utils.KotlinExceptionWithAttachments
+import org.jetbrains.kotlin.utils.addIfNotNull
 import java.lang.reflect.Field
 import java.lang.reflect.Modifier
 
@@ -93,13 +92,19 @@ class KotlinIndicesHelper(
         name: String
     ) {
         index.get(name, project, scope)
-            .filterTo(this) { it.parent is KtFile && it is KtCallableDeclaration && it.receiverTypeReference == null }
+            .filterTo(this) {
+                ProgressManager.checkCanceled()
+                it.parent is KtFile && it is KtCallableDeclaration && it.receiverTypeReference == null
+            }
     }
 
     fun getTopLevelExtensionOperatorsByName(name: String): Collection<FunctionDescriptor> {
         return KotlinFunctionShortNameIndex.get(name, project, scope)
             .filter { it.parent is KtFile && it.receiverTypeReference != null && it.hasModifier(KtTokens.OPERATOR_KEYWORD) }
-            .flatMap { it.resolveToDescriptors<FunctionDescriptor>() }
+            .flatMap {
+                ProgressManager.checkCanceled()
+                it.resolveToDescriptors<FunctionDescriptor>()
+            }
             .filter { descriptorFilter(it) && it.extensionReceiverParameter != null }
             .distinct()
     }
@@ -107,7 +112,10 @@ class KotlinIndicesHelper(
     fun getMemberOperatorsByName(name: String): Collection<FunctionDescriptor> {
         return KotlinFunctionShortNameIndex.get(name, project, scope)
             .filter { it.parent is KtClassBody && it.receiverTypeReference == null && it.hasModifier(KtTokens.OPERATOR_KEYWORD) }
-            .flatMap { it.resolveToDescriptors<FunctionDescriptor>() }
+            .flatMap {
+                ProgressManager.checkCanceled()
+                it.resolveToDescriptors<FunctionDescriptor>()
+            }
             .filter { descriptorFilter(it) && it.extensionReceiverParameter == null }
             .distinct()
     }
@@ -287,19 +295,28 @@ class KotlinIndicesHelper(
     }
 
     fun getJvmClassesByName(name: String): Collection<ClassDescriptor> {
-        return PsiShortNamesCache.getInstance(project).getClassesByName(name, scope)
-            .filter { it in scope && it.containingFile != null }
-            .mapNotNull { it.resolveToDescriptor(resolutionFacade) }
-            .filter(descriptorFilter)
-            .toSet()
+        val classesByName = PsiShortNamesCache.getInstance(project).getClassesByName(name, scope)
+        val result = HashSet<ClassDescriptor>(classesByName.size)
+        for (clazz in classesByName) {
+            ProgressManager.checkCanceled()
+            if (!(clazz in scope && clazz.containingFile != null)) continue
+            result.addIfNotNull(clazz.resolveToDescriptor(resolutionFacade)?.takeIf { descriptorFilter(it) })
+        }
+        return result
     }
 
     fun getKotlinEnumsByName(name: String): Collection<DeclarationDescriptor> {
-        return KotlinClassShortNameIndex.get(name, project, scope)
-            .filter { it is KtEnumEntry && it in scope }
-            .flatMap { it.resolveToDescriptors<DeclarationDescriptor>() }
-            .filter(descriptorFilter)
-            .toSet()
+        val classOrObjects = KotlinClassShortNameIndex.get(name, project, scope)
+        val result = HashSet<DeclarationDescriptor>(classOrObjects.size)
+        for (classOrObject in classOrObjects) {
+            ProgressManager.checkCanceled()
+            if (!(classOrObject is KtEnumEntry && classOrObject in scope)) continue
+            val descriptorsWithHack = classOrObject.resolveToDescriptorsWithHack { true }
+            for (descriptor in descriptorsWithHack) {
+                if (descriptorFilter(descriptor)) result += descriptor
+            }
+        }
+        return result
     }
 
     fun processJvmCallablesByName(
@@ -483,6 +500,7 @@ class KotlinIndicesHelper(
         processor: (ClassDescriptor) -> Unit
     ) {
         val classOrObjectProcessor = Processor<KtClassOrObject> { classOrObject ->
+            ProgressManager.checkCanceled()
             classOrObject.resolveToDescriptorsWithHack(psiFilter).forEach {
                 val descriptor = it as? ClassDescriptor ?: return@forEach
                 ProgressManager.checkCanceled()

@@ -3,6 +3,7 @@ package com.intellij.codeInsight.daemon.impl.quickfix;
 
 import com.intellij.codeInsight.FileModificationService;
 import com.intellij.codeInsight.daemon.QuickFixBundle;
+import com.intellij.codeInsight.intention.FileModifier;
 import com.intellij.codeInsight.intention.impl.BaseIntentionAction;
 import com.intellij.java.JavaBundle;
 import com.intellij.openapi.editor.Editor;
@@ -45,6 +46,11 @@ public class VariableAccessFromInnerClassJava10Fix extends BaseIntentionAction {
     myContext = context;
   }
 
+  @Override
+  public @Nullable FileModifier getFileModifierForPreview(@NotNull PsiFile target) {
+    return new VariableAccessFromInnerClassJava10Fix(PsiTreeUtil.findSameElementInCopy(myContext, target));
+  }
+
   @Nls(capitalization = Nls.Capitalization.Sentence)
   @NotNull
   @Override
@@ -83,12 +89,10 @@ public class VariableAccessFromInnerClassJava10Fix extends BaseIntentionAction {
     if (variable == null) return;
     final String variableText = getFieldText(variable);
 
-    PsiLambdaExpression lambdaExpression = PsiTreeUtil.getParentOfType(myContext, PsiLambdaExpression.class);
-    if (lambdaExpression == null) return;
     DeclarationInfo declarationInfo = DeclarationInfo.findExistingAnonymousClass(variable);
 
     if (declarationInfo != null) {
-      replaceReferences(variable, declarationInfo.myName);
+      replaceReferences(variable, declarationInfo.name);
       declarationInfo.replace(variableText);
       variable.delete();
       return;
@@ -146,16 +150,7 @@ public class VariableAccessFromInnerClassJava10Fix extends BaseIntentionAction {
     }
   }
 
-  private static class DeclarationInfo {
-    private final boolean myIsBefore;
-    private final @NotNull PsiLocalVariable myVariable;
-    private final @NotNull String myName;
-
-    DeclarationInfo(boolean isBefore, @NotNull PsiLocalVariable variable, @NotNull String name) {
-      myIsBefore = isBefore;
-      myVariable = variable;
-      myName = name;
-    }
+  private record DeclarationInfo(boolean isBefore, @NotNull PsiLocalVariable variable, @NotNull String name) {
 
     @Nullable
     static DeclarationInfo findExistingAnonymousClass(@NotNull PsiVariable variable) {
@@ -171,7 +166,7 @@ public class VariableAccessFromInnerClassJava10Fix extends BaseIntentionAction {
     }
 
     void replace(@NotNull String variableText) {
-      PsiNewExpression newExpression = (PsiNewExpression)myVariable.getInitializer();
+      PsiNewExpression newExpression = (PsiNewExpression)variable.getInitializer();
       assert newExpression != null;
       PsiAnonymousClass anonymousClass = newExpression.getAnonymousClass();
       assert anonymousClass != null;
@@ -184,15 +179,15 @@ public class VariableAccessFromInnerClassJava10Fix extends BaseIntentionAction {
         expressionText.append(child.getText());
       }
       for (PsiElement child = anonymousClass.getFirstChild(); child != null; child = child.getNextSibling()) {
-        if (!myIsBefore && child == rBrace) expressionText.append(variableText);
+        if (!isBefore && child == rBrace) expressionText.append(variableText);
         expressionText.append(child.getText());
-        if (myIsBefore && child == lBrace) expressionText.append(variableText);
+        if (isBefore && child == lBrace) expressionText.append(variableText);
       }
-      PsiElementFactory factory = JavaPsiFacade.getElementFactory(myVariable.getProject());
-      myVariable.setInitializer(factory.createExpressionFromText(expressionText.toString(), myVariable));
-      PsiTypeElement typeElement = myVariable.getTypeElement();
+      PsiElementFactory factory = JavaPsiFacade.getElementFactory(variable.getProject());
+      variable.setInitializer(factory.createExpressionFromText(expressionText.toString(), variable));
+      PsiTypeElement typeElement = variable.getTypeElement();
       if (!typeElement.isInferredType()) {
-        typeElement.replace(factory.createTypeElementFromText("var", myVariable));
+        typeElement.replace(factory.createTypeElementFromText("var", variable));
       }
     }
 

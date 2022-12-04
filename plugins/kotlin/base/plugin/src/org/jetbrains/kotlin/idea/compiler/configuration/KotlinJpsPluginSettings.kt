@@ -3,6 +3,8 @@ package org.jetbrains.kotlin.idea.compiler.configuration
 
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.application.runInEdt
+import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.intellij.openapi.components.service
@@ -22,7 +24,6 @@ import org.jetbrains.kotlin.config.SettingConstants
 import org.jetbrains.kotlin.config.SettingConstants.KOTLIN_JPS_PLUGIN_SETTINGS_SECTION
 import org.jetbrains.kotlin.config.toKotlinVersion
 import org.jetbrains.kotlin.idea.base.plugin.KotlinBasePluginBundle
-import org.jetbrains.kotlin.idea.util.application.isUnitTestMode
 import java.nio.file.Path
 import kotlin.io.path.bufferedReader
 
@@ -57,11 +58,6 @@ class KotlinJpsPluginSettings(project: Project) : BaseKotlinCompilerSettings<Jps
 
         fun validateSettings(project: Project) {
             val jpsPluginSettings = project.service<KotlinJpsPluginSettings>()
-            if (!isUnbundledJpsExperimentalFeatureEnabled(project)) {
-                // Delete compiler version in kotlinc.xml when feature flag is off
-                jpsPluginSettings.dropExplicitVersion()
-                return
-            }
 
             if (jpsPluginSettings.settings.version.isEmpty() && bundledVersion.buildNumber == null) {
                 // Encourage user to specify desired Kotlin compiler version in project settings for sake of reproducible builds
@@ -70,17 +66,13 @@ class KotlinJpsPluginSettings(project: Project) : BaseKotlinCompilerSettings<Jps
             }
         }
 
-        fun jpsVersion(project: Project): String? = getInstance(project)?.settings?.versionWithFallback
+        fun jpsVersion(project: Project): String = getInstance(project).settings.versionWithFallback
 
         /**
          * @see readFromKotlincXmlOrIpr
          */
         @JvmStatic
-        fun getInstance(project: Project): KotlinJpsPluginSettings? =
-            project.takeIf { isUnbundledJpsExperimentalFeatureEnabled(it) }?.service()
-
-        @JvmStatic
-        fun isUnbundledJpsExperimentalFeatureEnabled(project: Project): Boolean = isUnitTestMode() || !project.isDefault
+        fun getInstance(project: Project): KotlinJpsPluginSettings = project.service()
 
         /**
          * @param jpsVersion version to parse
@@ -129,19 +121,20 @@ class KotlinJpsPluginSettings(project: Project) : BaseKotlinCompilerSettings<Jps
          *
          * Please, prefer [getInstance] if possible.
          */
-        fun readFromKotlincXmlOrIpr(path: Path) =
-            path.takeIf { it.fileIsNotEmpty() }
+        fun readFromKotlincXmlOrIpr(path: Path): JpsPluginSettings? {
+            return path.takeIf { it.fileIsNotEmpty() }
                 ?.let { JDOMUtil.load(path) }
                 ?.children
                 ?.singleOrNull { it.getAttributeValue("name") == KotlinJpsPluginSettings::class.java.simpleName }
                 ?.let { xmlElement ->
                     JpsPluginSettings().apply {
-                        XmlSerializer.deserializeInto(this, xmlElement)
+                    XmlSerializer.deserializeInto(this, xmlElement)
                     }
                 }
+        }
 
         fun supportedJpsVersion(project: Project, onUnsupportedVersion: (String) -> Unit): String? {
-            val version = jpsVersion(project) ?: return null
+            val version = jpsVersion(project)
             return when (val error = checkJpsVersion(version, fromFile = true)) {
                 is OutdatedCompilerVersion -> fallbackVersionForOutdatedCompiler
 
@@ -158,7 +151,7 @@ class KotlinJpsPluginSettings(project: Project) : BaseKotlinCompilerSettings<Jps
          * @param isDelegatedToExtBuild `true` if compiled with Gradle/Maven. `false` if compiled with JPS
          */
         fun importKotlinJpsVersionFromExternalBuildSystem(project: Project, rawVersion: String, isDelegatedToExtBuild: Boolean) {
-            val instance = getInstance(project) ?: return
+            val instance = getInstance(project)
             if (rawVersion == rawBundledVersion) {
                 instance.setVersion(rawVersion)
                 return
@@ -198,12 +191,20 @@ class KotlinJpsPluginSettings(project: Project) : BaseKotlinCompilerSettings<Jps
             if (!isDelegatedToExtBuild) {
                 downloadKotlinJpsInBackground(project, version)
             }
-            instance.setVersion(version)
+            runInEdt {
+                runWriteAction {
+                    instance.setVersion(version)
+                }
+            }
         }
 
         private fun downloadKotlinJpsInBackground(project: Project, version: String) {
             ProgressManager.getInstance().run(
                 object : Task.Backgroundable(project, KotlinBasePluginBundle.getMessage("progress.text.downloading.kotlinc.dist"), true) {
+                    override fun isHeadless(): Boolean {
+                        return false
+                    }
+
                     override fun run(indicator: ProgressIndicator) {
                         KotlinArtifactsDownloader.lazyDownloadMissingJpsPluginDependencies(
                             project,

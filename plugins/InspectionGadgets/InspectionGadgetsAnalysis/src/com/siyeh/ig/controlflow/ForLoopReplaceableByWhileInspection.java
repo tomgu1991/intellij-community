@@ -39,7 +39,8 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
 import java.util.Collection;
-import java.util.Objects;
+
+import static com.intellij.openapi.util.Predicates.nonNull;
 
 public class ForLoopReplaceableByWhileInspection extends BaseInspection implements CleanupLocalInspectionTool {
 
@@ -84,7 +85,7 @@ public class ForLoopReplaceableByWhileInspection extends BaseInspection implemen
     }
 
     @Override
-    public void doFix(Project project, ProblemDescriptor descriptor) {
+    public void doFix(@NotNull Project project, @NotNull ProblemDescriptor descriptor) {
       final PsiElement element = descriptor.getPsiElement();
       final PsiForStatement forStatement = ObjectUtils.tryCast(element.getParent(), PsiForStatement.class);
       if (forStatement == null) return;
@@ -163,7 +164,7 @@ public class ForLoopReplaceableByWhileInspection extends BaseInspection implemen
       return StreamEx.of(initialization.getDeclaredElements())
         .select(PsiNamedElement.class)
         .map(namedElement -> namedElement.getName())
-        .filter(Objects::nonNull)
+        .filter(nonNull())
         .anyMatch(name -> !name.equals(manager.suggestUniqueVariableName(name, newStatement, true)));
     }
   }

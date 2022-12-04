@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.perf.synthetic
 
@@ -288,10 +288,6 @@ class PerformanceNativeProjectsTest : AbstractPerformanceProjectsTest() {
     // goal: make sure that the project imported from Gradle is valid
     private fun runProjectSanityChecks(project: Project) {
 
-        val isNativeDependencyPropagationEnabled by lazy {
-            readGradleProperty(project, "kotlin.native.enableDependencyPropagation")?.toBoolean() == true
-        }
-
         val nativeModules: Map<Module, Set<String>> = runReadAction {
             project.allModules().mapNotNull { module ->
                 val facetSettings = KotlinFacet.get(module)?.configuration?.settings ?: return@mapNotNull null
@@ -308,18 +304,13 @@ class PerformanceNativeProjectsTest : AbstractPerformanceProjectsTest() {
                     .asSequence()
                     .filterIsInstance<LibraryOrderEntry>()
                     .mapNotNull { it.library }
-                    .filter { detectLibraryKind(it.getFiles(OrderRootType.CLASSES)) == KotlinNativeLibraryKind }
+                    .filter { detectLibraryKind(it, module.project) == KotlinNativeLibraryKind }
                     .mapNotNull inner@{ library ->
                         val libraryNameParts = parseIDELibraryName(library.name.orEmpty()) ?: return@inner null
                         val (_, pureLibraryName, platformPart) = libraryNameParts
                         pureLibraryName + if (platformPart != null) " [$platformPart]" else ""
                     }
                     .toSet()
-
-                // workaround to skip common Linux modules in "enabled dependency propagation" mode that do not
-                // get any Kotlin/Native KLIB libraries
-                if (nativeLibraries.isEmpty() && moduleName.startsWith("linux") && isNativeDependencyPropagationEnabled)
-                    return@mapNotNull null
 
                 module to nativeLibraries
             }.toMap()

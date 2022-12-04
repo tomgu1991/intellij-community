@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.client
 
 import com.intellij.codeWithMe.ClientId
@@ -8,7 +8,7 @@ import com.intellij.openapi.application.impl.ApplicationImpl
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.project.impl.ProjectExImpl
+import com.intellij.openapi.project.impl.ProjectImpl
 import com.intellij.openapi.util.Disposer
 import org.jetbrains.annotations.ApiStatus
 import java.util.concurrent.ConcurrentHashMap
@@ -39,22 +39,34 @@ sealed class ClientSessionsManager<T : ClientSession> {
 
     /**
      * Returns all project-level sessions.
-     * @param includeLocal specifies whether the local session should be included
+     * @param kind specifies what sessions should be included
      * @see ClientSession
      */
     @JvmStatic
+    fun getProjectSessions(project: Project, kind: ClientKind): List<ClientProjectSession> {
+      return getInstance(project).getSessions(kind)
+    }
+
+    @JvmStatic
+    @Deprecated("Use overload accepting ClientKind")
     fun getProjectSessions(project: Project, includeLocal: Boolean): List<ClientProjectSession> {
-      return getInstance(project).getSessions(includeLocal)
+      return getProjectSessions(project, if (includeLocal) ClientKind.ALL else ClientKind.REMOTE)
     }
 
     /**
      * Returns all application-level sessions.
-     * @param includeLocal specifies whether the local session should be included
+     * @param kind specifies what sessions should be included
      * @see ClientSession
      */
     @JvmStatic
+    fun getAppSessions(kind: ClientKind): List<ClientAppSession> {
+      return getInstance().getSessions(kind)
+    }
+
+    @Deprecated("Use overload accepting ClientKind")
+    @JvmStatic
     fun getAppSessions(includeLocal: Boolean): List<ClientAppSession> {
-      return getInstance().getSessions(includeLocal)
+      return getAppSessions(if (includeLocal) ClientKind.ALL else ClientKind.REMOTE)
     }
 
     @ApiStatus.Internal
@@ -66,12 +78,17 @@ sealed class ClientSessionsManager<T : ClientSession> {
 
   private val sessions = ConcurrentHashMap<ClientId, T>()
 
+  @Deprecated("Use overload accepting ClientKind")
   fun getSessions(includeLocal: Boolean): List<T> {
-    if (includeLocal) {
+    return getSessions(if (includeLocal) ClientKind.ALL else ClientKind.REMOTE)
+  }
+
+  fun getSessions(kind: ClientKind): List<T> {
+    if (kind == ClientKind.ALL) {
       return java.util.List.copyOf(sessions.values)
     }
     else {
-      return sessions.values.filter { !it.isLocal }
+      return sessions.values.filter { it.type.matches(kind) }
     }
   }
 
@@ -104,14 +121,14 @@ open class ClientAppSessionsManager : ClientSessionsManager<ClientAppSession>() 
    * Used for [ClientId] overriding in JetBrains Client
    */
   protected open fun createLocalSession(application: ApplicationImpl): ClientAppSessionImpl {
-    return ClientAppSessionImpl(ClientId.localId, application)
+    return ClientAppSessionImpl(ClientId.localId, ClientType.LOCAL, application)
   }
 }
 
 open class ClientProjectSessionsManager(project: Project) : ClientSessionsManager<ClientProjectSession>() {
   init {
-    if (project is ProjectExImpl) {
-      registerSession(project, ClientProjectSessionImpl(ClientId.localId, project))
+    if (project is ProjectImpl) {
+      registerSession(project, ClientProjectSessionImpl(ClientId.localId, ClientType.LOCAL, project))
     }
   }
 }

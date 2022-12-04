@@ -1,6 +1,6 @@
 <idea-plugin package="com.intellij.grazie">
   <id>tanvd.grazi</id>
-  <name>Grazie</name>
+  <name>Grazie Lite</name>
   <vendor>JetBrains</vendor>
 
   <incompatible-with>com.intellij.cwm.guest</incompatible-with>
@@ -57,10 +57,15 @@
     <search.optionContributor implementation="com.intellij.grazie.ide.ui.search.GrazieSearchableOptionContributor"/>
 
     <statistics.applicationUsagesCollector implementation="com.intellij.grazie.ide.fus.GrazieFUSState"/>
-    <statistics.counterUsagesCollector groupId="grazie.count" version="5"/>
+    <statistics.counterUsagesCollector implementationClass="com.intellij.grazie.ide.fus.GrazieFUSCounter"/>
 
     <spellchecker.dictionary.runtimeDictionaryProvider implementation="com.intellij.grazie.spellcheck.GrazieDictionaryProvider"/>
     <notificationGroup id="Proofreading missing languages information" displayType="STICKY_BALLOON" bundle="messages.GrazieBundle" key="grazie.notification.missing-languages.group"/>
+
+    <notificationGroup displayType="STICKY_BALLOON"
+                       id="Grazie notifications"
+                       bundle="messages.GrazieBundle"
+                       key="grazie.notification.grazie.group"/>
 
     <annotator language="TEXT" implementationClass="com.intellij.grazie.ide.language.commit.CommitAnnotator"/>
 

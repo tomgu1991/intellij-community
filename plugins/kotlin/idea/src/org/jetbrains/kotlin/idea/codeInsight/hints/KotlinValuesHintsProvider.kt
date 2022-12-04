@@ -1,10 +1,12 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.idea.codeInsight.hints
 
-import com.intellij.codeInsight.hints.*
+import com.intellij.codeInsight.hints.ChangeListener
+import com.intellij.codeInsight.hints.ImmediateConfigurable
+import com.intellij.codeInsight.hints.InlayGroup
+import com.intellij.codeInsight.hints.SettingsKey
 import com.intellij.ui.layout.*
-import org.jetbrains.kotlin.idea.KotlinBundle
-import org.jetbrains.kotlin.psi.KtBinaryExpression
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import javax.swing.JComponent
 
 class KotlinValuesHintsProvider : KotlinAbstractHintsProvider<KotlinValuesHintsProvider.Settings>() {
@@ -62,8 +64,3 @@ class KotlinValuesHintsProvider : KotlinAbstractHintsProvider<KotlinValuesHintsP
     override val description: String
         get() = KotlinBundle.message("inlay.kotlin.values.hints")
 }
-
-internal fun KtBinaryExpression.isRangeExpression(): Boolean =
-    with(operationReference.getReferencedNameAsName().asString()) {
-        return this == ".." || this == "rangeTo" || this == "downTo" || this == "until"
-    }

@@ -4,10 +4,11 @@ package com.intellij.workspaceModel.storage.entities.model.api
 import com.intellij.workspaceModel.storage.WorkspaceEntity
 import com.intellij.workspaceModel.storage.EntitySource
 import com.intellij.workspaceModel.storage.GeneratedCodeApiVersion
-import com.intellij.workspaceModel.storage.ModifiableWorkspaceEntity
 import com.intellij.workspaceModel.storage.MutableEntityStorage
 import org.jetbrains.deft.ObjBuilder
 import org.jetbrains.deft.Type
+import org.jetbrains.deft.annotations.Child
+
 
 
 interface TestEntity: WorkspaceEntity {
@@ -17,7 +18,7 @@ interface TestEntity: WorkspaceEntity {
   //region generated code
   //@formatter:off
   @GeneratedCodeApiVersion(1)
-  interface Builder: TestEntity, ModifiableWorkspaceEntity<TestEntity>, ObjBuilder<TestEntity> {
+  interface Builder: TestEntity, WorkspaceEntity.Builder<TestEntity>, ObjBuilder<TestEntity> {
       override var name: String
       override var entitySource: EntitySource
       override var count: Int
@@ -25,7 +26,7 @@ interface TestEntity: WorkspaceEntity {
   }
   
   companion object: Type<TestEntity, Builder>() {
-      operator fun invoke(name: String, entitySource: EntitySource, count: Int, anotherField: One, init: (Builder.() -> Unit)? = null): TestEntity {
+      operator fun invoke(name: String, count: Int, anotherField: One, entitySource: EntitySource, init: (Builder.() -> Unit)? = null): TestEntity {
           val builder = builder()
           builder.name = name
           builder.entitySource = entitySource
@@ -41,6 +42,9 @@ interface TestEntity: WorkspaceEntity {
 }
 //region generated code
 fun MutableEntityStorage.modifyEntity(entity: TestEntity, modification: TestEntity.Builder.() -> Unit) = modifyEntity(TestEntity.Builder::class.java, entity, modification)
+var TestEntity.Builder.anotherTest: @Child AnotherTest?
+    by WorkspaceEntity.extension()
+
 //endregion
 
 data class One(val foo: String, val bar: String)

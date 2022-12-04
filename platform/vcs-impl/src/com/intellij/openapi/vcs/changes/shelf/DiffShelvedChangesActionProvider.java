@@ -13,10 +13,7 @@ import com.intellij.diff.requests.UnknownFileTypeDiffRequest;
 import com.intellij.diff.tools.util.SoftHardCacheMap;
 import com.intellij.diff.util.DiffUtil;
 import com.intellij.openapi.ListSelection;
-import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.AnActionExtensionProvider;
-import com.intellij.openapi.actionSystem.CommonDataKeys;
-import com.intellij.openapi.actionSystem.DataContext;
+import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.diff.DiffBundle;
 import com.intellij.openapi.diff.impl.patch.ApplyPatchContext;
@@ -48,6 +45,7 @@ import com.intellij.openapi.vcs.changes.patch.ApplyPatchForBaseRevisionTexts;
 import com.intellij.openapi.vcs.changes.patch.tool.PatchDiffRequest;
 import com.intellij.openapi.vcs.changes.ui.ChangeDiffRequestChain;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.ui.ExperimentalUI;
 import com.intellij.util.concurrency.annotations.RequiresBackgroundThread;
 import com.intellij.vcsUtil.VcsUtil;
 import org.jetbrains.annotations.NotNull;
@@ -73,6 +71,11 @@ public final class DiffShelvedChangesActionProvider implements AnActionExtension
   private static final Logger LOG = getInstance(DiffShelvedChangesActionProvider.class);
 
   @Override
+  public @NotNull ActionUpdateThread getActionUpdateThread() {
+    return ActionUpdateThread.BGT;
+  }
+
+  @Override
   public boolean isActive(@NotNull AnActionEvent e) {
     return e.getData(ShelvedChangesViewManager.SHELVED_CHANGES_TREE) != null;
   }
@@ -84,6 +87,8 @@ public final class DiffShelvedChangesActionProvider implements AnActionExtension
 
   public static void updateAvailability(@NotNull AnActionEvent e) {
     e.getPresentation().setEnabled(isEnabled(e.getDataContext()));
+    boolean shouldBeHidden = ExperimentalUI.isNewUI() && e.isFromActionToolbar();
+    e.getPresentation().setVisible(!shouldBeHidden);
   }
 
   @Override

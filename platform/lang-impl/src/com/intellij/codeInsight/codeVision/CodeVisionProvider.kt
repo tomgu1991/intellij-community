@@ -1,4 +1,4 @@
-// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.codeInsight.codeVision
 
 import com.intellij.codeInsight.codeVision.settings.PlatformCodeVisionIds
@@ -12,30 +12,30 @@ import org.jetbrains.annotations.ApiStatus
 import org.jetbrains.annotations.Nls
 
 /**
- * @see CodeVisionProviderFactory
  * If invalidation and calculation should be bound to daemon, then use @see [com.intellij.codeInsight.hints.codeVision.DaemonBoundCodeVisionProvider]
  * Otherwise implement [CodeVisionProvider] directly
  *
  * If you want to implement multiple providers with same meaning (for example, for different languages)
  * and group them in settings window, then @see [com.intellij.codeInsight.codeVision.settings.CodeVisionGroupSettingProvider]
- * Also @see [PlatformCodeVisionIds]
+ * @see [PlatformCodeVisionIds]
+ * @see CodeVisionProviderFactory
  */
 @ApiStatus.Experimental
 interface CodeVisionProvider<T> {
   companion object {
-    val EP_NAME = "com.intellij.codeInsight.codeVisionProvider"
-    val providersExtensionPoint = ExtensionPointName.create<CodeVisionProvider<*>>(EP_NAME)
+    const val EP_NAME: String = "com.intellij.codeInsight.codeVisionProvider"
+    val providersExtensionPoint: ExtensionPointName<CodeVisionProvider<*>> = ExtensionPointName.create(EP_NAME)
   }
 
   /**
-   * It affects  whether the group will be shown in settings or not.
-   *
+   * WARNING! Must work very fast, it is invoked for a file during its opening. The user won't see the file's content if this method works long.
    * @return true iff it could potentially provide any lenses for the project
    */
-  @JvmDefault
-  fun isAvailableFor(project: Project) = true
+  fun isAvailableFor(project: Project): Boolean = true
 
-  @JvmDefault
+  /**
+   * Prepares data for preview (to understand later that it is a preview), for example, stores user data in the editor/file.
+   */
   fun preparePreview(editor: Editor, file: PsiFile) {
   }
   
@@ -49,7 +49,7 @@ interface CodeVisionProvider<T> {
    *  Return true if [computeForEditor] should be called
    *  false otherwise
    */
-  fun shouldRecomputeForEditor(editor: Editor, uiData: T?) = true
+  fun shouldRecomputeForEditor(editor: Editor, uiData: T?): Boolean = true
 
   /**
    * Should return text ranges and applicable hints for them, invoked on background thread.
@@ -77,11 +77,11 @@ interface CodeVisionProvider<T> {
   /**
    * Handle click on an extra action on a lens at a given range
    */
-  fun handleExtraAction(editor: Editor, textRange: TextRange, actionId: String) = Unit
+  fun handleExtraAction(editor: Editor, textRange: TextRange, actionId: String): Unit = Unit
 
   /**
    * Calls on background BEFORE editor opening
-   * Returns ranges where placeholders should be when editor opens
+   * @return ranges where placeholders should be when editor opens
    */
   @Deprecated("use getPlaceholderCollector")
   fun collectPlaceholders(editor: Editor): List<TextRange> = emptyList()

@@ -4,7 +4,6 @@ package com.intellij.openapi.wm.impl.status.widget;
 import com.intellij.ide.HelpTooltipManager;
 import com.intellij.internal.statistic.service.fus.collectors.UIEventLogger;
 import com.intellij.openapi.ui.popup.JBPopup;
-import com.intellij.openapi.ui.popup.ListPopup;
 import com.intellij.openapi.util.NlsContexts;
 import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.util.text.StringUtil;
@@ -24,8 +23,7 @@ import java.awt.*;
 import java.awt.event.MouseEvent;
 
 public interface StatusBarWidgetWrapper {
-  @NotNull
-  static JComponent wrap(@NotNull StatusBarWidget.WidgetPresentation presentation) {
+  static @NotNull JComponent wrap(@NotNull StatusBarWidget.WidgetPresentation presentation) {
     if (presentation instanceof StatusBarWidget.IconPresentation) {
       return new StatusBarWidgetWrapper.Icon((StatusBarWidget.IconPresentation)presentation);
     }
@@ -55,7 +53,7 @@ public interface StatusBarWidgetWrapper {
   final class MultipleTextValues extends TextPanel.WithIconAndArrows implements StatusBarWidgetWrapper {
     private final StatusBarWidget.MultipleTextValuesPresentation myPresentation;
 
-    public MultipleTextValues(@NotNull final StatusBarWidget.MultipleTextValuesPresentation presentation) {
+    public MultipleTextValues(final @NotNull StatusBarWidget.MultipleTextValuesPresentation presentation) {
       myPresentation = presentation;
       setVisible(StringUtil.isNotEmpty(myPresentation.getSelectedValue()));
       setTextAlignment(Component.CENTER_ALIGNMENT);
@@ -66,7 +64,7 @@ public interface StatusBarWidgetWrapper {
         @Override
         public boolean onClick(@NotNull MouseEvent e, int clickCount) {
           if (myPopupState.isRecentlyHidden()) return false; // do not show new popup
-          final ListPopup popup = myPresentation.getPopupStep();
+          JBPopup popup = myPresentation.getPopup();
           if (popup == null) return false;
           UIEventLogger.StatusBarPopupShown.log(myPresentation.getClass());
           final Dimension dimension = getSizeFor(popup);
@@ -76,7 +74,7 @@ public interface StatusBarWidgetWrapper {
           return true;
         }
 
-        private Dimension getSizeFor(ListPopup popup) {
+        private static @NotNull Dimension getSizeFor(@NotNull JBPopup popup) {
           if (popup instanceof AbstractPopup) {
             return ((AbstractPopup)popup).getSizeForPositioning();
           }
@@ -94,9 +92,8 @@ public interface StatusBarWidgetWrapper {
       setWidgetTooltip(this, myPresentation.getTooltipText(), myPresentation.getShortcutText());
     }
 
-    @NotNull
     @Override
-    public StatusBarWidget.WidgetPresentation getPresentation() {
+    public @NotNull StatusBarWidget.WidgetPresentation getPresentation() {
       return myPresentation;
     }
   }
@@ -104,7 +101,7 @@ public interface StatusBarWidgetWrapper {
   final class Text extends TextPanel implements StatusBarWidgetWrapper {
     private final StatusBarWidget.TextPresentation myPresentation;
 
-    public Text(@NotNull final StatusBarWidget.TextPresentation presentation) {
+    public Text(final @NotNull StatusBarWidget.TextPresentation presentation) {
       myPresentation = presentation;
       setTextAlignment(presentation.getAlignment());
       setVisible(!myPresentation.getText().isEmpty());
@@ -115,9 +112,8 @@ public interface StatusBarWidgetWrapper {
       }
     }
 
-    @NotNull
     @Override
-    public StatusBarWidget.WidgetPresentation getPresentation() {
+    public @NotNull StatusBarWidget.WidgetPresentation getPresentation() {
       return myPresentation;
     }
 
@@ -133,7 +129,7 @@ public interface StatusBarWidgetWrapper {
   final class Icon extends TextPanel.WithIconAndArrows implements StatusBarWidgetWrapper {
     private final StatusBarWidget.IconPresentation myPresentation;
 
-    public Icon(@NotNull final StatusBarWidget.IconPresentation presentation) {
+    public Icon(final @NotNull StatusBarWidget.IconPresentation presentation) {
       myPresentation = presentation;
       setTextAlignment(Component.CENTER_ALIGNMENT);
       setIcon(myPresentation.getIcon());
@@ -145,9 +141,8 @@ public interface StatusBarWidgetWrapper {
       }
     }
 
-    @NotNull
     @Override
-    public StatusBarWidget.WidgetPresentation getPresentation() {
+    public @NotNull StatusBarWidget.WidgetPresentation getPresentation() {
       return myPresentation;
     }
 

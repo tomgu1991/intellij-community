@@ -5,6 +5,7 @@ import com.intellij.openapi.components.ComponentManager;
 import com.intellij.openapi.extensions.AreaInstance;
 import com.intellij.openapi.util.NlsSafe;
 import com.intellij.openapi.vfs.VirtualFile;
+import kotlinx.coroutines.CoroutineScope;
 import org.jetbrains.annotations.*;
 
 /**
@@ -108,11 +109,28 @@ public interface Project extends ComponentManager, AreaInstance {
 
   void save();
 
+  default void scheduleSave() {
+    save();
+  }
+
   boolean isOpen();
 
   boolean isInitialized();
 
   default boolean isDefault() {
     return false;
+  }
+
+  /**
+   * @deprecated this scope will die only with the project => plugin coroutines which use it will leak on unloading.
+   * Instead, use Disposable project service approach described here https://youtrack.jetbrains.com/articles/IDEA-A-237338670
+   */
+  @Deprecated
+  @ApiStatus.Internal
+  CoroutineScope getCoroutineScope();
+
+  @ApiStatus.Internal
+  default ComponentManager getActualComponentManager() {
+    return this;
   }
 }

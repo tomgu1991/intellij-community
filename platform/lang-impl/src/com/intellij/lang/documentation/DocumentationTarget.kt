@@ -13,12 +13,20 @@ import org.jetbrains.annotations.ApiStatus.OverrideOnly
 /**
  * The minimal entity which is needed for documentation actions.
  *
- * The entity is valid within a read action, [createPointer] must be used to access the entity between different read actions.
+ * To provide [DocumentationTarget] implement and register:
+ * - by an offset in a [file][com.intellij.psi.PsiFile] - [DocumentationTargetProvider];
+ * - by a target [symbol][com.intellij.model.Symbol] - [SymbolDocumentationTargetProvider][com.intellij.lang.documentation.symbol.SymbolDocumentationTargetProvider] (or see other options in `SymbolDocumentationTargetProvider` docs);
+ * - by a target [element][com.intellij.psi.PsiElement] - [PsiDocumentationTargetProvider][com.intellij.lang.documentation.psi.PsiDocumentationTargetProvider].
  */
 @Experimental
 @OverrideOnly
 interface DocumentationTarget {
 
+  /**
+   * The current instance is valid within a single read action.
+   * This function must be used to access the entity between different read actions.
+   * See [Pointer] docs for an example.
+   */
   @RequiresReadLock
   @RequiresBackgroundThread
   fun createPointer(): Pointer<out DocumentationTarget>
@@ -27,13 +35,11 @@ interface DocumentationTarget {
    * Returned presentation is used to render the tab name and icon in the tool window,
    * and to render location info under the documentation in the popup.
    */
-  val presentation: TargetPresentation
-    @RequiresReadLock
-    @RequiresBackgroundThread
-    get
+  @RequiresReadLock
+  @RequiresBackgroundThread
+  fun presentation(): TargetPresentation
 
   @Suppress("DEPRECATION") // deprecated JvmDefault
-  @JvmDefault
   val navigatable: Navigatable?
     @RequiresReadLock
     @RequiresBackgroundThread
@@ -48,7 +54,6 @@ interface DocumentationTarget {
    */
   @RequiresReadLock
   @RequiresBackgroundThread
-  @JvmDefault
   fun computeDocumentationHint(): @HintText String? = null
 
   /**
@@ -64,6 +69,5 @@ interface DocumentationTarget {
    */
   @RequiresReadLock
   @RequiresBackgroundThread
-  @JvmDefault
   fun computeDocumentation(): DocumentationResult? = null
 }

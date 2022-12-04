@@ -40,7 +40,6 @@ import com.intellij.psi.search.PsiElementProcessor;
 import com.intellij.psi.util.PsiUtilCore;
 import com.intellij.ui.awt.RelativePoint;
 import com.intellij.util.containers.ContainerUtil;
-import com.intellij.util.ui.EDT;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -265,18 +264,20 @@ public class GotoDeclarationAction extends BaseCodeInsightAction implements Dumb
 
   @Override
   public void update(@NotNull final AnActionEvent event) {
+    InputEvent inputEvent = event.getInputEvent();
+    boolean isMouseShortcut = inputEvent instanceof MouseEvent && ActionPlaces.MOUSE_SHORTCUT.equals(event.getPlace());
+
     if (event.getProject() == null ||
         event.getData(EditorGutter.KEY) != null ||
-        Boolean.TRUE.equals(event.getData(CommonDataKeys.EDITOR_VIRTUAL_SPACE))) {
+        !isMouseShortcut && Boolean.TRUE.equals(event.getData(CommonDataKeys.EDITOR_VIRTUAL_SPACE))) {
       event.getPresentation().setEnabled(false);
       return;
     }
 
-    InputEvent inputEvent = event.getInputEvent();
     Editor editor = event.getData(CommonDataKeys.EDITOR);
-    if (editor != null && inputEvent instanceof MouseEvent && event.getPlace().equals(ActionPlaces.MOUSE_SHORTCUT) &&
-        EDT.isCurrentThreadEdt() &&
-        !EditorUtil.isPointOverText(editor, new RelativePoint((MouseEvent)inputEvent).getPoint(editor.getContentComponent()))) {
+    if (editor != null && isMouseShortcut &&
+        !Boolean.TRUE.equals(event.getUpdateSession().compute(this, "isPointOverText", ActionUpdateThread.EDT, () ->
+          EditorUtil.isPointOverText(editor, new RelativePoint((MouseEvent)inputEvent).getPoint(editor.getContentComponent()))))) {
       event.getPresentation().setEnabled(false);
       return;
     }

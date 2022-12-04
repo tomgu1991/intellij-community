@@ -31,7 +31,6 @@ import com.intellij.openapi.fileEditor.impl.text.TextEditorProvider;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.util.NlsContexts;
-import com.intellij.openapi.util.Pair;
 import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -77,7 +76,7 @@ public class IdeDocumentHistoryImpl extends IdeDocumentHistory implements Dispos
   private final LinkedList<PlaceInfo> myForwardPlaces = new LinkedList<>(); // LinkedList of PlaceInfo's
   private boolean myBackInProgress;
   private boolean myForwardInProgress;
-  private Reference<Object> myLastGroupId; // weak reference to avoid memleaks when clients pass some exotic objects as commandId
+  private Reference<Object> myLastGroupId; // weak reference to avoid memory leaks when clients pass some exotic objects as commandId
   private boolean myRegisteredBackPlaceInLastGroup;
 
   // change's navigation
@@ -178,7 +177,7 @@ public class IdeDocumentHistoryImpl extends IdeDocumentHistory implements Dispos
   }
 
   protected FileEditorManagerEx getFileEditorManager() {
-    return FileEditorManagerEx.getInstanceEx(myProject);
+    return FileEditorManagerEx.getInstanceExIfCreated(myProject);
   }
 
   private @NotNull static PersistentHashMap<String, Long> initRecentFilesTimestampMap(@NotNull Project project) {
@@ -568,22 +567,20 @@ public class IdeDocumentHistoryImpl extends IdeDocumentHistory implements Dispos
 
   @Override
   public void gotoPlaceInfo(@NotNull PlaceInfo info, boolean wasActive) {
-    EditorWindow wnd = info.getWindow();
     FileEditorManagerEx editorManager = getFileEditorManager();
     FileEditorOpenOptions openOptions = new FileEditorOpenOptions()
       .withUsePreviewTab(info.isPreviewTab())
       .withRequestFocus(wasActive);
-    final Pair<FileEditor[], FileEditorProvider[]> editorsWithProviders =
-      editorManager.openFileWithProviders(info.getFile(), wnd, openOptions);
+    var editorsWithProviders = editorManager.openFileWithProviders(info.getFile(), info.getWindow(), openOptions);
 
     editorManager.setSelectedEditor(info.getFile(), info.getEditorTypeId());
 
-    final FileEditor[] editors = editorsWithProviders.getFirst();
-    final FileEditorProvider[] providers = editorsWithProviders.getSecond();
-    for (int i = 0; i < editors.length; i++) {
-      String typeId = providers[i].getEditorTypeId();
+    var editors = editorsWithProviders.getAllEditors();
+    var providers = editorsWithProviders.getAllProviders();
+    for (int i = 0; i < editors.size(); i++) {
+      String typeId = providers.get(i).getEditorTypeId();
       if (typeId.equals(info.getEditorTypeId())) {
-        editors[i].setState(info.getNavigationState());
+        editors.get(i).setState(info.getNavigationState());
       }
     }
   }
@@ -609,7 +606,7 @@ public class IdeDocumentHistoryImpl extends IdeDocumentHistory implements Dispos
     LOG.assertTrue(file != null, fileEditor.getClass().getName() + " getFile() returned null");
     FileEditorState state = fileEditor.getState(FileEditorStateLevel.NAVIGATION);
 
-    EditorWindow window = editorManager.getCurrentWindow();
+    EditorWindow window = editorManager == null ? null : editorManager.getCurrentWindow();
     EditorComposite composite = window != null ? window.getComposite(file) : null;
     return new PlaceInfo(file, state, fileProvider.getEditorTypeId(), window, composite != null && composite.isPreview(),
                          getCaretPosition(fileEditor), System.currentTimeMillis());

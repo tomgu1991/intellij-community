@@ -10,6 +10,8 @@ import com.intellij.ide.util.PsiClassListCellRenderer
 import com.intellij.ide.util.PsiClassRenderingInfo
 import com.intellij.ide.util.PsiElementListCellRenderer
 import com.intellij.java.JavaBundle
+import com.intellij.openapi.application.runReadAction
+import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.fileEditor.FileEditorManager
@@ -27,9 +29,10 @@ import org.jetbrains.kotlin.asJava.toLightMethods
 import org.jetbrains.kotlin.descriptors.CallableMemberDescriptor
 import org.jetbrains.kotlin.descriptors.ClassDescriptor
 import org.jetbrains.kotlin.descriptors.ClassKind
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToDescriptorIfAny
 import org.jetbrains.kotlin.idea.caches.resolve.util.getJavaClassDescriptor
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.intentions.SelfTargetingRangeIntention
 import org.jetbrains.kotlin.idea.core.overrideImplement.BodyType
 import org.jetbrains.kotlin.idea.core.overrideImplement.GenerateMembersHandler
 import org.jetbrains.kotlin.idea.core.overrideImplement.OverrideMemberChooserObject
@@ -39,8 +42,6 @@ import org.jetbrains.kotlin.idea.search.declarationsSearch.HierarchySearchReques
 import org.jetbrains.kotlin.idea.search.declarationsSearch.searchInheritors
 import org.jetbrains.kotlin.idea.util.application.executeCommand
 import org.jetbrains.kotlin.idea.util.application.isUnitTestMode
-import org.jetbrains.kotlin.idea.util.application.runReadAction
-import org.jetbrains.kotlin.idea.util.application.runWriteAction
 import org.jetbrains.kotlin.idea.util.getTypeSubstitution
 import org.jetbrains.kotlin.idea.util.substitute
 import org.jetbrains.kotlin.load.java.descriptors.JavaClassDescriptor
@@ -119,11 +120,11 @@ abstract class ImplementAbstractMemberIntentionBase : SelfTargetingRangeIntentio
         val substitution = getTypeSubstitution(superClassDescriptor.defaultType, subClassDescriptor.defaultType).orEmpty()
         val descriptorToImplement = superMemberDescriptor.substitute(substitution) as CallableMemberDescriptor
         val chooserObject = OverrideMemberChooserObject.create(
-            member.project,
-            descriptorToImplement,
-            descriptorToImplement,
-            BodyType.FROM_TEMPLATE,
-            preferConstructorParameters
+          member.project,
+          descriptorToImplement,
+          descriptorToImplement,
+          BodyType.FromTemplate,
+          preferConstructorParameters
         )
         GenerateMembersHandler.generateMembers(editor, targetClass, listOf(chooserObject), false)
     }

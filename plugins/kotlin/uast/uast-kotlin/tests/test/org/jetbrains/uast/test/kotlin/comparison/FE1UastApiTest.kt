@@ -6,7 +6,7 @@ package org.jetbrains.uast.test.kotlin.comparison
 
 import com.intellij.testFramework.TestDataPath
 import org.jetbrains.kotlin.idea.test.JUnit3RunnerWithInners
-import org.jetbrains.kotlin.test.KotlinRoot
+import org.jetbrains.kotlin.idea.base.test.KotlinRoot
 import org.jetbrains.kotlin.test.TestMetadata
 import org.jetbrains.uast.UFile
 import org.jetbrains.uast.test.common.kotlin.UastApiTestBase
@@ -22,8 +22,9 @@ class FE1UastApiTest : AbstractFE1UastTest() {
 
     @TestMetadata("uast-kotlin-fir/testData/declaration")
     @TestDataPath("/")
+    @RunWith(JUnit3RunnerWithInners::class)
     class Declaration : AbstractFE1UastTest(), UastApiTestBase {
-        override var testDataDir = KotlinRoot.DIR_PATH.resolve("uast/uast-kotlin-fir/testData/declaration").toFile()
+        override var testDataDir = KotlinRoot.DIR.resolve("uast/uast-kotlin-fir/testData/declaration")
 
         override val isFirUastPlugin: Boolean = false
 
@@ -35,12 +36,18 @@ class FE1UastApiTest : AbstractFE1UastTest() {
         fun testRetention() {
             doTest("retention", ::checkCallbackForRetention)
         }
+
+        @TestMetadata("returns.kt")
+        fun testReturnJumpTargets() {
+            doTest("returns", ::checkReturnJumpTargets)
+        }
     }
 
     @TestMetadata("uast-kotlin/testData")
     @TestDataPath("/")
+    @RunWith(JUnit3RunnerWithInners::class)
     class Legacy : AbstractFE1UastTest(), UastApiTestBase {
-        override var testDataDir: File = KotlinRoot.DIR_PATH.resolve("uast/uast-kotlin/tests/testData").toFile()
+        override var testDataDir: File = KotlinRoot.DIR.resolve("uast/uast-kotlin/tests/testData")
 
         override val isFirUastPlugin: Boolean = false
 
@@ -148,11 +155,6 @@ class FE1UastApiTest : AbstractFE1UastTest() {
             doTest("ParametersDisorder", ::checkCallbackForParametersDisorder)
         }
 
-        @TestMetadata("Resolve.kt")
-        fun testResolve() {
-            doTest("Resolve", ::checkCallbackForResolve)
-        }
-
         @TestMetadata("Lambdas.kt")
         fun testLambdas() {
             doTest("Lambdas", ::checkCallbackForLambdas)
@@ -206,6 +208,11 @@ class FE1UastApiTest : AbstractFE1UastTest() {
         @TestMetadata("StringTemplateComplexForUInjectionHost.kt")
         fun testStringTemplateComplexForUInjectionHost() {
             doTest("StringTemplateComplexForUInjectionHost", ::checkCallbackForComplexStrings)
+        }
+
+        @TestMetadata("WhenIs.kt")
+        fun testWhenIs() {
+            doTest("WhenIs", ::checkSwitchYieldTargets)
         }
     }
 }

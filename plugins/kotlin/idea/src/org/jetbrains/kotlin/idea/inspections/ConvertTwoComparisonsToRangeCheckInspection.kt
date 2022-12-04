@@ -1,15 +1,15 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.inspections
 
-import com.intellij.codeInspection.CleanupLocalInspectionTool
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.tree.IElementType
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
-import org.jetbrains.kotlin.idea.KotlinBundle
-import org.jetbrains.kotlin.idea.caches.resolve.analyzeAsReplacement
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
+import org.jetbrains.kotlin.idea.caches.resolve.analyzeAsReplacement
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.inspections.AbstractApplicabilityBasedInspection
 import org.jetbrains.kotlin.idea.intentions.branchedTransformations.evaluatesTo
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
@@ -26,7 +26,7 @@ import org.jetbrains.kotlin.types.typeUtil.isPrimitiveNumberType
 import org.jetbrains.kotlin.util.OperatorNameConventions
 
 class ConvertTwoComparisonsToRangeCheckInspection :
-    AbstractApplicabilityBasedInspection<KtBinaryExpression>(KtBinaryExpression::class.java), CleanupLocalInspectionTool {
+    AbstractApplicabilityBasedInspection<KtBinaryExpression>(KtBinaryExpression::class.java) {
     override fun inspectionText(element: KtBinaryExpression) = KotlinBundle.message("two.comparisons.should.be.converted.to.a.range.check")
 
     override val defaultFixText get() = KotlinBundle.message("convert.to.a.range.check")
@@ -48,16 +48,16 @@ class ConvertTwoComparisonsToRangeCheckInspection :
         val rangeData = generateRangeExpressionData(element) ?: return
         val replaced = element.replace(rangeData.createExpression())
         (replaced as? KtBinaryExpression)?.right?.let {
-            ReplaceRangeToWithUntilInspection.applyFixIfApplicable(it)
+            AbstractReplaceRangeToWithRangeUntilInspection.applyFixIfApplicable(it)
         }
     }
 
     private data class RangeExpressionData(val value: KtExpression, val min: String, val max: String) {
         fun createExpression(): KtBinaryExpression {
-            val factory = KtPsiFactory(value)
-            return factory.createExpressionByPattern(
-                "$0 in $1..$2", value, factory.createExpression(min), factory.createExpression(max)
-            ) as KtBinaryExpression
+            val psiFactory = KtPsiFactory(value.project)
+            val minExpression = psiFactory.createExpression(min)
+            val maxExpression = psiFactory.createExpression(max)
+            return psiFactory.createExpressionByPattern("$0 in $1..$2", value, minExpression, maxExpression) as KtBinaryExpression
         }
     }
 
@@ -175,9 +175,9 @@ class ConvertTwoComparisonsToRangeCheckInspection :
 
                 if (valType.isFloatingPoint()) {
                     if (minType.isInteger())
-                        minVal = KtPsiFactory(minVal).createExpression(getDoubleConstant(min, minType, context) ?: return null)
+                        minVal = KtPsiFactory(minVal.project).createExpression(getDoubleConstant(min, minType, context) ?: return null)
                     if (maxType.isInteger())
-                        maxVal = KtPsiFactory(maxVal).createExpression(getDoubleConstant(max, maxType, context) ?: return null)
+                        maxVal = KtPsiFactory(maxVal.project).createExpression(getDoubleConstant(max, maxType, context) ?: return null)
                 }
             } else {
                 return null

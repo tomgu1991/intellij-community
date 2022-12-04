@@ -1,15 +1,17 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.debugger.stepping.smartStepInto
 
 import com.intellij.debugger.actions.MethodSmartStepTarget
 import com.intellij.debugger.actions.SmartStepTarget
+import com.intellij.openapi.application.runReadAction
 import com.intellij.psi.PsiMethod
 import com.intellij.util.Range
 import com.intellij.util.containers.OrderedSet
 import org.jetbrains.kotlin.builtins.functions.FunctionInvokeDescriptor
 import org.jetbrains.kotlin.builtins.isBuiltinFunctionalType
 import org.jetbrains.kotlin.builtins.isFunctionType
+import org.jetbrains.kotlin.builtins.isSuspendFunctionType
 import org.jetbrains.kotlin.codegen.intrinsics.IntrinsicMethods
 import org.jetbrains.kotlin.config.JvmTarget
 import org.jetbrains.kotlin.descriptors.*
@@ -17,8 +19,7 @@ import org.jetbrains.kotlin.idea.base.facet.platform.platform
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToCall
 import org.jetbrains.kotlin.idea.codeInsight.DescriptorToSourceUtilsIde
-import org.jetbrains.kotlin.idea.debugger.breakpoints.isInlineOnly
-import org.jetbrains.kotlin.idea.util.application.runReadAction
+import org.jetbrains.kotlin.idea.debugger.core.breakpoints.isInlineOnly
 import org.jetbrains.kotlin.load.java.JvmAbi
 import org.jetbrains.kotlin.load.java.isFromJava
 import org.jetbrains.kotlin.platform.jvm.JdkPlatform
@@ -178,8 +179,8 @@ class SmartStepTargetVisitor(
                     parameter,
                     callerMethodOrdinal,
                     methodDescriptor.containsInlineClassInValueArguments(),
-                    true,
-                    methodDescriptor.getMethodName()
+                    methodDescriptor.name.asString(),
+                    (methodDescriptor as? FunctionDescriptor)?.isSuspend ?: false
                 )
             )
         }
@@ -337,7 +338,7 @@ fun KtFunction.isSamLambda(): Boolean {
 
 private fun ValueParameterDescriptor.isSamLambdaParameterDescriptor(): Boolean {
     val type = type
-    return !type.isFunctionType && type is SimpleType && type.isSingleClassifierType
+    return !type.isFunctionType && !type.isSuspendFunctionType && type is SimpleType && type.isSingleClassifierType
 }
 
 private fun KtFunction.getParameterAndResolvedCallDescriptor(): Pair<ValueParameterDescriptor, CallableMemberDescriptor>? {

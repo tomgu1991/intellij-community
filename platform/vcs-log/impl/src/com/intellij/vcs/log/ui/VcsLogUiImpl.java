@@ -3,6 +3,7 @@ package com.intellij.vcs.log.ui;
 
 import com.google.common.util.concurrent.SettableFuture;
 import com.intellij.openapi.Disposable;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.ui.MessageType;
 import com.intellij.openapi.util.NamedRunnable;
 import com.intellij.openapi.vcs.FilePath;
@@ -15,6 +16,7 @@ import com.intellij.vcs.log.VcsLogBundle;
 import com.intellij.vcs.log.VcsLogFilterCollection;
 import com.intellij.vcs.log.VcsLogHighlighter;
 import com.intellij.vcs.log.data.VcsLogData;
+import com.intellij.vcs.log.graph.actions.ActionController;
 import com.intellij.vcs.log.impl.CommonUiProperties;
 import com.intellij.vcs.log.impl.MainVcsLogUiProperties;
 import com.intellij.vcs.log.impl.MainVcsLogUiProperties.VcsLogHighlighterProperty;
@@ -72,7 +74,7 @@ public class VcsLogUiImpl extends AbstractVcsLogUi implements MainVcsLogUi {
     myMainFrame = createMainFrame(logData, uiProperties, filterUi, isEditorDiffPreview);
 
     LOG_HIGHLIGHTER_FACTORY_EP.addChangeListener(this::updateHighlighters, this);
-    updateHighlighters();
+    ApplicationManager.getApplication().invokeLater(this::updateHighlighters, o -> myDisposableFlag.isDisposed());
 
     myPropertiesListener = new MyVcsLogUiPropertiesListener();
     myUiProperties.addChangeListener(myPropertiesListener);
@@ -260,8 +262,13 @@ public class VcsLogUiImpl extends AbstractVcsLogUi implements MainVcsLogUi {
     }
 
     private void onShowLongEdgesChanged() {
-      myVisiblePack.getVisibleGraph().getActionController()
-        .setLongEdgesHidden(!myUiProperties.get(MainVcsLogUiProperties.SHOW_LONG_EDGES));
+      ActionController<Integer> actionController = myVisiblePack.getVisibleGraph().getActionController();
+      boolean oldLongEdgesHiddenValue = actionController.areLongEdgesHidden();
+      boolean newLongEdgesHiddenValue = !myUiProperties.get(MainVcsLogUiProperties.SHOW_LONG_EDGES);
+      if (newLongEdgesHiddenValue != oldLongEdgesHiddenValue) {
+        actionController.setLongEdgesHidden(newLongEdgesHiddenValue);
+        getTable().repaint();
+      }
     }
   }
 }

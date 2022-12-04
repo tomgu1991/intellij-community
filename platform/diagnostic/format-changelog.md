@@ -1,3 +1,15 @@
+## 39
+
+* add `memory` extra data with `usedMb`, `maxMb` and `metaspaceMb` numbers
+
+## 38
+
+* `classLoading` changed - added `preparedCount` and `loadedCount` metrics on Linux 
+
+## 37
+
+* add `langLoading` extra data with `elementTypeCount` number
+
 ## 36
 * Do not write empty class loading stats for `plugins` (skipped if `loadedClassCount` is equal to `0`).
 
@@ -110,7 +122,7 @@
 
 ## 12
 
-* service/component events are reported in a google trace event format.
+* service/component events are reported in a Google trace event format.
 * compute own time for services/components with respect to multi-thread execution.
 * `serviceWaiting` event (reported if > 100 μs to get cached value after lock).
 * report all services/components without threshold.

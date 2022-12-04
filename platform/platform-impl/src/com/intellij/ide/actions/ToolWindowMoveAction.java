@@ -14,6 +14,8 @@ import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowAnchor;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.openapi.wm.WindowInfo;
+import com.intellij.openapi.wm.impl.ToolWindowMoveToAction;
+import com.intellij.ui.ExperimentalUI;
 import com.intellij.ui.UIBundle;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
@@ -35,25 +37,16 @@ public final class ToolWindowMoveAction extends DumbAwareAction implements FusAw
       String left = UIBundle.message("tool.window.move.to.left.action.name");
       String bottom = UIBundle.message("tool.window.move.to.bottom.action.name");
       String right = UIBundle.message("tool.window.move.to.right.action.name");
-      switch (this) {
-        case LeftTop:
-          return left + " " + top;
-        case LeftBottom:
-          return left + " " + bottom;
-        case BottomLeft:
-          return bottom + " " + left;
-        case BottomRight:
-          return bottom + " " + right;
-        case RightBottom:
-          return right + " " + bottom;
-        case RightTop:
-          return right + " " + top;
-        case TopRight:
-          return top + " " + right;
-        case TopLeft:
-          return top + " " + left;
-      }
-      throw new IllegalStateException("Should not be invoked");
+      return switch (this) {
+        case LeftTop -> left + " " + top;
+        case BottomLeft -> ExperimentalUI.isNewUI() ? left + " " + bottom : bottom + " " + left;
+        case BottomRight -> ExperimentalUI.isNewUI() ? right + " " + bottom : bottom + " " + right;
+        case RightTop -> right + " " + top;
+        case LeftBottom -> ExperimentalUI.isNewUI() ? bottom + " " + left : left + " " + bottom;
+        case RightBottom -> ExperimentalUI.isNewUI() ? bottom + " " + right : right + " " + bottom;
+        case TopRight -> top + " " + right;
+        case TopLeft -> top + " " + left;
+      };
     }
 
     @NotNull
@@ -73,46 +66,31 @@ public final class ToolWindowMoveAction extends DumbAwareAction implements FusAw
     }
 
     @NotNull
-    private ToolWindowAnchor getAnchor() {
-      switch (this) {
-        case LeftTop:
-        case LeftBottom:
-          return ToolWindowAnchor.LEFT;
-        case BottomLeft:
-        case BottomRight:
-          return ToolWindowAnchor.BOTTOM;
-        case RightBottom:
-        case RightTop:
-          return ToolWindowAnchor.RIGHT;
-        default:
-          return ToolWindowAnchor.TOP;
-      }
+    public ToolWindowAnchor getAnchor() {
+      return switch (this) {
+        case LeftTop, LeftBottom -> ToolWindowAnchor.LEFT;
+        case BottomLeft, BottomRight -> ToolWindowAnchor.BOTTOM;
+        case RightBottom, RightTop -> ToolWindowAnchor.RIGHT;
+        default -> ToolWindowAnchor.TOP;
+      };
     }
 
-    private boolean isSplit() {
+    public boolean isSplit() {
       return Arrays.asList(LeftBottom, BottomRight, RightBottom, TopRight).contains(this);
     }
 
     @NotNull
     public Icon getIcon() {
-      switch (this) {
-        case LeftTop:
-          return AllIcons.Actions.MoveToLeftTop;
-        case LeftBottom:
-          return AllIcons.Actions.MoveToLeftBottom;
-        case BottomLeft:
-          return AllIcons.Actions.MoveToBottomLeft;
-        case BottomRight:
-          return AllIcons.Actions.MoveToBottomRight;
-        case RightBottom:
-          return AllIcons.Actions.MoveToRightBottom;
-        case RightTop:
-          return AllIcons.Actions.MoveToRightTop;
-        case TopRight:
-          return AllIcons.Actions.MoveToTopRight;
-        default:
-          return AllIcons.Actions.MoveToTopLeft;
-      }
+      return switch (this) {
+        case LeftTop -> AllIcons.Actions.MoveToLeftTop;
+        case LeftBottom -> AllIcons.Actions.MoveToLeftBottom;
+        case BottomLeft -> AllIcons.Actions.MoveToBottomLeft;
+        case BottomRight -> AllIcons.Actions.MoveToBottomRight;
+        case RightBottom -> AllIcons.Actions.MoveToRightBottom;
+        case RightTop -> AllIcons.Actions.MoveToRightTop;
+        case TopRight -> AllIcons.Actions.MoveToTopRight;
+        default -> AllIcons.Actions.MoveToTopLeft;
+      };
     }
 
     boolean isApplied(@NotNull ToolWindow window) {
@@ -132,7 +110,7 @@ public final class ToolWindowMoveAction extends DumbAwareAction implements FusAw
   }
 
   @Nullable
-  private static ToolWindow getToolWindow(@NotNull AnActionEvent e) {
+  public static ToolWindow getToolWindow(@NotNull AnActionEvent e) {
     ToolWindowManager manager = getToolWindowManager(e);
     if (manager == null) {
       return null;
@@ -198,8 +176,13 @@ public final class ToolWindowMoveAction extends DumbAwareAction implements FusAw
     @Override
     public void update(@NotNull AnActionEvent e) {
       if (!isInitialized) {
-        for (ToolWindowMoveAction.Anchor anchor : ToolWindowMoveAction.Anchor.values()) {
-          add(new ToolWindowMoveAction(anchor));
+        if (ExperimentalUI.isNewUI()) {
+          addAll(new ToolWindowMoveToAction.Group().getChildren(e));
+        }
+        else {
+          for (Anchor anchor : Anchor.values()) {
+            add(new ToolWindowMoveAction(anchor));
+          }
         }
         isInitialized = true;
       }

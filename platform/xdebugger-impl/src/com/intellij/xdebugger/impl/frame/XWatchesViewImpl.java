@@ -218,6 +218,11 @@ public class XWatchesViewImpl extends XVariablesView implements DnDNativeTarget,
                 public void update(@NotNull AnActionEvent e) {
                   e.getPresentation().setEnabled(!XDebuggerUtilImpl.isEmptyExpression(getExpression()));
                 }
+
+                @Override
+                public @NotNull ActionUpdateThread getActionUpdateThread() {
+                  return ActionUpdateThread.BGT;
+                }
               };
             ActionToolbarImpl toolbar = (ActionToolbarImpl)ActionManager.getInstance()
               .createActionToolbar("DebuggerVariablesEvaluate", new DefaultActionGroup(addToWatchesAction), true);
@@ -570,7 +575,6 @@ public class XWatchesViewImpl extends XVariablesView implements DnDNativeTarget,
     int minIndex = Integer.MAX_VALUE;
     List<XDebuggerTreeNode> toRemove = new ArrayList<>();
     for (XDebuggerTreeNode node : ordinaryWatches) {
-      @SuppressWarnings("SuspiciousMethodCalls")
       int index = children.indexOf(node);
       if (index != -1) {
         toRemove.add(node);
@@ -612,15 +616,13 @@ public class XWatchesViewImpl extends XVariablesView implements DnDNativeTarget,
   }
 
   public void updateSessionData() {
+    List<XExpression> watchExpressions = myRootNode.getWatchExpressions();
     XDebugSession session = getSession(getTree());
-    if (session != null) {
-      ((XDebugSessionImpl)session).setWatchExpressions(myRootNode.getWatchExpressions());
-    }
-    else {
-      XDebugSessionData data = getData(XDebugSessionData.DATA_KEY, getTree());
-      if (data != null) {
-        data.setWatchExpressions(myRootNode.getWatchExpressions());
-      }
+    XDebugSessionData data = (session != null) ? ((XDebugSessionImpl)session).getSessionData()
+                                               : getData(XDebugSessionData.DATA_KEY, getTree());
+    if (data != null) {
+      data.setWatchExpressions(watchExpressions);
+      getWatchesManager().setWatches(data.getConfigurationName(), watchExpressions);
     }
   }
 

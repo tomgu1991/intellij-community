@@ -19,7 +19,6 @@ import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.testing.Test
 import org.gradle.api.tasks.util.PatternFilterable
 import org.gradle.plugins.ide.idea.IdeaPlugin
-import org.gradle.util.GUtil
 import org.gradle.util.GradleVersion
 import org.jetbrains.annotations.NotNull
 import org.jetbrains.annotations.Nullable
@@ -37,6 +36,7 @@ import java.util.concurrent.ConcurrentMap
 
 import static org.jetbrains.plugins.gradle.tooling.ModelBuilderContext.DataProvider
 import static org.jetbrains.plugins.gradle.tooling.builder.ModelBuildersDataProviders.TASKS_PROVIDER
+import static org.jetbrains.plugins.gradle.tooling.util.StringUtils.toCamelCase
 
 /**
  * @author Vladislav.Soroka
@@ -309,7 +309,7 @@ class ExternalProjectBuilderImpl extends AbstractModelBuilderService {
 
       def ideaOutDir = new File(project.projectDir, "out/" + (SourceSet.MAIN_SOURCE_SET_NAME == sourceSet.name ||
                                                               (!resolveSourceSetDependencies && SourceSet.TEST_SOURCE_SET_NAME !=
-                                                               sourceSet.name) ? "production" : GUtil.toLowerCamelCase(sourceSet.name)))
+                                                               sourceSet.name) ? "production" : toCamelCase(sourceSet.name, true)))
       resourcesDirectorySet.outputDir = new File(ideaOutDir, "resources")
       resourcesDirectorySet.inheritedCompilerOutput = inheritOutputDirs
 
@@ -594,36 +594,42 @@ class ExternalProjectBuilderImpl extends AbstractModelBuilderService {
       return [includes, excludes, filterReaders]
     }
 
-    try {
-      if (filterableTask instanceof ContentFilterable && filterableTask.metaClass.respondsTo(filterableTask, "getMainSpec")) {
-        //noinspection GrUnresolvedAccess
-        def properties = filterableTask.getMainSpec().properties
-        def copyActions = properties?.allCopyActions ?: properties?.copyActions
-
-        if (copyActions) {
-          copyActions.each { Action<? super FileCopyDetails> action ->
-            if ('RenamingCopyAction' == action.class.simpleName) {
-              filterReaders << getRenamingCopyFilter(action)
-            }
-            else {
-              filterReaders << getFilter(action)
-            }
-          }
+    if (filterableTask instanceof ContentFilterable && filterableTask.metaClass.respondsTo(filterableTask, "getMainSpec")) {
+      //noinspection GrUnresolvedAccess
+      def properties = filterableTask.getMainSpec().properties
+      def copyActions = properties?.allCopyActions ?: properties?.copyActions
+      copyActions?.each { Action<? super FileCopyDetails> action ->
+        def filter = getFilter(project, context, action)
+        if (filter != null) {
+          filterReaders << filter
         }
       }
-    }
-    catch (Exception exception) {
-      def message = ErrorMessageBuilder.create(project, exception, "Resource configuration errors")
-        .withDescription("Idea internal error: Unable to resolve resources filtering configuration")
-        .buildMessage()
-      context.report(project, message)
     }
 
     return [includes, excludes, filterReaders]
   }
 
+  private static ExternalFilter getFilter(Project project, ModelBuilderContext context, Action<? super FileCopyDetails> action) {
+    try {
+      if ('RenamingCopyAction' == action.class.simpleName) {
+        return getRenamingCopyFilter(action)
+      }
+      else {
+        return getCommonFilter(action)
+      }
+    }
+    catch (Exception ignored) {
+      context.report(project, ErrorMessageBuilder.create(project, "Resource configuration errors")
+        .withDescription("Cannot resolve resource filtering of " + action.class.simpleName + ". " +
+                         "IDEA may fail to build project. " +
+                         "Consider using delegated build (enabled by default).")
+        .buildMessage())
+    }
+    return null
+  }
+
   @CompileDynamic
-  private static ExternalFilter getFilter(Action<? super FileCopyDetails> action) {
+  private static ExternalFilter getCommonFilter(Action<? super FileCopyDetails> action) {
     def filterClass = findPropertyWithType(action, Class, 'filterType', 'val$filterType', 'arg$2', 'arg$1')
     if (filterClass == null) {
       throw new IllegalArgumentException("Unsupported action found: " + action.class.name)

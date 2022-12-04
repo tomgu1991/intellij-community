@@ -1,7 +1,9 @@
 // Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.openapi.vcs.changes.ui;
 
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Comparing;
 import com.intellij.openapi.util.Key;
@@ -13,6 +15,7 @@ import com.intellij.openapi.vcs.changes.*;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.SimpleColoredComponent;
 import com.intellij.ui.SimpleTextAttributes;
+import com.intellij.util.concurrency.annotations.RequiresReadLock;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.containers.MultiMap;
 import com.intellij.util.ui.tree.TreeUtil;
@@ -29,7 +32,6 @@ import java.util.function.Function;
 import static com.intellij.openapi.vcs.changes.ui.ChangesBrowserNode.createLockedFolders;
 import static com.intellij.util.ObjectUtils.notNull;
 import static com.intellij.util.containers.ContainerUtil.sorted;
-import static com.intellij.util.containers.ContainerUtil.toList;
 import static java.util.Comparator.comparing;
 import static java.util.Comparator.comparingInt;
 
@@ -162,7 +164,7 @@ public class TreeModelBuilder implements ChangesViewModelBuilder {
   }
 
   @NotNull
-  public TreeModelBuilder setUnversioned(@Nullable List<FilePath> unversionedFiles) {
+  public TreeModelBuilder setUnversioned(@Nullable List<? extends FilePath> unversionedFiles) {
     assert myProject != null;
     if (ContainerUtil.isEmpty(unversionedFiles)) return this;
     ChangesBrowserUnversionedFilesNode node = new ChangesBrowserUnversionedFilesNode(myProject, unversionedFiles);
@@ -170,7 +172,7 @@ public class TreeModelBuilder implements ChangesViewModelBuilder {
   }
 
   @NotNull
-  public TreeModelBuilder setIgnored(@Nullable List<FilePath> ignoredFiles) {
+  public TreeModelBuilder setIgnored(@Nullable List<? extends FilePath> ignoredFiles) {
     assert myProject != null;
     if (ContainerUtil.isEmpty(ignoredFiles)) return this;
     ChangesBrowserIgnoredFilesNode node = new ChangesBrowserIgnoredFilesNode(myProject, ignoredFiles);
@@ -179,7 +181,7 @@ public class TreeModelBuilder implements ChangesViewModelBuilder {
 
   @NotNull
   private TreeModelBuilder insertSpecificFilePathNodeToModel(@NotNull List<? extends FilePath> specificFiles,
-                                                             @NotNull ChangesBrowserSpecificFilePathsNode node,
+                                                             @NotNull ChangesBrowserSpecificFilePathsNode<?> node,
                                                              @NotNull FileStatus status) {
     insertSubtreeRoot(node);
     if (!node.isManyFiles()) {
@@ -226,7 +228,7 @@ public class TreeModelBuilder implements ChangesViewModelBuilder {
     if (lists.size() != 1) return false;
     ChangeList single = lists.iterator().next();
     if (!(single instanceof LocalChangeList)) return false;
-    return ((LocalChangeList) single).isBlank();
+    return ((LocalChangeList)single).isBlank();
   }
 
   @NotNull
@@ -436,8 +438,34 @@ public class TreeModelBuilder implements ChangesViewModelBuilder {
   public DefaultTreeModel build() {
     TreeUtil.sort(myModel, BROWSER_NODE_COMPARATOR);
     collapseDirectories(myModel, myRoot);
+
+    if (myProject != null && !ApplicationManager.getApplication().isDispatchThread()) {
+      // Incrementally fill background colors
+      // read lock is required for background colors calculation as it requires project file index
+      ReadAction.nonBlocking(() -> {
+        precalculateFileColors(myProject, myRoot);
+        // skip deprecation warning about com.intellij.openapi.application.ReadAction.nonBlocking(java.lang.Runnable)
+        return 1;
+      }).executeSynchronously();
+    }
+
     myModel.nodeStructureChanged((TreeNode)myModel.getRoot());
     return myModel;
+  }
+
+  /**
+   * Unfortunately calculating file background color is a costly operation.
+   * (it requires e.g. project file index to detect whether a file in test sources or not)
+   * TreeModelBuilder calls this method on a background thread to have
+   * this calculation ready for Tree rendering
+   */
+  @RequiresReadLock
+  private static void precalculateFileColors(@NotNull Project project, @NotNull ChangesBrowserNode<?> root) {
+    root.traverse().forEach(node -> {
+      node.getBackgroundColorCached(project);
+      // Allow to interrupt read lock
+      ProgressManager.checkCanceled();
+    });
   }
 
   private static void collapseDirectories(@NotNull DefaultTreeModel model, @NotNull ChangesBrowserNode<?> node) {
@@ -460,15 +488,14 @@ public class TreeModelBuilder implements ChangesViewModelBuilder {
       node = collapsedNode;
     }
 
-    final Enumeration<?> children = node.children();
-    while (children.hasMoreElements()) {
-      ChangesBrowserNode<?> child = (ChangesBrowserNode<?>)children.nextElement();
+    node.iterateNodeChildren().forEach(child -> {
       collapseDirectories(model, child);
-    }
+    });
   }
 
   @Nullable
-  private static ChangesBrowserNode<?> collapseParentWithOnlyChild(@NotNull ChangesBrowserNode<?> parent, @NotNull ChangesBrowserNode<?> child) {
+  private static ChangesBrowserNode<?> collapseParentWithOnlyChild(@NotNull ChangesBrowserNode<?> parent,
+                                                                   @NotNull ChangesBrowserNode<?> child) {
     if (child.isLeaf()) return null;
 
     Object parentUserObject = parent.getUserObject();
@@ -487,9 +514,8 @@ public class TreeModelBuilder implements ChangesViewModelBuilder {
 
       parent.remove(0);
 
-      @SuppressWarnings({"unchecked", "rawtypes"})
-      Enumeration<ChangesBrowserNode<?>> children = (Enumeration)child.children();
-      for (ChangesBrowserNode<?> childNode : toList(children)) {
+      List<ChangesBrowserNode<?>> children = child.iterateNodeChildren().toList(); // defensive copy
+      for (ChangesBrowserNode<?> childNode : children) {
         parent.add(childNode);
       }
 

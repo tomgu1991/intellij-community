@@ -31,9 +31,6 @@ import java.util.concurrent.Future
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
-/**
- * @author peter
- */
 class DumbServiceImplTest extends BasePlatformTestCase {
   @Override
   protected void setUp() throws Exception {
@@ -90,7 +87,7 @@ class DumbServiceImplTest extends BasePlatformTestCase {
       void performInDumbMode(@NotNull ProgressIndicator indicator) {
         def e = new Exception()
         for (StackTraceElement element : e.stackTrace) {
-          if (element.toString().contains(DumbServiceGuiTaskQueue.class.simpleName)) {
+          if (element.toString().contains(DumbServiceGuiExecutor.class.simpleName)) {
             semaphore.up()
             return
           }

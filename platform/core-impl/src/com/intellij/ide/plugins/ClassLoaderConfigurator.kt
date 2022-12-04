@@ -11,6 +11,7 @@ import com.intellij.util.lang.ClassPath
 import com.intellij.util.lang.ResourceFile
 import com.intellij.util.lang.UrlClassLoader
 import org.jetbrains.annotations.ApiStatus
+import org.jetbrains.annotations.VisibleForTesting
 import java.lang.invoke.MethodHandles
 import java.lang.invoke.MethodType
 import java.nio.file.Files
@@ -66,25 +67,19 @@ class ClassLoaderConfigurator(
     mainDescriptor: IdeaPluginDescriptorImpl,
     moduleDescriptor: IdeaPluginDescriptorImpl,
   ): Boolean {
-    assert(mainDescriptor != moduleDescriptor)
+    assert(mainDescriptor != moduleDescriptor) { "$mainDescriptor != $moduleDescriptor" }
 
     val pluginId = mainDescriptor.pluginId
-    assert(pluginId == moduleDescriptor.pluginId)
+    assert(pluginId == moduleDescriptor.pluginId) { "pluginId '$pluginId' != moduleDescriptor.pluginId '${moduleDescriptor.pluginId}'"}
 
     val mainClassLoader = mainDescriptor.pluginClassLoader as PluginClassLoader
     mainToClassPath[pluginId] = MainInfo(mainClassLoader)
 
-    return if (mainDescriptor.packagePrefix == null) {
-      moduleDescriptor.pluginClassLoader = mainClassLoader
-      true
-    }
-    else {
-      configureModule(moduleDescriptor)
-    }
+    return configureModule(moduleDescriptor)
   }
 
   fun configure() {
-    for (module in pluginSet.getRawListOfEnabledModules()) {
+    for (module in pluginSet.getEnabledModules()) {
       configureModule(module)
     }
   }
@@ -347,7 +342,7 @@ private fun createPluginDependencyAndContentBasedScope(descriptor: IdeaPluginDes
 
     for (prefix in contentPackagePrefixes) {
       if (name.startsWith(prefix)) {
-        return@ResolveScopeManager "Class $name must be not requested from main classloader of $pluginId plugin"
+        return@ResolveScopeManager "Class $name must not be requested from main classloader of $pluginId plugin"
       }
     }
 
@@ -431,6 +426,7 @@ private fun configureUsingIdeaClassloader(classPath: List<Path>, descriptor: Ide
   }
 }
 
+@VisibleForTesting
 fun sortDependenciesInPlace(dependencies: Array<IdeaPluginDescriptorImpl>) {
   if (dependencies.size <= 1) return
 

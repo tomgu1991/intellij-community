@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.ide.impl;
 
 import com.intellij.ide.DataManager;
@@ -57,7 +57,7 @@ public class DataManagerImpl extends DataManager {
   public @Nullable Object getDataFromProviderAndRules(@NotNull String dataId,
                                                       @Nullable GetDataRuleType ruleType,
                                                       @NotNull DataProvider provider) {
-    return getDataFromProviderInner(dataId, ruleType, null, provider);
+    return getDataFromProviderAndRulesInner(dataId, ruleType, null, provider);
   }
 
   @ApiStatus.Internal
@@ -67,10 +67,10 @@ public class DataManagerImpl extends DataManager {
     return getDataFromRulesInner(dataId, ruleType, null, provider);
   }
 
-  private @Nullable Object getDataFromProviderInner(@NotNull String dataId,
-                                                    @Nullable GetDataRuleType ruleType,
-                                                    @Nullable Set<String> alreadyComputedIds,
-                                                    @NotNull DataProvider provider) {
+  private @Nullable Object getDataFromProviderAndRulesInner(@NotNull String dataId,
+                                                            @Nullable GetDataRuleType ruleType,
+                                                            @Nullable Set<String> alreadyComputedIds,
+                                                            @NotNull DataProvider provider) {
     ProgressManager.checkCanceled();
     if (alreadyComputedIds != null && alreadyComputedIds.contains(dataId)) {
       return null;
@@ -78,8 +78,10 @@ public class DataManagerImpl extends DataManager {
     int[] depth = ourGetDataLevel.get();
     try {
       depth[0]++;
-      Object data = provider.getData(dataId);
-      if (data != null) return DataValidators.validOrNull(data, dataId, provider);
+      Object data = getDataFromProviderInner(dataId, provider);
+      if (data != null) {
+        return data;
+      }
       return ruleType == null ? null : getDataFromRulesInner(dataId, ruleType, alreadyComputedIds, provider);
     }
     finally {
@@ -107,8 +109,13 @@ public class DataManagerImpl extends DataManager {
       depth[0]++;
       Set<String> ids = alreadyComputedIds == null ? new HashSet<>() : alreadyComputedIds;
       ids.add(dataId);
-      Object data = rule.getData(id -> getDataFromProviderInner(id, ruleType, ids, provider));
-      return data == null ? null : DataValidators.validOrNull(data, dataId, rule);
+      Object data = rule.getData(id -> {
+        Object o = getDataFromProviderAndRulesInner(id, ruleType, ids, provider);
+        return o == CustomizedDataContext.EXPLICIT_NULL ? null : o;
+      });
+      return data == null ? null :
+             data == CustomizedDataContext.EXPLICIT_NULL ? data :
+             DataValidators.validOrNull(data, dataId, rule);
     }
     finally {
       depth[0]--;
@@ -143,29 +150,30 @@ public class DataManagerImpl extends DataManager {
 
   @Override
   public @Nullable Object getCustomizedData(@NotNull String dataId, @NotNull DataContext dataContext, @NotNull DataProvider provider) {
-    return getDataFromProviderAndRules(dataId, GetDataRuleType.CONTEXT, id -> {
-      Object result = getDataFromProviderAndRules(id, GetDataRuleType.PROVIDER, provider);
-      if (result != null) return result;
+    Object data = getDataFromProviderAndRules(dataId, GetDataRuleType.CONTEXT, id -> {
+      Object o = getDataFromProviderAndRules(id, GetDataRuleType.PROVIDER, provider);
+      if (o != null) return o;
       return dataContext.getData(id);
     });
+    return data == CustomizedDataContext.EXPLICIT_NULL ? null : data;
   }
 
   private static @Nullable GetDataRule getDataRule(@NotNull String dataId, @NotNull GetDataRuleType ruleType) {
-    switch (ruleType) {
-      case FAST:
+    return switch (ruleType) {
+      case FAST -> {
         List<GetDataRule> rules = rulesForKey(dataId, GetDataRuleType.FAST);
-        return rules == null ? null : rules.size() == 1 ? rules.get(0) : dataProvider -> getRulesData(dataId, rules, dataProvider);
-      case PROVIDER:
-        return getDataRuleInner(dataId, GetDataRuleType.PROVIDER);
-      case CONTEXT:
-        return getDataRuleInner(dataId, GetDataRuleType.CONTEXT);
-    }
-    throw new AssertionError("unknown type: " + ruleType);
+        yield rules == null ? null : rules.size() == 1 ? rules.get(0) : dataProvider -> getRulesData(dataId, rules, dataProvider);
+      }
+      case PROVIDER -> getDataRuleInner(dataId, GetDataRuleType.PROVIDER);
+      case CONTEXT -> getDataRuleInner(dataId, GetDataRuleType.CONTEXT);
+    };
   }
 
   private static @Nullable GetDataRule getDataRuleInner(@NotNull String dataId, @NotNull GetDataRuleType ruleType) {
     String uninjectedId = InjectedDataKeys.uninjectedId(dataId);
-    GetDataRule slowRule = ruleType == GetDataRuleType.PROVIDER && !PlatformCoreDataKeys.SLOW_DATA_PROVIDERS.is(dataId) ?
+    GetDataRule slowRule = ruleType == GetDataRuleType.PROVIDER &&
+                           !PlatformCoreDataKeys.BGT_DATA_PROVIDER.is(dataId) &&
+                           !PlatformCoreDataKeys.SLOW_DATA_PROVIDERS.is(dataId) ?
                            dataProvider -> getSlowData(dataId, dataProvider) : null;
     List<GetDataRule> rules1 = rulesForKey(dataId, ruleType);
     List<GetDataRule> rules2 = uninjectedId == null ? null : rulesForKey(uninjectedId, ruleType);
@@ -196,11 +204,14 @@ public class DataManagerImpl extends DataManager {
     return result;
   }
 
-  private static @Nullable Object getRulesData(@NotNull String dataId, @NotNull List<GetDataRule> rules, @NotNull DataProvider provider) {
+  private static @Nullable Object getRulesData(@NotNull String dataId, @NotNull List<? extends GetDataRule> rules, @NotNull DataProvider provider) {
     for (GetDataRule rule : rules) {
       try {
         Object data = rule.getData(provider);
-        if (data != null) return DataValidators.validOrNull(data, dataId, rule);
+        if (data != null) {
+          return data == CustomizedDataContext.EXPLICIT_NULL ? data :
+                 DataValidators.validOrNull(data, dataId, rule);
+        }
       }
       catch (IndexNotReadyException ignore) {
       }
@@ -209,16 +220,37 @@ public class DataManagerImpl extends DataManager {
   }
 
   private static @Nullable Object getSlowData(@NotNull String dataId, @NotNull DataProvider dataProvider) {
-    Iterable<DataProvider> asyncProviders = PlatformCoreDataKeys.SLOW_DATA_PROVIDERS.getData(dataProvider);
-    if (asyncProviders == null) return null;
-    for (DataProvider provider : asyncProviders) {
+    DataProvider bgtProvider = PlatformCoreDataKeys.BGT_DATA_PROVIDER.getData(dataProvider);
+    if (bgtProvider != null) {
+      Object data = getDataFromProviderInner(dataId, bgtProvider);
+      if (data != null) return data;
+    }
+    Iterable<DataProvider> slowProviders = PlatformCoreDataKeys.SLOW_DATA_PROVIDERS.getData(dataProvider);
+    if (slowProviders != null) {
+      for (DataProvider p : slowProviders) {
+        Object data = getDataFromProviderInner(dataId, p);
+        if (data != null) return data;
+      }
+    }
+    return null;
+  }
+
+  private static @Nullable Object getDataFromProviderInner(@NotNull String dataId, @NotNull DataProvider provider) {
+    if (!(provider instanceof CompositeDataProvider)) {
       try {
         Object data = provider.getData(dataId);
         if (data != null) {
-          return DataValidators.validOrNull(data, dataId, provider);
+          return data == CustomizedDataContext.EXPLICIT_NULL ? data :
+                 DataValidators.validOrNull(data, dataId, provider);
         }
       }
       catch (IndexNotReadyException ignore) {
+      }
+    }
+    else {
+      for (DataProvider p : ((CompositeDataProvider)provider).getDataProviders()) {
+        Object data = getDataFromProviderInner(dataId, p);
+        if (data != null) return data;
       }
     }
     return null;
@@ -230,7 +262,12 @@ public class DataManagerImpl extends DataManager {
     if (ourGetDataLevel.get()[0] > 0) {
       LOG.error("DataContext shall not be created and queried inside another getData() call.");
     }
-    return IdeUiService.getInstance().createUiDataContext(component);
+    if (component instanceof DependentTransientComponent) {
+      LOG.assertTrue(getDataProviderEx(component) == null, "DependentTransientComponent must not yield DataProvider");
+    }
+    Component adjusted = component instanceof DependentTransientComponent ?
+                         ((DependentTransientComponent)component).getPermanentComponent() : component;
+    return IdeUiService.getInstance().createUiDataContext(adjusted);
   }
 
   @Override
@@ -254,7 +291,7 @@ public class DataManagerImpl extends DataManager {
   @Override
   public @NotNull DataContext getDataContext() {
     Component component = null;
-    if (Registry.is("actionSystem.getContextByRecentMouseEvent")) {
+    if (Registry.is("actionSystem.getContextByRecentMouseEvent", false)) {
       component = IdeUiService.getInstance().getComponentFromRecentMouseEvent();
     }
     return getDataContext(component != null ? component : getFocusedComponent());
@@ -264,7 +301,7 @@ public class DataManagerImpl extends DataManager {
   public @NotNull Promise<DataContext> getDataContextFromFocusAsync() {
     AsyncPromise<DataContext> result = new AsyncPromise<>();
     IdeFocusManager.getGlobalInstance()
-                   .doWhenFocusSettlesDown(() -> result.setResult(getDataContext()), ModalityState.any());
+                   .doWhenFocusSettlesDown(() -> result.setResult(getDataContext()), ModalityState.defaultModalityState());
     return result;
   }
 

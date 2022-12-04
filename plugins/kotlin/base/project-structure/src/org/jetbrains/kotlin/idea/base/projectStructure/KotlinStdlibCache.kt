@@ -3,16 +3,19 @@
 package org.jetbrains.kotlin.idea.base.projectStructure
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.DumbService
+import com.intellij.openapi.project.IndexNotReadyException
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.projectRoots.ProjectJdkTable
-import com.intellij.openapi.projectRoots.Sdk
-import com.intellij.openapi.roots.*
+import com.intellij.openapi.roots.LibraryOrderEntry
+import com.intellij.openapi.roots.OrderRootType
+import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.roots.impl.libraries.LibraryEx
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.ThrowableComputable
+import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.search.DelegatingGlobalSearchScope
 import com.intellij.psi.search.GlobalSearchScope
@@ -22,11 +25,9 @@ import com.intellij.util.messages.MessageBusConnection
 import com.intellij.workspaceModel.ide.WorkspaceModelChangeListener
 import com.intellij.workspaceModel.ide.WorkspaceModelTopics
 import com.intellij.workspaceModel.storage.VersionedStorageChange
-import com.intellij.workspaceModel.storage.bridgeEntities.api.ModuleEntity
+import com.intellij.workspaceModel.storage.bridgeEntities.ModuleEntity
 import org.jetbrains.kotlin.idea.base.projectStructure.moduleInfo.*
-import org.jetbrains.kotlin.idea.base.projectStructure.moduleInfo.ModuleSourceInfo
-import org.jetbrains.kotlin.idea.base.util.caching.FineGrainedEntityCache
-import org.jetbrains.kotlin.idea.util.application.runReadAction
+import org.jetbrains.kotlin.idea.base.util.caching.SynchronizedFineGrainedEntityCache
 import org.jetbrains.kotlin.idea.vfilefinder.KotlinStdlibIndex
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.utils.addToStdlib.safeAs
@@ -57,6 +58,7 @@ interface KotlinStdlibCache {
 internal class KotlinStdlibCacheImpl(private val project: Project) : KotlinStdlibCache, Disposable {
     companion object {
         private const val KOTLIN_JAVA_RUNTIME_NAME = "KotlinJavaRuntime"
+        private val noStdlibDependency = StdlibDependency(null)
     }
 
     @JvmInline
@@ -67,9 +69,9 @@ internal class KotlinStdlibCacheImpl(private val project: Project) : KotlinStdli
     private val moduleStdlibDependencyCache = ModuleStdlibDependencyCache()
 
     init {
-      Disposer.register(this, stdlibCache)
-      Disposer.register(this, stdlibDependencyCache)
-      Disposer.register(this, moduleStdlibDependencyCache)
+        Disposer.register(this, stdlibCache)
+        Disposer.register(this, stdlibDependencyCache)
+        Disposer.register(this, moduleStdlibDependencyCache)
     }
 
     private class LibraryScope(
@@ -78,37 +80,30 @@ internal class KotlinStdlibCacheImpl(private val project: Project) : KotlinStdli
     ) : DelegatingGlobalSearchScope(GlobalSearchScope.allScope(project)) {
         private val fileSystems = directories.mapTo(hashSetOf(), VirtualFile::getFileSystem)
 
-        override fun contains(file: VirtualFile): Boolean =
-            file.fileSystem in fileSystems && generateSequence(file, VirtualFile::getParent).any { it in directories }
+        override fun contains(file: VirtualFile): Boolean = file.fileSystem in fileSystems && VfsUtilCore.isUnder(file, directories)
 
         override fun toString() = "All files under: $directories"
     }
 
-    private fun libraryScopeContainsIndexedFilesForNames(libraryInfo: LibraryInfo, names: Collection<FqName>): Boolean =
-        names.any { name ->
+    private fun libraryScopeContainsIndexedFilesForNames(libraryInfo: LibraryInfo, names: Collection<FqName>): Boolean {
+        val libraryScope = LibraryScope(project, libraryInfo.library.getFiles(OrderRootType.CLASSES).toSet())
+        return names.any { name ->
             DumbModeAccessType.RELIABLE_DATA_ONLY.ignoreDumbMode(ThrowableComputable {
-                FileBasedIndex.getInstance().getContainingFiles(
-                    KotlinStdlibIndex.KEY,
-                    name,
-                    LibraryScope(project, libraryInfo.library.rootProvider.getFiles(OrderRootType.CLASSES).toSet())
-                ).isNotEmpty()
+                FileBasedIndex.getInstance().getContainingFilesIterator(KotlinStdlibIndex.KEY, name, libraryScope).hasNext()
             })
         }
+    }
 
     private fun libraryScopeContainsIndexedFilesForName(libraryInfo: LibraryInfo, name: FqName) =
         libraryScopeContainsIndexedFilesForNames(libraryInfo, listOf(name))
 
-    private fun isFatJar(libraryInfo: LibraryInfo) =
-        libraryInfo.getLibraryRoots().size > 1
+    private fun isFatJar(libraryInfo: LibraryInfo) = libraryInfo.getLibraryRoots().size > 1
 
-    private fun isKotlinJavaRuntime(libraryInfo: LibraryInfo) =
-        libraryInfo.library.name == KOTLIN_JAVA_RUNTIME_NAME
+    private fun isKotlinJavaRuntime(libraryInfo: LibraryInfo) = libraryInfo.library.name == KOTLIN_JAVA_RUNTIME_NAME
 
-    override fun isStdlib(libraryInfo: LibraryInfo): Boolean {
-        return stdlibCache.get(libraryInfo)
-    }
+    override fun isStdlib(libraryInfo: LibraryInfo): Boolean = stdlibCache[libraryInfo]
 
-    override fun isStdlibDependency(libraryInfo: LibraryInfo): Boolean = stdlibDependencyCache.get(libraryInfo)
+    override fun isStdlibDependency(libraryInfo: LibraryInfo): Boolean = stdlibDependencyCache[libraryInfo]
 
     override fun findStdlibInModuleDependencies(module: IdeaModuleInfo): LibraryInfo? {
         ProgressManager.checkCanceled()
@@ -118,11 +113,12 @@ internal class KotlinStdlibCacheImpl(private val project: Project) : KotlinStdli
 
     override fun dispose() = Unit
 
-    private abstract class BaseStdLibCache(project: Project) : FineGrainedEntityCache<LibraryInfo, Boolean>(project, cleanOnLowMemory = true),
-                                                               OutdatedLibraryInfoListener {
+    private sealed class BaseStdLibCache(project: Project) :
+        SynchronizedFineGrainedEntityCache<LibraryInfo, Boolean>(project, cleanOnLowMemory = true),
+        LibraryInfoListener {
         override fun subscribe() {
             val busConnection = project.messageBus.connect(this)
-            busConnection.subscribe(OutdatedLibraryInfoListener.TOPIC, this)
+            busConnection.subscribe(LibraryInfoListener.TOPIC, this)
         }
 
         override fun checkKeyValidity(key: LibraryInfo) {
@@ -130,9 +126,8 @@ internal class KotlinStdlibCacheImpl(private val project: Project) : KotlinStdli
         }
 
         override fun libraryInfosRemoved(libraryInfos: Collection<LibraryInfo>) {
-            super.invalidateKeys(libraryInfos) { _, _ -> true }
+            invalidateKeys(libraryInfos)
         }
-
     }
 
     private inner class StdLibCache : BaseStdLibCache(project) {
@@ -150,63 +145,72 @@ internal class KotlinStdlibCacheImpl(private val project: Project) : KotlinStdli
 
     private inner class ModuleStdlibDependencyCache : Disposable {
         private val libraryCache = LibraryCache()
-        private val sdkCache = SdkCache()
         private val moduleCache = ModuleCache()
 
         init {
             Disposer.register(this, libraryCache)
-            Disposer.register(this, sdkCache)
             Disposer.register(this, moduleCache)
         }
 
-        fun get(key: IdeaModuleInfo): StdlibDependency =
-            when(key) {
-                is LibraryInfo -> libraryCache.get(key)
-                is SdkInfo -> sdkCache.get(key)
-                else -> moduleCache.get(key)
-            }
+        fun get(key: IdeaModuleInfo): StdlibDependency = when (key) {
+            is LibraryInfo -> libraryCache[key]
+            is SdkInfo, is NotUnderContentRootModuleInfo -> noStdlibDependency
+            else -> moduleCache[key]
+        }
 
         override fun dispose() = Unit
 
         private abstract inner class AbstractCache<Key : IdeaModuleInfo> :
-            FineGrainedEntityCache<Key, StdlibDependency>(project, cleanOnLowMemory = true),
-            OutdatedLibraryInfoListener {
+            SynchronizedFineGrainedEntityCache<Key, StdlibDependency>(project, cleanOnLowMemory = true),
+            LibraryInfoListener {
             override fun subscribe() {
                 val connection = project.messageBus.connect(this)
-                connection.subscribe(OutdatedLibraryInfoListener.TOPIC, this)
+                connection.subscribe(LibraryInfoListener.TOPIC, this)
                 subscribe(connection)
             }
 
             protected open fun subscribe(connection: MessageBusConnection) {
             }
 
-            protected fun Key.findStdLib(): LibraryInfo? = dependencies().firstOrNull {
-                it is LibraryInfo && isStdlib(it)
-            } as LibraryInfo?
+            protected fun Key.findStdLib(): LibraryInfo? {
+                val dependencies = if (this is LibraryInfo) {
+                    if (isStdlib(this)) return this
 
-            protected fun LibraryInfo?.toStdlibDependency(): StdlibDependency {
-                if (this == null && runReadAction { project.isDisposed || DumbService.isDumb(project) }) {
-                    throw ProcessCanceledException()
+                    LibraryDependenciesCache.getInstance(project).getLibraryDependencies(this).libraries
+                } else {
+                    dependencies()
                 }
 
-                return StdlibDependency(this)
+                return dependencies.firstNotNullOfOrNull { it.safeAs<LibraryInfo>()?.takeIf(::isStdlib) }
+            }
+
+            protected fun LibraryInfo?.toStdlibDependency(): StdlibDependency {
+                if (this != null) {
+                    return StdlibDependency(this)
+                }
+
+                val flag = runReadAction {
+                    when {
+                        project.isDisposed -> null
+                        DumbService.isDumb(project) -> true
+                        else -> false
+                    }
+                }
+
+                return when (flag) {
+                    null -> throw ProcessCanceledException()
+                    true -> throw IndexNotReadyException.create()
+                    else -> noStdlibDependency
+                }
             }
 
             override fun checkValueValidity(value: StdlibDependency) {
                 value.libraryInfo?.checkValidity()
             }
-
-            override fun libraryInfosRemoved(libraryInfos: Collection<LibraryInfo>) {
-                invalidateEntries({ _, v -> v.libraryInfo in libraryInfos }, validityCondition = { _, v -> v.libraryInfo != null })
-            }
         }
 
         private inner class LibraryCache : AbstractCache<LibraryInfo>() {
-            override fun calculate(key: LibraryInfo): StdlibDependency {
-                val stdLib = key.takeIf(::isStdlib) ?: key.findStdLib()
-
-                return stdLib.toStdlibDependency()
-            }
+            override fun calculate(key: LibraryInfo): StdlibDependency = key.findStdLib().toStdlibDependency()
 
             fun putExtraValues(map: Map<LibraryInfo, StdlibDependency>) {
                 putAll(map)
@@ -221,29 +225,9 @@ internal class KotlinStdlibCacheImpl(private val project: Project) : KotlinStdli
             }
         }
 
-        private inner class SdkCache : AbstractCache<SdkInfo>(),
-                                       ProjectJdkTable.Listener {
-            override fun subscribe(connection: MessageBusConnection) {
-                connection.subscribe(ProjectJdkTable.JDK_TABLE_TOPIC, this)
-            }
-
-            override fun calculate(key: SdkInfo): StdlibDependency =
-                key.findStdLib().toStdlibDependency()
-
-            override fun checkKeyValidity(key: SdkInfo) = Unit
-
-            override fun jdkRemoved(jdk: Sdk) {
-                invalidateEntries({ k, _ -> k.sdk == jdk })
-            }
-
-            override fun jdkNameChanged(jdk: Sdk, previousName: String) {
-                jdkRemoved(jdk)
-            }
-        }
-
         private inner class ModuleCache : AbstractCache<IdeaModuleInfo>(), WorkspaceModelChangeListener {
             override fun subscribe(connection: MessageBusConnection) {
-                WorkspaceModelTopics.getInstance(project).subscribeImmediately(connection, this)
+                connection.subscribe(WorkspaceModelTopics.CHANGED, this)
             }
 
             override fun calculate(key: IdeaModuleInfo): StdlibDependency {
@@ -256,51 +240,56 @@ internal class KotlinStdlibCacheImpl(private val project: Project) : KotlinStdli
                             scope
                         )
                     })
-                    val index = ProjectFileIndex.getInstance(project)
+
+                    val projectFileIndex = ProjectFileIndex.getInstance(project)
+                    val libraryInfoCache = LibraryInfoCache.getInstance(project)
                     for (manifest in stdlibManifests) {
-                        val orderEntries = index.getOrderEntriesForFile(manifest)
-                        orderEntries.firstNotNullOfOrNull { it.safeAs<LibraryOrderEntry>()?.library.safeAs<LibraryEx>() }?.let {
-                            LibraryInfoCache.getInstance(project).get(it)
-                        }?.firstOrNull(::isStdlib)?.let {
-                            return@index it
+                        val orderEntries = projectFileIndex.getOrderEntriesForFile(manifest)
+                        for (entry in orderEntries) {
+                            val library = entry.safeAs<LibraryOrderEntry>()?.library.safeAs<LibraryEx>() ?: continue
+                            val libraryInfos = libraryInfoCache[library]
+                            return@index libraryInfos.find(::isStdlib) ?: continue
                         }
                     }
                     null
                 } ?: key.findStdLib()
 
-                val stdlibDependency = stdLib.toStdlibDependency()
+                return stdLib.toStdlibDependency()
+            }
 
-                moduleSourceInfo?.let {
-                    val result = hashMapOf<LibraryInfo, StdlibDependency>()
-                    // all module dependencies have same stdlib as module itself
-                    key.dependencies().forEach {
-                        if (it is LibraryInfo) {
-                            result[it] = stdlibDependency
-                        }
+            override fun postProcessNewValue(key: IdeaModuleInfo, value: StdlibDependency) {
+                if (key !is ModuleSourceInfo) return
+
+                val result = hashMapOf<LibraryInfo, StdlibDependency>()
+                // all module dependencies have same stdlib as module itself
+                key.dependencies().forEach {
+                    if (it is LibraryInfo) {
+                        result[it] = value
                     }
-                    libraryCache.putExtraValues(result)
                 }
 
-                return stdlibDependency
+                libraryCache.putExtraValues(result)
             }
 
             override fun checkKeyValidity(key: IdeaModuleInfo) {
-                key.safeAs<ModuleSourceInfo>()?.module?.checkValidity()
+                key.checkValidity()
+            }
+
+            override fun libraryInfosRemoved(libraryInfos: Collection<LibraryInfo>) {
+                invalidateEntries({ _, v -> v.libraryInfo in libraryInfos }, validityCondition = { _, v -> v.libraryInfo != null })
             }
 
             override fun changed(event: VersionedStorageChange) {
                 event.getChanges(ModuleEntity::class.java).ifEmpty { return }
-                invalidate()
+
+                invalidate(writeAccessRequired = true)
             }
         }
     }
 }
 
-fun LibraryInfo.isCoreKotlinLibrary(project: Project): Boolean =
-    isKotlinStdlib(project) || isKotlinStdlibDependency(project)
+fun LibraryInfo.isCoreKotlinLibrary(project: Project): Boolean = isKotlinStdlib(project) || isKotlinStdlibDependency(project)
 
-fun LibraryInfo.isKotlinStdlib(project: Project): Boolean =
-    KotlinStdlibCache.getInstance(project).isStdlib(this)
+fun LibraryInfo.isKotlinStdlib(project: Project): Boolean = KotlinStdlibCache.getInstance(project).isStdlib(this)
 
-fun LibraryInfo.isKotlinStdlibDependency(project: Project): Boolean =
-    KotlinStdlibCache.getInstance(project).isStdlibDependency(this)
+fun LibraryInfo.isKotlinStdlibDependency(project: Project): Boolean = KotlinStdlibCache.getInstance(project).isStdlibDependency(this)

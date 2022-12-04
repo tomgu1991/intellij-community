@@ -1,7 +1,8 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.jetbrains.python.configuration
 
 import com.intellij.ProjectTopics
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.DataContext
@@ -13,7 +14,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ModuleRootEvent
 import com.intellij.openapi.roots.ModuleRootListener
 import com.intellij.openapi.ui.popup.ListPopup
-import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.registry.Registry
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.wm.StatusBar
@@ -29,28 +29,24 @@ import com.jetbrains.python.sdk.PySdkPopupFactory.Companion.shortenNameInPopup
 import com.jetbrains.python.sdk.PythonSdkUtil
 import com.jetbrains.python.sdk.noInterpreterMarker
 
-private const val pySdkWidgetId: String = "pythonInterpreterWidget"
+private const val ID: String = "pythonInterpreterWidget"
 
 fun isDataSpellInterpreterWidgetEnabled() = PlatformUtils.isDataSpell() && Registry.`is`("dataspell.interpreter.widget")
 
-class PySdkStatusBarWidgetFactory : StatusBarWidgetFactory {
-
-  override fun getId(): String = pySdkWidgetId
+private class PySdkStatusBarWidgetFactory : StatusBarWidgetFactory {
+  override fun getId(): String = ID
 
   override fun getDisplayName(): String = PyBundle.message("configurable.PyActiveSdkModuleConfigurable.python.interpreter.display.name")
 
-  override fun isAvailable(project: Project): Boolean = PythonIdeLanguageCustomization.isMainlyPythonIde() &&
-                                                        !isDataSpellInterpreterWidgetEnabled()
+  override fun isAvailable(project: Project): Boolean =
+    PythonIdeLanguageCustomization.isMainlyPythonIde() && !isDataSpellInterpreterWidgetEnabled()
 
   override fun createWidget(project: Project): StatusBarWidget = PySdkStatusBar(project)
-
-  override fun disposeWidget(widget: StatusBarWidget) = Disposer.dispose(widget)
 
   override fun canBeEnabledOn(statusBar: StatusBar): Boolean = true
 }
 
-class PySwitchSdkAction : DumbAwareAction(PyBundle.message("switch.python.interpreter"), null, null) {
-
+private class PySwitchSdkAction : DumbAwareAction(PyBundle.message("switch.python.interpreter"), null, null) {
   override fun update(e: AnActionEvent) {
     e.presentation.isVisible = e.getData(CommonDataKeys.VIRTUAL_FILE) != null && e.project != null
   }
@@ -61,12 +57,15 @@ class PySwitchSdkAction : DumbAwareAction(PyBundle.message("switch.python.interp
     val module = ModuleUtil.findModuleForFile(file, project) ?: return
 
     val dataContext = e.dataContext
-    PySdkPopupFactory(project, module).createPopup(dataContext)?.showInBestPositionFor(dataContext)
+    PySdkPopupFactory(project, module).createPopup(dataContext).showInBestPositionFor(dataContext)
+  }
+
+  override fun getActionUpdateThread(): ActionUpdateThread {
+    return ActionUpdateThread.BGT
   }
 }
 
 private class PySdkStatusBar(project: Project) : EditorBasedStatusBarPopup(project, false) {
-
   private var module: Module? = null
 
   override fun getWidgetState(file: VirtualFile?): WidgetState {
@@ -97,7 +96,7 @@ private class PySdkStatusBar(project: Project) : EditorBasedStatusBarPopup(proje
 
   override fun createPopup(context: DataContext): ListPopup? = module?.let { PySdkPopupFactory(project, it).createPopup(context) }
 
-  override fun ID(): String = pySdkWidgetId
+  override fun ID(): String = ID
 
   override fun createInstance(project: Project): StatusBarWidget = PySdkStatusBar(project)
 

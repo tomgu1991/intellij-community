@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring.introduce.introduceVariable
 
@@ -10,10 +10,7 @@ import com.intellij.openapi.command.impl.StartMarkAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.Key
-import com.intellij.openapi.util.NlsContexts
-import com.intellij.openapi.util.TextRange
-import com.intellij.openapi.util.ThrowableComputable
+import com.intellij.openapi.util.*
 import com.intellij.psi.*
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.refactoring.HelpID
@@ -24,7 +21,7 @@ import com.intellij.util.SmartList
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
 import org.jetbrains.kotlin.descriptors.ValueParameterDescriptor
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.base.codeInsight.KotlinNameSuggestionProvider
 import org.jetbrains.kotlin.idea.core.CollectingNameValidator
 import org.jetbrains.kotlin.idea.base.fe10.codeInsight.newDeclaration.Fe10KotlinNameSuggester
@@ -34,7 +31,6 @@ import org.jetbrains.kotlin.idea.caches.resolve.analyzeInContext
 import org.jetbrains.kotlin.idea.caches.resolve.computeTypeInfoInContext
 import org.jetbrains.kotlin.idea.caches.resolve.getResolutionFacade
 import org.jetbrains.kotlin.idea.core.*
-import org.jetbrains.kotlin.idea.core.util.CodeInsightUtils
 import org.jetbrains.kotlin.idea.intentions.ConvertToBlockBodyIntention
 import org.jetbrains.kotlin.idea.refactoring.*
 import org.jetbrains.kotlin.idea.refactoring.introduce.*
@@ -65,7 +61,9 @@ import org.jetbrains.kotlin.utils.KotlinExceptionWithAttachments
 import org.jetbrains.kotlin.utils.addIfNotNull
 import org.jetbrains.kotlin.utils.ifEmpty
 import org.jetbrains.kotlin.utils.sure
+import kotlin.Pair
 import kotlin.math.min
+import org.jetbrains.kotlin.idea.util.ElementKind
 
 object KotlinIntroduceVariableHandler : RefactoringActionHandler {
     val INTRODUCE_VARIABLE get() = KotlinBundle.message("introduce.variable")
@@ -105,7 +103,7 @@ object KotlinIntroduceVariableHandler : RefactoringActionHandler {
         private val bindingContext: BindingContext,
         private val resolutionFacade: ResolutionFacade
     ) {
-        private val psiFactory = KtPsiFactory(expression)
+        private val psiFactory = KtPsiFactory(expression.project)
 
         var propertyRef: KtDeclaration? = null
         var reference: SmartPsiElementPointer<KtExpression>? = null
@@ -533,7 +531,7 @@ object KotlinIntroduceVariableHandler : RefactoringActionHandler {
 
         val allOccurrences = occurrencesToReplace ?: expression.findOccurrences(occurrenceContainer)
 
-        val callback = Pass<OccurrencesChooser.ReplaceChoice> { replaceChoice ->
+        val callback = Pass.create { replaceChoice: OccurrencesChooser.ReplaceChoice ->
             val allReplaces = when (replaceChoice) {
                 OccurrencesChooser.ReplaceChoice.ALL -> allOccurrences
                 else -> listOf(expression)
@@ -819,7 +817,7 @@ object KotlinIntroduceVariableHandler : RefactoringActionHandler {
         if (file !is KtFile) return
 
         try {
-            selectElement(editor, file, listOf(CodeInsightUtils.ElementKind.EXPRESSION)) {
+            selectElement(editor, file, ElementKind.EXPRESSION) {
                 doRefactoring(project, editor, it as KtExpression?, false, null, null)
             }
         } catch (e: IntroduceRefactoringException) {

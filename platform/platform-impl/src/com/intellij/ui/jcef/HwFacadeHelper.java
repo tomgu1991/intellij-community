@@ -71,7 +71,7 @@ public class HwFacadeHelper {
       Set<CefClient> clients = clientsField.get(ourCefApp);
       if (clients == null) return list;
       for (CefClient client : clients) {
-        HashMap<?, CefBrowser> browsers = browsersField.get(client);
+        Map<?, CefBrowser> browsers = browsersField.get(client);
         if (browsers == null) return list;
         for (CefBrowser browser : browsers.values()) {
           JBCefBrowserBase jbCefBrowser = JBCefBrowserBase.getJBCefBrowser(browser);
@@ -150,7 +150,7 @@ public class HwFacadeHelper {
     activateIfNeeded(JCEFAccessor.getHwBrowsers());
   }
 
-  private void activateIfNeeded(@NotNull List<CefBrowser> browsers) {
+  private void activateIfNeeded(@NotNull List<? extends CefBrowser> browsers) {
     if (isActive() || !Registry.is("ide.browser.jcef.hwfacade.enabled") || !isCefAppActive() || !myTarget.isShowing() || SystemInfo.isLinux) {
       return;
     }

@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.highlighter
 
@@ -10,7 +10,7 @@ import com.intellij.openapi.options.colors.ColorDescriptor
 import com.intellij.openapi.options.colors.ColorSettingsPage
 import com.intellij.openapi.options.colors.RainbowColorSettingsPage
 import com.intellij.openapi.util.NlsSafe
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.KotlinIcons
 import org.jetbrains.kotlin.idea.KotlinLanguage
 import org.jetbrains.kotlin.idea.highlighter.dsl.DslKotlinHighlightingVisitorExtension
@@ -88,9 +88,7 @@ var <PACKAGE_PROPERTY_CUSTOM_PROPERTY_DECLARATION><MUTABLE_VARIABLE>globalCounte
 <KEYWORD>suspend</KEYWORD> <KEYWORD>fun</KEYWORD> <FUNCTION_DECLARATION>suspendCall</FUNCTION_DECLARATION>() = 
   <SUSPEND_FUNCTION_CALL>suspendFn</SUSPEND_FUNCTION_CALL>()
 
-<KEYWORD>suspend</KEYWORD> <KEYWORD>fun</KEYWORD> <FUNCTION_DECLARATION>suspendFn</FUNCTION_DECLARATION>() {}
-
-"""
+<KEYWORD>suspend</KEYWORD> <KEYWORD>fun</KEYWORD> <FUNCTION_DECLARATION>suspendFn</FUNCTION_DECLARATION>() {}"""
     }
 
     override fun getAdditionalHighlightingTagToDescriptorMap(): Map<String, TextAttributesKey> {

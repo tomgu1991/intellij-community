@@ -94,7 +94,7 @@ public abstract class TestObject extends JavaTestFrameworkRunnableState<JUnitCon
 
   private final JUnitConfiguration myConfiguration;
   protected File myListenersFile;
-  
+
   private final Map<Module, JavaParameters> myAdditionalJarsForModuleFork = new HashMap<>();
 
   protected TestObject(JUnitConfiguration configuration, ExecutionEnvironment environment) {
@@ -174,7 +174,7 @@ public abstract class TestObject extends JavaTestFrameworkRunnableState<JUnitCon
   }
 
   private Set<Module> collectPackageModules(String packageName) {
-    Set<Module> result = new HashSet<>(); 
+    Set<Module> result = new HashSet<>();
     final SourceScope sourceScope = getSourceScope();
     final Project project = getConfiguration().getProject();
     if (sourceScope != null && packageName != null && JUnitStarter.JUNIT5_PARAMETER.equals(getRunner())) {
@@ -231,7 +231,7 @@ public abstract class TestObject extends JavaTestFrameworkRunnableState<JUnitCon
 
     //include junit5 listeners for the case custom junit 5 engines would be detected on runtime
     javaParameters.getClassPath().addFirst(getJUnit5RtFile());
-    
+
     appendDownloadedDependenciesForForkedConfigurations(javaParameters, module);
   }
 
@@ -314,9 +314,8 @@ public abstract class TestObject extends JavaTestFrameworkRunnableState<JUnitCon
 
     JavaPsiFacade psiFacade = JavaPsiFacade.getInstance(project);
     DumbService dumbService = DumbService.getInstance(project);
-    PsiClass classFromCommon = ReadAction.nonBlocking(() -> dumbService.computeWithAlternativeResolveEnabled(() -> psiFacade.findClass("org.junit.platform.commons.JUnitException", globalSearchScope))).executeSynchronously();
 
-    String launcherVersion = getVersion(classFromCommon);
+    String launcherVersion = getLibraryVersion("org.junit.platform.commons.JUnitException", globalSearchScope, project);
     if (launcherVersion == null) {
       LOG.info("Failed to detect junit 5 launcher version, please configure explicit dependency");
       return;
@@ -346,8 +345,7 @@ public abstract class TestObject extends JavaTestFrameworkRunnableState<JUnitCon
 
     //add standard engines only if no engine api is present
     if (!hasJUnit5EnginesAPI(globalSearchScope, psiFacade) || !isCustomJUnit5(globalSearchScope)) {
-      PsiClass testAnnotation = dumbService.computeWithAlternativeResolveEnabled(() -> ReadAction.nonBlocking(() -> psiFacade.findClass(JUnitUtil.TEST5_ANNOTATION, globalSearchScope)).executeSynchronously());
-      String jupiterVersion = ObjectUtils.notNull(getVersion(testAnnotation), "5.0.0");
+      String jupiterVersion = ObjectUtils.notNull(getLibraryVersion(JUnitUtil.TEST5_ANNOTATION, globalSearchScope, project), "5.0.0");
       if (JUnitUtil.hasPackageWithDirectories(psiFacade, JUnitUtil.TEST5_PACKAGE_FQN, globalSearchScope)) {
         if (!JUnitUtil.hasPackageWithDirectories(psiFacade, JUPITER_ENGINE_NAME, globalSearchScope)) {
           downloadDependenciesWhenRequired(project, additionalDependencies,
@@ -400,7 +398,7 @@ public abstract class TestObject extends JavaTestFrameworkRunnableState<JUnitCon
   /**
    * junit 4.12+ must be on the classpath for vintage engine to work correctly.
    * Don't add engine when it will fail to detect tests anyway.
-   * <p> 
+   * <p>
    * Reflection is needed for the case when no sources are attached
    */
   private boolean isAcceptableVintageVersion() {
@@ -421,22 +419,27 @@ public abstract class TestObject extends JavaTestFrameworkRunnableState<JUnitCon
     return JUnitUtil.hasPackageWithDirectories(psiFacade, "org.junit.platform.engine", globalSearchScope);
   }
 
-  private static String getVersion(PsiClass classFromCommon) {
-    VirtualFile virtualFile = PsiUtilCore.getVirtualFile(classFromCommon);
-    if (virtualFile != null) {
-      ProjectFileIndex index = ProjectFileIndex.getInstance(classFromCommon.getProject());
-      VirtualFile root = index.getClassRootForFile(virtualFile);
-      if (root != null && root.getFileSystem() instanceof JarFileSystem) {
-        VirtualFile manifestFile = root.findFileByRelativePath(JarFile.MANIFEST_NAME);
-        if (manifestFile != null) {
-          try (final InputStream inputStream = manifestFile.getInputStream()) {
-            Attributes mainAttributes = new Manifest(inputStream).getMainAttributes();
-            if ("junit.org".equals(mainAttributes.getValue(Attributes.Name.IMPLEMENTATION_VENDOR))) {
-              return mainAttributes.getValue(Attributes.Name.IMPLEMENTATION_VERSION);
-            }
+  private static String getLibraryVersion(String className, GlobalSearchScope globalSearchScope, Project project) {
+    VirtualFile root = ReadAction.nonBlocking(() -> {
+      PsiClass psiClass = DumbService.getInstance(project).computeWithAlternativeResolveEnabled(() ->
+        JavaPsiFacade.getInstance(project).findClass(className, globalSearchScope)
+      );
+      VirtualFile virtualFile = PsiUtilCore.getVirtualFile(psiClass);
+      if (virtualFile == null) return null;
+
+      return ProjectFileIndex.getInstance(project).getClassRootForFile(virtualFile);
+    }).executeSynchronously();
+
+    if (root != null && root.getFileSystem() instanceof JarFileSystem) {
+      VirtualFile manifestFile = root.findFileByRelativePath(JarFile.MANIFEST_NAME);
+      if (manifestFile != null) {
+        try (final InputStream inputStream = manifestFile.getInputStream()) {
+          Attributes mainAttributes = new Manifest(inputStream).getMainAttributes();
+          if ("junit.org".equals(mainAttributes.getValue(Attributes.Name.IMPLEMENTATION_VENDOR))) {
+            return mainAttributes.getValue(Attributes.Name.IMPLEMENTATION_VERSION);
           }
-          catch (IOException ignored) { }
         }
+        catch (IOException ignored) { }
       }
     }
 
@@ -463,7 +466,7 @@ public abstract class TestObject extends JavaTestFrameworkRunnableState<JUnitCon
     catch (ProcessCanceledException e) {
       roots = Collections.emptyList();
     }
-    catch (Throwable e) { 
+    catch (Throwable e) {
       LOG.error(e);
       roots = Collections.emptyList();
     }
@@ -518,8 +521,8 @@ public abstract class TestObject extends JavaTestFrameworkRunnableState<JUnitCon
   }
 
   /**
-   * Dependencies for full & forked per module configurations are downloaded; 
-   * <p> 
+   * Dependencies for full & forked per module configurations are downloaded;
+   * <p>
    * Dependencies for forked configurations are stored to be added later in {@link #appendDownloadedDependenciesForForkedConfigurations(JavaParameters, Module)}
    */
   @Override
@@ -536,7 +539,7 @@ public abstract class TestObject extends JavaTestFrameworkRunnableState<JUnitCon
                                     getScopeForJUnit(module, project),
                                     useModulePath() && module != null && ReadAction.compute(() -> findJavaModule(module, true)) != null);
         if (forkPerModule()) {
-          for (Module packageModule : collectPackageModules(configuration.getPackage())) {
+          for (Module packageModule : ReadAction.compute(() -> collectPackageModules(configuration.getPackage()))) {
             JavaParameters parameters = new JavaParameters();
             ParamsGroup group = getJigsawOptions(javaParameters);
             if (group != null) {
@@ -552,6 +555,18 @@ public abstract class TestObject extends JavaTestFrameworkRunnableState<JUnitCon
             myAdditionalJarsForModuleFork.put(packageModule, parameters);
           }
         }
+
+        String disabledCondition = ReadAction.nonBlocking(() -> {
+          if (DumbService.isDumb(project)) {
+            return null;
+          }
+          return DisabledConditionUtil.getDisabledConditionValue(myConfiguration);
+        }).executeSynchronously();
+
+        if (disabledCondition != null) {
+          javaParameters.getVMParametersList().add("-Djunit.jupiter.conditions.deactivate=" + disabledCondition);
+        }
+        
         return null;
       };
       if (ApplicationManager.getApplication().isDispatchThread()) {
@@ -662,13 +677,16 @@ public abstract class TestObject extends JavaTestFrameworkRunnableState<JUnitCon
   }
 
   private String myRunner;
+  private static final Object LOCK = ObjectUtils.sentinel("JUnitRunner");
 
   @NotNull
   protected String getRunner() {
-    if (myRunner == null) {
-      myRunner = ReadAction.nonBlocking(this::getRunnerInner).executeSynchronously();
+    synchronized (LOCK) {
+      if (myRunner == null) {
+        myRunner = ReadAction.nonBlocking(this::getRunnerInner).executeSynchronously();
+      }
+      return myRunner;
     }
-    return myRunner;
   }
 
   @NotNull

@@ -4,6 +4,7 @@ package com.intellij.openapi.vcs.changes.savedPatches
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vcs.FilePath
 import com.intellij.openapi.vcs.VcsException
 import com.intellij.openapi.vcs.changes.Change
 import com.intellij.openapi.vcs.changes.ui.*
@@ -36,9 +37,10 @@ interface SavedPatchesProvider<S> {
   }
 
   interface ChangeObject : PresentableChange {
+    val originalFilePath: FilePath? get() = null
+
     fun createDiffRequestProducer(project: Project?): ChangeDiffRequestChain.Producer?
     fun createDiffWithLocalRequestProducer(project: Project?, useBeforeVersion: Boolean): ChangeDiffRequestChain.Producer?
-    @JvmDefault
     fun asChange(): Change? = null
   }
 

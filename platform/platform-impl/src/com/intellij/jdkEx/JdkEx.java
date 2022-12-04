@@ -1,7 +1,9 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.jdkEx;
 
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.SystemInfo;
+import com.intellij.openapi.util.SystemInfoRt;
 import com.intellij.openapi.util.registry.Registry;
 import com.intellij.ui.ExperimentalUI;
 import com.intellij.util.MethodInvocator;
@@ -15,13 +17,15 @@ import java.awt.*;
 /**
  * Provides extensions for OpenJDK API, implemented in JetBrains JDK.
  * For OpenJDK defaults to some meaningful results where applicable or otherwise throws runtime exception.
- *
+ * <p>
  * WARNING: For internal usage only.
  *
  * @author tav
  */
 @ApiStatus.Internal
 public final class JdkEx {
+  private static final Logger LOG = Logger.getInstance(JdkEx.class);
+
   @SuppressWarnings("unused")
   public static @NotNull InputEventEx getInputEventEx() {
     if (SystemInfo.isJetBrainsJvm) {
@@ -105,19 +109,31 @@ public final class JdkEx {
   private static MethodInvocator mySetTabbingMode;
 
   private static @Nullable MethodInvocator getTabbingModeInvocator() {
-    if (!SystemInfo.isJetBrainsJvm || !SystemInfo.isMacOSBigSur || !Registry.is("ide.mac.bigsur.window.with.tabs.enabled", true) ||
-        ExperimentalUI.isNewUI()) {
+    if (ExperimentalUI.isNewUI() ||
+        !SystemInfo.isJetBrainsJvm ||
+        !SystemInfo.isMacOSBigSur ||
+        !Registry.is("ide.mac.bigsur.window.with.tabs.enabled", true)) {
+      if (SystemInfoRt.isMac) {
+        LOG.info("=== TabbingMode: disabled (" +
+                 SystemInfo.isJetBrainsJvm + "," +
+                 SystemInfo.isMacOSBigSur + "," +
+                 Registry.is("ide.mac.bigsur.window.with.tabs.enabled", true) + "," +
+                 ExperimentalUI.isNewUI() + ") ===");
+      }
       return null;
     }
     if (mySetTabbingMode == null) {
       try {
         mySetTabbingMode = new MethodInvocator(false, Class.forName("java.awt.Window"), "setTabbingMode");
         if (mySetTabbingMode.isAvailable()) {
+          LOG.info("=== TabbingMode: available ===");
           return mySetTabbingMode;
         }
       }
-      catch (ClassNotFoundException ignore) {
+      catch (ClassNotFoundException e) {
+        LOG.error(e);
       }
+      LOG.info("=== TabbingMode: not available ===");
       return null;
     }
     return mySetTabbingMode.isAvailable() ? mySetTabbingMode : null;
@@ -127,20 +143,25 @@ public final class JdkEx {
     return getTabbingModeInvocator() != null;
   }
 
-  public static boolean setTabbingMode(@NotNull Window window, @Nullable Runnable moveTabToNewWindowCallback) {
+  public static boolean setTabbingMode(@NotNull Window window, @NotNull String windowId, @Nullable Runnable moveTabToNewWindowCallback) {
     MethodInvocator invocator = getTabbingModeInvocator();
     if (invocator != null) {
       invocator.invoke(window);
+      ((RootPaneContainer)window).getRootPane().putClientProperty("JavaWindowTabbingIdentifier", windowId);
+
       if (moveTabToNewWindowCallback != null) {
         try {
           new MethodInvocator(false, Class.forName("java.awt.Window"), "setMoveTabToNewWindowCallback", Runnable.class)
             .invoke(window, moveTabToNewWindowCallback);
         }
-        catch (ClassNotFoundException ignore) {
+        catch (ClassNotFoundException e) {
+          LOG.error(e);
         }
       }
+      LOG.info("=== TabbingMode: on ===");
       return true;
     }
+    LOG.info("=== TabbingMode: off ===");
     return false;
   }
 }

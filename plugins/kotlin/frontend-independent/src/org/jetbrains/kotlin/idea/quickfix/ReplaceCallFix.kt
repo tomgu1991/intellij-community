@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.quickfix
 
@@ -7,7 +7,9 @@ import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.util.PsiTreeUtil
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.CleanupFix
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.KotlinPsiOnlyQuickFixAction
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.endOffset
@@ -36,7 +38,7 @@ abstract class ReplaceCallFix(
         val selectorExpression = element?.selectorExpression ?: return null
         val elvis = element.elvisOrEmpty(notNullNeeded)
         val betweenReceiverAndOperation = element.elementsBetweenReceiverAndOperation().joinToString(separator = "") { it.text }
-        val newExpression = KtPsiFactory(element).createExpressionByPattern(
+        val newExpression = KtPsiFactory(project).createExpressionByPattern(
             "$0$betweenReceiverAndOperation$operation$1$elvis",
             element.receiverExpression,
             selectorExpression,
@@ -70,7 +72,7 @@ class ReplaceImplicitReceiverCallFix(
     override fun invoke(project: Project, editor: Editor?, file: KtFile) {
         val element = element ?: return
         val elvis = element.elvisOrEmpty(notNullNeeded)
-        val newExpression = KtPsiFactory(element).createExpressionByPattern("this?.$0$elvis", element)
+        val newExpression = KtPsiFactory(project).createExpressionByPattern("this?.$0$elvis", element)
         val replacement = element.replace(newExpression)
         if (elvis.isNotEmpty()) {
             replacement.moveCaretToEnd(editor, project)

@@ -3,6 +3,7 @@ package training.featuresSuggester.ui
 
 import com.intellij.ide.BrowserUtil
 import com.intellij.ide.util.TipAndTrickBean
+import com.intellij.ide.util.TipAndTrickManager
 import com.intellij.notification.Notification
 import com.intellij.notification.NotificationGroup
 import com.intellij.notification.NotificationGroupManager
@@ -90,17 +91,13 @@ class NotificationSuggestionPresenter :
     notification: Notification,
     suggestion: TipSuggestion
   ): AnAction? {
-    val tip = getTipByFilename(suggestion.suggestingTipFilename) ?: return null
+    val tip = TipAndTrickBean.findById(suggestion.suggestingTipId) ?: return null
     return object : AnAction(FeatureSuggesterBundle.message("notification.learn.more")) {
       override fun actionPerformed(e: AnActionEvent) {
-        SingleTipDialog.showForProject(project, tip)
+        TipAndTrickManager.getInstance().showTipDialog(project, tip)
         notification.hideBalloon()
         FeatureSuggesterStatistics.logNotificationLearnMore(suggestion.suggesterId)
       }
     }
-  }
-
-  private fun getTipByFilename(tipFilename: String): TipAndTrickBean? {
-    return TipAndTrickBean.EP_NAME.extensions.find { it.fileName == tipFilename }
   }
 }

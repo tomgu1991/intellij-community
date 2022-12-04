@@ -117,7 +117,12 @@ public final class ProjectTypeStep extends ModuleWizardStep implements SettingsS
         TemplatesGroup groupToSelect = ContainerUtil.find(myTemplatesMap.keySet(), group -> group.getId().equals(placeId));
         if (groupToSelect != null) {
           myProjectTypeList.setSelectedValue(groupToSelect, true);
-          configure.accept(getCustomStep());
+          try {
+            configure.accept(getCustomStep());
+          }
+          catch (Throwable exception) {
+            throw new IllegalStateException("Cannot switch on " + placeId + ", current step " + myCurrentCard, exception);
+          }
         }
       }
     });
@@ -782,12 +787,9 @@ public final class ProjectTypeStep extends ModuleWizardStep implements SettingsS
   @TestOnly
   public String availableTemplateGroupsToString() {
     ListModel<TemplatesGroup> model = myProjectTypeList.getModel();
-    StringBuilder builder = new StringBuilder();
+    StringJoiner builder = new StringJoiner(", ");
     for (int i = 0; i < model.getSize(); i++) {
-      if (builder.length() > 0) {
-        builder.append(", ");
-      }
-      builder.append(model.getElementAt(i).getName());
+      builder.add(model.getElementAt(i).getName());
     }
     return builder.toString();
   }
@@ -842,11 +844,6 @@ public final class ProjectTypeStep extends ModuleWizardStep implements SettingsS
   @Override
   public void addExpertField(@NotNull @NlsContexts.Label String label, @NotNull JComponent field) {
 
-  }
-
-  @Override
-  public JTextField getModuleNameField() {
-    return null;
   }
 
   @Override

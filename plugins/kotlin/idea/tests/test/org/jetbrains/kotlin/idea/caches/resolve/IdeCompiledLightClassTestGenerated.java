@@ -6,7 +6,7 @@ import com.intellij.testFramework.TestDataPath;
 import org.jetbrains.kotlin.idea.test.JUnit3RunnerWithInners;
 import org.jetbrains.kotlin.idea.test.KotlinTestUtils;
 import org.jetbrains.kotlin.test.TestMetadata;
-import org.jetbrains.kotlin.idea.test.TestRoot;
+import org.jetbrains.kotlin.idea.base.test.TestRoot;
 import org.junit.runner.RunWith;
 import static org.jetbrains.kotlin.idea.base.plugin.artifacts.TestKotlinArtifacts.compilerTestData;
 
@@ -316,6 +316,11 @@ public abstract class IdeCompiledLightClassTestGenerated extends AbstractIdeComp
         @TestMetadata("DollarsInNameNoPackage.kt")
         public void testDollarsInNameNoPackage() throws Exception {
             runTest(compilerTestData("compiler/testData/asJava/lightClasses/DollarsInNameNoPackage.kt"));
+        }
+
+        @TestMetadata("EnumEntry.kt")
+        public void testEnumEntry() throws Exception {
+            runTest(compilerTestData("compiler/testData/asJava/lightClasses/EnumEntry.kt"));
         }
 
         @TestMetadata("ExtendingInterfaceWithDefaultImpls.kt")

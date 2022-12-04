@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.idea.base.plugin.artifacts
 
 import org.jetbrains.annotations.ApiStatus
@@ -31,6 +31,7 @@ object KotlinArtifactNames {
     const val ALLOPEN_COMPILER_PLUGIN = "allopen-compiler-plugin.jar"
     const val NOARG_COMPILER_PLUGIN = "noarg-compiler-plugin.jar"
     const val SAM_WITH_RECEIVER_COMPILER_PLUGIN = "sam-with-receiver-compiler-plugin.jar"
+    const val ASSIGNMENT_COMPILER_PLUGIN = "assignment-compiler-plugin.jar"
     const val KOTLINX_SERIALIZATION_COMPILER_PLUGIN = "kotlinx-serialization-compiler-plugin.jar"
     const val PARCELIZE_RUNTIME = "parcelize-runtime.jar"
     const val ANDROID_EXTENSIONS_RUNTIME = "android-extensions-runtime.jar"

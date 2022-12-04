@@ -10,7 +10,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElementVisitor
 import org.jetbrains.kotlin.builtins.StandardNames
 import org.jetbrains.kotlin.cfg.WhenChecker
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToCall
 import org.jetbrains.kotlin.idea.intentions.loopToCallChain.previousStatement
@@ -28,6 +28,8 @@ import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
 import org.jetbrains.kotlin.types.KotlinType
 import org.jetbrains.kotlin.types.isDynamic
 import org.jetbrains.kotlin.types.typeUtil.isUnit
+
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.inspections.AbstractKotlinInspection
 
 class RedundantUnitExpressionInspection : AbstractKotlinInspection(), CleanupLocalInspectionTool {
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean): PsiElementVisitor = referenceExpressionVisitor(fun(expression) {
@@ -51,7 +53,8 @@ class RedundantUnitExpressionInspection : AbstractKotlinInspection(), CleanupLoc
 
             if (parent is KtBlockExpression) {
                 if (referenceExpression == parent.lastBlockStatementOrThis()) {
-                    val prev = referenceExpression.previousStatement() ?: return true
+                    val parentIfOrWhen = parent.getParentIfOrWhen()
+                    val prev = referenceExpression.previousStatement() ?: return parentIfOrWhen == null
                     if (prev.isUnitLiteral) return true
                     if (prev is KtDeclaration && isDynamicCall(parent)) return false
                     val context = prev.analyze(BodyResolveMode.PARTIAL)
@@ -62,11 +65,7 @@ class RedundantUnitExpressionInspection : AbstractKotlinInspection(), CleanupLoc
 
                     if (prev !is KtDeclaration) return false
                     if (prev !is KtFunction) return true
-                    return parent.getParentOfTypesAndPredicate(
-                        true,
-                        KtIfExpression::class.java,
-                        KtWhenExpression::class.java
-                    ) { true } == null
+                    return parentIfOrWhen == null
                 }
 
                 return true
@@ -76,6 +75,9 @@ class RedundantUnitExpressionInspection : AbstractKotlinInspection(), CleanupLoc
         }
     }
 }
+
+private fun KtExpression.getParentIfOrWhen(): KtExpression? =
+    getParentOfTypesAndPredicate(true, KtIfExpression::class.java, KtWhenExpression::class.java) { true }
 
 private fun isDynamicCall(parent: KtBlockExpression): Boolean = parent.getStrictParentOfType<KtFunctionLiteral>()
     ?.findLambdaReturnType()

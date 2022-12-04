@@ -48,7 +48,7 @@ public class ConstantOnWrongSideOfComparisonInspection extends BaseInspection im
     comboBox.setSelectedIndex(myConstantShouldGoLeft ? 0 : 1);
     comboBox.addItemListener(e -> {
       if (e.getStateChange() == ItemEvent.SELECTED) {
-        myConstantShouldGoLeft = (e.getItem() == left);
+        myConstantShouldGoLeft = e.getItem() == left;
       }
     });
     final InspectionOptionsPanel panel = new InspectionOptionsPanel(this);
@@ -71,7 +71,7 @@ public class ConstantOnWrongSideOfComparisonInspection extends BaseInspection im
     }
 
     @Override
-    public void doFix(Project project, ProblemDescriptor descriptor) {
+    public void doFix(@NotNull Project project, @NotNull ProblemDescriptor descriptor) {
       final PsiElement element = descriptor.getPsiElement().getParent();
       if (!(element instanceof PsiBinaryExpression)) {
         return;

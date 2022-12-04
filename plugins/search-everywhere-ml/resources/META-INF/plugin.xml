@@ -1,4 +1,4 @@
-<idea-plugin>
+<idea-plugin package="com.intellij.ide.actions.searcheverywhere.ml">
   <id>com.intellij.searcheverywhere.ml</id>
   <name>Machine Learning in Search Everywhere</name>
   <vendor>JetBrains</vendor>
@@ -11,7 +11,12 @@
     <i>Note that sorting by machine learning is currently available only for the Actions tab.</i>
   ]]></description>
 
-  <depends optional="true" config-file="vcs-feature-provider.xml">Git4Idea</depends>
+  <content>
+    <module name="intellij.searchEverywhereMl.yaml"/>
+    <module name="intellij.searchEverywhereMl.vcs"/>
+  </content>
+
+  <resource-bundle>messages.searchEverywhereMlBundle</resource-bundle>
 
   <extensions defaultExtensionNs="com.intellij">
     <searchEverywhereMlService implementation="com.intellij.ide.actions.searcheverywhere.ml.SearchEverywhereMlSessionService"/>
@@ -22,7 +27,10 @@
     <advancedSetting default="true" id="searcheverywhere.ml.sort.action"
                      groupKey="advanced.setting.searcheverywhere.ml.name"
                      bundle="messages.searchEverywhereMlBundle"/>
-    <advancedSetting default="false" id="searcheverywhere.ml.sort.files"
+    <advancedSetting default="true" id="searcheverywhere.ml.sort.files"
+                     groupKey="advanced.setting.searcheverywhere.ml.name"
+                     bundle="messages.searchEverywhereMlBundle"/>
+    <advancedSetting default="false" id="searcheverywhere.ml.sort.classes"
                      groupKey="advanced.setting.searcheverywhere.ml.name"
                      bundle="messages.searchEverywhereMlBundle"/>
 
@@ -32,6 +40,9 @@
     <registryKey defaultValue="false"
                  description="When enabled ML experiments with files order won't be performed"
                  key="search.everywhere.force.disable.experiment.files.ml"/>
+    <registryKey defaultValue="false"
+                 description="When enabled ML experiments with classes order won't be performed"
+                 key="search.everywhere.force.disable.experiment.classes.ml"/>
     <registryKey defaultValue="false"
                  description="When enabled ML logs and experiments in Search Everywhere will be disabled"
                  key="search.everywhere.force.disable.logging.ml"/>
@@ -45,6 +56,9 @@
     <registryKey defaultValue=""
                  description="Path to the local file-ranking model."
                  key="search.everywhere.ml.files.model.path"/>
+    <registryKey defaultValue=""
+                 description="Path to the local class-ranking model."
+                 key="search.everywhere.ml.classes.model.path"/>
 
     <statistician key="searchEverywhere"
                   implementationClass="com.intellij.ide.actions.searcheverywhere.ml.features.statistician.SearchEverywhereFileStatistician"/>
@@ -107,16 +121,20 @@
       implementation="com.intellij.ide.actions.searcheverywhere.ml.model.SearchEverywhereActionsRankingModelLoader"/>
     <rankingModelLoader
       implementation="com.intellij.ide.actions.searcheverywhere.ml.model.SearchEverywhereFilesRankingModelLoader"/>
+    <rankingModelLoader
+      implementation="com.intellij.ide.actions.searcheverywhere.ml.model.SearchEverywhereClassesRankingModelLoader"/>
   </extensions>
 
   <applicationListeners>
     <listener class="com.intellij.filePrediction.features.history.FileHistoryManagerWrapper$ProjectClosureListener"
-              topic="com.intellij.openapi.project.ProjectManagerListener"/>
+              topic="com.intellij.openapi.project.ProjectCloseListener"/>
   </applicationListeners>
+
   <projectListeners>
     <listener class="com.intellij.filePrediction.features.history.FileHistoryManagerWrapper$EditorManagerListener"
               topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
   </projectListeners>
+
   <actions>
     <action id="com.intellij.ide.actions.searcheverywhere.ml.actions.OpenFeaturesInScratchFileAction"
             class="com.intellij.ide.actions.searcheverywhere.ml.actions.OpenFeaturesInScratchFileAction">
@@ -124,5 +142,4 @@
       <keyboard-shortcut keymap="$default" first-keystroke="shift ctrl alt 1"/>
     </action>
   </actions>
-  <resource-bundle>messages.searchEverywhereMlBundle</resource-bundle>
 </idea-plugin>

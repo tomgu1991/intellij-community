@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.idea.inspections.dfa
 
 import com.intellij.codeInspection.dataFlow.jvm.descriptors.JvmVariableDescriptor
@@ -8,22 +8,23 @@ import com.intellij.codeInspection.dataFlow.value.DfaVariableValue
 import com.intellij.psi.PsiElement
 import com.intellij.psi.util.CachedValuesManager
 import com.intellij.psi.util.PsiTreeUtil
+import org.jetbrains.kotlin.builtins.getReceiverTypeFromFunctionType
 import org.jetbrains.kotlin.builtins.getValueParameterTypesFromFunctionType
 import org.jetbrains.kotlin.descriptors.DeclarationDescriptorWithSource
 import org.jetbrains.kotlin.descriptors.ValueParameterDescriptor
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToDescriptorIfAny
+import org.jetbrains.kotlin.idea.core.isOverridable
 import org.jetbrains.kotlin.idea.core.resolveType
 import org.jetbrains.kotlin.idea.refactoring.move.moveMethod.type
 import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.idea.references.readWriteAccess
 import org.jetbrains.kotlin.idea.references.resolveMainReferenceToDescriptors
 import org.jetbrains.kotlin.idea.util.findAnnotation
-import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
-import org.jetbrains.kotlin.psi.psiUtil.containingClass
 import org.jetbrains.kotlin.psi.psiUtil.containingClassOrObject
 import org.jetbrains.kotlin.psi.psiUtil.isExtensionDeclaration
 import org.jetbrains.kotlin.resolve.jvm.annotations.VOLATILE_ANNOTATION_FQ_NAME
+import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
 import org.jetbrains.kotlin.resolve.source.KotlinSourceElement
 import org.jetbrains.kotlin.types.KotlinType
 
@@ -95,6 +96,12 @@ class KtVariableDescriptor(val variable: KtCallableDeclaration) : JvmVariableDes
             val kotlinType = lambda.resolveType()?.getValueParameterTypesFromFunctionType()?.singleOrNull()?.type ?: return null
             return factory.varFactory.createVariableValue(KtItVariableDescriptor(lambda.functionLiteral, kotlinType))
         }
+        
+        fun getLambdaReceiver(factory: DfaValueFactory, lambda: KtLambdaExpression): DfaVariableValue? {
+            val receiverType = lambda.resolveType()?.getReceiverTypeFromFunctionType() ?: return null
+            val descriptor = lambda.functionLiteral.resolveToDescriptorIfAny(BodyResolveMode.FULL) ?: return null
+            return factory.varFactory.createVariableValue(KtThisDescriptor(descriptor, receiverType.toDfType()))
+        }
 
         fun createFromQualified(factory: DfaValueFactory, expr: KtExpression?): DfaVariableValue? {
             var selector = expr
@@ -118,6 +125,10 @@ class KtVariableDescriptor(val variable: KtCallableDeclaration) : JvmVariableDes
                     if (isTrackableProperty(target)) {
                         val parent = expr.parent
                         var qualifier: DfaVariableValue? = null
+                        if (target.parent is KtClassBody && target.parent.parent is KtObjectDeclaration) {
+                            // property in object: singleton, can track
+                            return varFactory.createVariableValue(KtVariableDescriptor(target), null)
+                        }
                         if (parent is KtQualifiedExpression && parent.selectorExpression == expr) {
                             val receiver = parent.receiverExpression
                             qualifier = createFromSimpleName(factory, receiver)
@@ -154,10 +165,8 @@ class KtVariableDescriptor(val variable: KtCallableDeclaration) : JvmVariableDes
         private fun isTrackableProperty(target: PsiElement?) =
             target is KtParameter && target.ownerFunction is KtPrimaryConstructor ||
             target is KtProperty && !target.hasDelegate() && target.getter == null && target.setter == null &&
-                    !target.hasModifier(KtTokens.ABSTRACT_KEYWORD) &&
-                    target.findAnnotation(VOLATILE_ANNOTATION_FQ_NAME) == null &&
-                    target.containingClass()?.isInterface() != true &&
-                    !target.isExtensionDeclaration()
+                    !target.isOverridable && !target.isExtensionDeclaration() &&
+                    target.findAnnotation(VOLATILE_ANNOTATION_FQ_NAME) == null
     }
 }
 class KtItVariableDescriptor(val lambda: KtElement, val type: KotlinType): JvmVariableDescriptor() {

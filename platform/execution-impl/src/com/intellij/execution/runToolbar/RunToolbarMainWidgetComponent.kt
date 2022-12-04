@@ -1,35 +1,36 @@
 // Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.execution.runToolbar
 
+import com.intellij.execution.ExecutionBundle
+import com.intellij.execution.runToolbar.data.RWActiveListener
 import com.intellij.execution.runToolbar.data.RWSlotManagerState
 import com.intellij.execution.runToolbar.data.RWStateListener
 import com.intellij.ide.DataManager
+import com.intellij.ide.ui.ToolbarSettings
 import com.intellij.ide.util.PropertiesComponent
-import com.intellij.openapi.actionSystem.ActionGroup
-import com.intellij.openapi.actionSystem.AnAction
-import com.intellij.openapi.actionSystem.DataProvider
-import com.intellij.openapi.actionSystem.Presentation
+import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
-import com.intellij.openapi.wm.IdeFrame
-import com.intellij.util.ui.JBUI
+import com.intellij.ui.GotItTooltip
+import java.awt.Point
 import java.awt.event.ContainerEvent
 import java.awt.event.ContainerListener
-import javax.swing.SwingUtilities
 
 class RunToolbarMainWidgetComponent(val presentation: Presentation, place: String, group: ActionGroup) :
   FixWidthSegmentedActionToolbarComponent(place, group) {
   companion object {
     private val LOG = Logger.getInstance(RunToolbarMainWidgetComponent::class.java)
     private var counter: MutableMap<Project, Int> = mutableMapOf()
+
+    private const val GOT_IT_TOOLTIP_ID = "run.toolbar.gotIt"
   }
 
   override fun logNeeded(): Boolean = RunToolbarProcess.logNeeded
 
   private var project: Project? = null
     set(value) {
-      if (field == value) return
+      if(field == value) return
       field?.let {
         remove(it)
       }
@@ -71,32 +72,32 @@ class RunToolbarMainWidgetComponent(val presentation: Presentation, place: Strin
         }
         RWSlotManagerState.SINGLE_PLAIN,
         RWSlotManagerState.MULTIPLE -> {
-          if (isOpened) RunToolbarMainSlotState.CONFIGURATION else RunToolbarMainSlotState.INFO
+          if(isOpened) RunToolbarMainSlotState.CONFIGURATION else RunToolbarMainSlotState.INFO
         }
         RWSlotManagerState.INACTIVE -> {
           RunToolbarMainSlotState.CONFIGURATION
         }
         RWSlotManagerState.MULTIPLE_WITH_MAIN -> {
-          if (isOpened) RunToolbarMainSlotState.PROCESS else RunToolbarMainSlotState.INFO
+          if(isOpened) RunToolbarMainSlotState.PROCESS else RunToolbarMainSlotState.INFO
         }
       }
 
       value
     }
 
-    if (RunToolbarProcess.logNeeded) LOG.info("MAIN SLOT state updated: $state RunToolbar")
+    if(RunToolbarProcess.logNeeded) LOG.info("MAIN SLOT state updated: $state RunToolbar")
   }
 
   override fun traceState(lastIds: List<String>, filteredIds: List<String>, ides: List<String>) {
-    if (logNeeded()) LOG.info("MAIN SLOT state: ${state} new filtered: ${filteredIds}} visible: $ides RunToolbar")
+    if(logNeeded() && filteredIds != lastIds ) LOG.info("MAIN SLOT state: ${state} new filtered: ${filteredIds}} visible: $ides RunToolbar")
   }
 
   internal var isOpened = false
     set(value) {
-      if (field == value) return
+      if(field == value) return
 
       field = value
-      if (RunToolbarProcess.logNeeded) LOG.info("MAIN SLOT isOpened: $isOpened RunToolbar")
+      if(RunToolbarProcess.logNeeded) LOG.info("MAIN SLOT isOpened: $isOpened RunToolbar")
       updateState()
 
       if (RunToolbarProcess.isExperimentalUpdatingEnabled) {
@@ -106,35 +107,87 @@ class RunToolbarMainWidgetComponent(val presentation: Presentation, place: Strin
 
   override fun isSuitableAction(action: AnAction): Boolean {
     return state?.let {
-      if (action is RTBarAction) {
+      if(action is RTBarAction) {
         action.checkMainSlotVisibility(it)
-      }
-      else true
-    } ?: false
+      } else true
+    } ?: true
   }
 
   override fun addNotify() {
     super.addNotify()
 
-    (SwingUtilities.getWindowAncestor(this) as? IdeFrame)?.project?.let {
+    CommonDataKeys.PROJECT.getData(DataManager.getInstance().getDataContext(this))?.let {
       project = it
-      RUN_CONFIG_SCALED_WIDTH = PropertiesComponent.getInstance().getInt(RUN_CONFIG_WIDTH_PROP, JBUI.scale(RUN_CONFIG_WIDTH_UNSCALED_MIN))
+
+      RunWidgetWidthHelper.getInstance(it).runConfig = RunToolbarSettings.getInstance(it).getRunConfigWidth()
+      checkGotIt(it)
     }
+  }
+
+  private var rwActiveListener: RWActiveListener? = null
+
+  private fun checkGotIt(project: Project) {
+    val instance = RunToolbarSlotManager.getInstance(project)
+    if(instance.initialized) {
+      showGotItTooltip()
+    } else {
+      val lst = object : RWActiveListener {
+        override fun initialize() {
+          if(!instance.active) return
+
+          showGotItTooltip()
+          clearListeners(project)
+        }
+      }
+      rwActiveListener = lst
+      instance.activeListener.addListener(lst)
+    }
+  }
+
+  private fun clearListeners(project: Project) {
+    rwActiveListener?.let {
+      RunToolbarSlotManager.getInstance(project).activeListener.removeListener(it)
+    }
+  }
+
+  private fun showGotItTooltip() {
+    val propertiesComponent = PropertiesComponent.getInstance()
+    val inclusionState = propertiesComponent.getInt(ToolbarSettings.INCLUSION_STATE, 0)
+    if(inclusionState != 1) return
+
+    val gotItTooltip = GotItTooltip(GOT_IT_TOOLTIP_ID, ExecutionBundle.message("run.toolbar.gotIt.text"), project)
+      .withHeader(ExecutionBundle.message("run.toolbar.gotIt.title"))
+
+
+    if(!gotItTooltip.canShow()) {
+      propertiesComponent.setValue(ToolbarSettings.INCLUSION_STATE, inclusionState+1, 0)
+      return
+    }
+
+   gotItTooltip.show(this){c, b ->
+     Point(c.width/3, c.height)
+   }
   }
 
   override fun updateWidthHandler() {
     super.updateWidthHandler()
-    PropertiesComponent.getInstance().setValue(RUN_CONFIG_WIDTH_PROP, RUN_CONFIG_SCALED_WIDTH, JBUI.scale(RUN_CONFIG_WIDTH_UNSCALED_MIN))
+    project?.let {
+      RunToolbarSettings.getInstance(it).setRunConfigWidth(RunWidgetWidthHelper.getInstance(it).runConfig)
+    }
   }
 
   private fun rebuildPopupControllerComponent() {
     popupController?.let {
-      it.updateControllerComponents(components.filter { it is PopupControllerComponent }.toMutableList())
+      it.updateControllerComponents(components.filter{it is PopupControllerComponent}.toMutableList())
     }
   }
 
   override fun removeNotify() {
-    project = null
+    project?.let {
+      clearListeners(it)
+      project = null
+    }
+
     super.removeNotify()
   }
 
@@ -186,7 +239,7 @@ class RunToolbarMainWidgetComponent(val presentation: Presentation, place: Strin
 
     removeContainerListener(componentListener)
     popupController?.let {
-      if (!Disposer.isDisposed(it)) {
+      if(!Disposer.isDisposed(it)) {
         Disposer.dispose(it)
       }
     }

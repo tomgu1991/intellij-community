@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.uast.kotlin
 
 import com.intellij.psi.PsiElement
@@ -19,6 +19,12 @@ class KotlinUSwitchEntry(
         sourcePsi.conditions.map {
             baseResolveProviderService.baseKotlinConverter.convertWhenCondition(it, this, DEFAULT_EXPRESSION_TYPES_LIST)
                 ?: UastEmptyExpression(null)
+        }
+    }
+
+    private val containingWhenExpression by lz {
+        baseResolveProviderService.baseKotlinConverter.unwrapElements(sourcePsi.parent)?.let { parentUnwrapped ->
+            languagePlugin?.convertElementWithParent(parentUnwrapped, null)
         }
     }
 
@@ -60,15 +66,16 @@ class KotlinUSwitchEntry(
                                         it, this, DEFAULT_EXPRESSION_TYPES_LIST
                                     )
                                 }
+
+                        override val jumpTarget: UElement?
+                            get() = containingWhenExpression
                     }
                 else emptyList()
         }
     }
 
     override fun convertParent(): UElement? {
-        val result = baseResolveProviderService.baseKotlinConverter.unwrapElements(sourcePsi.parent)?.let { parentUnwrapped ->
-            languagePlugin?.convertElementWithParent(parentUnwrapped, null)
-        }
-        return (result as? KotlinUSwitchExpression)?.body ?: result
+        return (containingWhenExpression as? KotlinUSwitchExpression)?.body
+            ?: containingWhenExpression
     }
 }

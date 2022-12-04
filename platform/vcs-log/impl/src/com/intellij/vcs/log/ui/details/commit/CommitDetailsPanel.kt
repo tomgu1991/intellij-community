@@ -1,13 +1,15 @@
-// Copyright 2000-2019 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.vcs.log.ui.details.commit
 
 import com.intellij.ide.IdeTooltipManager
 import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.impl.ActionToolbarImpl
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.ui.popup.Balloon
+import com.intellij.openapi.util.NlsContexts
 import com.intellij.openapi.util.registry.Registry
 import com.intellij.openapi.util.text.HtmlChunk
 import com.intellij.openapi.vcs.ui.FontUtil
@@ -37,6 +39,7 @@ class CommitDetailsPanel @JvmOverloads constructor(navigate: (CommitId) -> Unit 
     const val SIDE_BORDER = 14
     const val INTERNAL_BORDER = 10
     const val EXTERNAL_BORDER = 14
+    const val LAYOUT_MIN_WIDTH = 40
   }
 
   private val statusesActionGroup = DefaultActionGroup()
@@ -74,7 +77,7 @@ class CommitDetailsPanel @JvmOverloads constructor(navigate: (CommitId) -> Unit 
         addToCenter(hashAndAuthorPanel)
       }
 
-      val componentLayout = CC().minWidth("0").grow().push()
+      val componentLayout = CC().minWidth("$LAYOUT_MIN_WIDTH").grow().push()
       add(messagePanel, componentLayout)
       add(metadataPanel, componentLayout)
       add(branchesPanel, componentLayout)
@@ -130,6 +133,10 @@ class CommitDetailsPanel @JvmOverloads constructor(navigate: (CommitId) -> Unit 
 
   private fun statusToAction(status: VcsCommitExternalStatusPresentation) =
     object : DumbAwareAction(status.text, null, status.icon) {
+      override fun getActionUpdateThread(): ActionUpdateThread {
+        return ActionUpdateThread.BGT
+      }
+
       override fun update(e: AnActionEvent) {
         e.presentation.apply {
           isVisible = true
@@ -308,7 +315,7 @@ private class RootColorPanel(private val parent: HashAndAuthorPanel) : Wrapper(p
   }
 
   private var icon: ColorIcon? = null
-  private var tooltipText: String? = null
+  private var tooltipText: @NlsContexts.Tooltip String? = null
   private val mouseMotionListener = object : MouseAdapter() {
     override fun mouseMoved(e: MouseEvent?) {
       if (IdeTooltipManager.getInstance().hasCurrent()) {

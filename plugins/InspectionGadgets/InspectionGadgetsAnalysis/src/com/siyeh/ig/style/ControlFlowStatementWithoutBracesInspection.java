@@ -70,14 +70,14 @@ public class ControlFlowStatementWithoutBracesInspection extends BaseInspection 
     }
 
     @Override
-    protected void doFix(Project project, ProblemDescriptor descriptor) {
+    protected void doFix(@NotNull Project project, @NotNull ProblemDescriptor descriptor) {
       final PsiElement element = descriptor.getStartElement();
       final PsiElement parent = element.getParent();
       final PsiStatement statement;
       if (element instanceof PsiStatement) {
         statement = (PsiStatement)element;
       }
-      else if ((parent instanceof PsiStatement)) {
+      else if (parent instanceof PsiStatement) {
         statement = (PsiStatement)parent;
       }
       else {

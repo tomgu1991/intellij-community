@@ -46,6 +46,7 @@ internal fun generateKotlincLibraries(preferences: GeneratorPreferences, isCommu
         kotlincForIdeWithStandardNaming("kotlinc.noarg-compiler-plugin", kotlincCoordinates)
         kotlincForIdeWithStandardNaming("kotlinc.parcelize-compiler-plugin", kotlincCoordinates)
         kotlincForIdeWithStandardNaming("kotlinc.sam-with-receiver-compiler-plugin", kotlincCoordinates)
+        kotlincForIdeWithStandardNaming("kotlinc.assignment-compiler-plugin", kotlincCoordinates)
         kotlincForIdeWithStandardNaming("kotlinc.kotlin-jps-common", kotlincCoordinates)
 
         if (!isCommunity) {
@@ -60,13 +61,6 @@ internal fun generateKotlincLibraries(preferences: GeneratorPreferences, isCommu
         kotlincForIdeWithStandardNaming("kotlinc.kotlin-jps-plugin-tests", jpsPluginCoordinates)
         kotlincWithStandardNaming("kotlinc.kotlin-dist", jpsPluginCoordinates, postfix = "-for-ide")
         kotlincWithStandardNaming("kotlinc.kotlin-jps-plugin-classpath", jpsPluginCoordinates)
-
-        kotlincWithStandardNaming(
-            "kotlinc.kotlin-reflect",
-            kotlincCoordinates,
-            transitive = true,
-            excludes = listOf(MavenId(ktGroup, "kotlin-stdlib"))
-        )
 
         run {
             val mavenIds = listOf(
@@ -147,8 +141,10 @@ private fun singleJarMavenLibrary(
 
 private fun JpsLibrary.convertMavenUrlToCooperativeIfNeeded(artifactsMode: ArtifactMode, isCommunity: Boolean): JpsLibrary {
     fun convertUrl(url: JpsUrl): JpsUrl {
-        require(url.path is JpsPath.MavenRepository)
-        return JpsUrl.Jar(JpsPath.ProjectDir("../build/repo/${url.path}", isCommunity))
+        return when (url.path) {
+            is JpsPath.ProjectDir -> url
+            is JpsPath.MavenRepository -> JpsUrl.Jar(JpsPath.ProjectDir("../build/repo/${url.path.relativePath}", isCommunity))
+        }
     }
 
     return when (artifactsMode) {

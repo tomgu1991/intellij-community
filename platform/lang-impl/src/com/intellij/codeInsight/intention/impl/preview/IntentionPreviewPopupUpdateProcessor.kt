@@ -5,6 +5,7 @@ import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.codeInsight.intention.impl.preview.IntentionPreviewComponent.Companion.LOADING_PREVIEW
 import com.intellij.codeInsight.intention.impl.preview.IntentionPreviewComponent.Companion.NO_PREVIEW
 import com.intellij.codeInsight.intention.preview.IntentionPreviewInfo
+import com.intellij.codeInsight.intention.preview.IntentionPreviewInfo.Html
 import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.actionSystem.ShortcutSet
 import com.intellij.openapi.application.ModalityState
@@ -55,7 +56,9 @@ class IntentionPreviewPopupUpdateProcessor(private val project: Project,
     if (!show) return
 
     if (!::popup.isInitialized || popup.isDisposed) {
-      component = IntentionPreviewComponent(project)
+      val origPopup = originalPopup
+      if (origPopup == null || origPopup.isDisposed) return
+      component = IntentionPreviewComponent(origPopup)
 
       component.multiPanel.select(LOADING_PREVIEW, true)
 
@@ -117,7 +120,7 @@ class IntentionPreviewPopupUpdateProcessor(private val project: Project,
         editorsToRelease.addAll(editors)
         select(index, editors)
       }
-      is IntentionPreviewInfo.Html -> {
+      is Html -> {
         select(index, html = result)
       }
       else -> {
@@ -153,14 +156,14 @@ class IntentionPreviewPopupUpdateProcessor(private val project: Project,
   }
 
   private fun cancel(): Boolean {
-    editorsToRelease.forEach { EditorFactory.getInstance().releaseEditor(it) }
+    editorsToRelease.forEach { editor -> EditorFactory.getInstance().releaseEditor(editor) }
     editorsToRelease.clear()
     component.removeAll()
     show = false
     return true
   }
 
-  private fun select(index: Int, editors: List<EditorEx> = emptyList(), @NlsSafe html: IntentionPreviewInfo.Html? = null) {
+  private fun select(index: Int, editors: List<EditorEx> = emptyList(), @NlsSafe html: Html? = null) {
     justActivated = false
     popupWindow?.isVisible = true
     component.stopLoading()
@@ -222,6 +225,24 @@ class IntentionPreviewPopupUpdateProcessor(private val project: Project,
                        originalFile: PsiFile,
                        originalEditor: Editor): String? {
       return (getPreviewInfo(project, action, originalFile, originalEditor) as? IntentionPreviewDiffResult)?.psiFile?.text
+    }
+
+    /**
+     * Returns content of preview:
+     * if it's diff then new content is returned
+     * if it's HTML then text representation is returned
+     */
+    @TestOnly
+    @JvmStatic
+    fun getPreviewContent(project: Project,
+                          action: IntentionAction,
+                          originalFile: PsiFile,
+                          originalEditor: Editor): String {
+      return when(val info = getPreviewInfo(project, action, originalFile, originalEditor)) {
+        is IntentionPreviewDiffResult -> info.psiFile.text
+        is Html -> info.content().toString()
+        else -> ""
+      }
     }
 
     @TestOnly

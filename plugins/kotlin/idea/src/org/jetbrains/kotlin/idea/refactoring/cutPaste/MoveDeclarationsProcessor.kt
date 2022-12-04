@@ -1,7 +1,8 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring.cutPaste
 
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.RangeMarker
 import com.intellij.openapi.project.Project
@@ -12,14 +13,13 @@ import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiManager
 import com.intellij.refactoring.RefactoringBundle
 import com.intellij.refactoring.suggested.range
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.unsafeResolveToDescriptor
 import org.jetbrains.kotlin.idea.codeInsight.shorten.runRefactoringAndKeepDelayedRequests
 import org.jetbrains.kotlin.idea.core.util.runSynchronouslyWithProgress
 import org.jetbrains.kotlin.idea.refactoring.cutPaste.MoveDeclarationsTransferableData.Companion.STUB_RENDERER
 import org.jetbrains.kotlin.idea.refactoring.move.moveDeclarations.*
 import org.jetbrains.kotlin.idea.util.application.executeWriteCommand
-import org.jetbrains.kotlin.idea.util.application.runReadAction
 import org.jetbrains.kotlin.idea.util.getSourceRoot
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.endOffset
@@ -58,7 +58,7 @@ class MoveDeclarationsProcessor(
 
             if (targetPsiFile == sourceContainer) return null
 
-            val declarations = MoveDeclarationsCopyPasteProcessor.rangeToDeclarations(targetPsiFile, range.startOffset, range.endOffset)
+            val declarations = MoveDeclarationsCopyPasteProcessor.rangeToDeclarations(targetPsiFile, range)
             if (declarations.isEmpty() || declarations.any { it.parent !is KtFile }) return null
 
             if (sourceContainer == sourcePsiFile && sourcePsiFile.packageFqName == targetPsiFile.packageFqName) return null
@@ -187,9 +187,7 @@ class MoveDeclarationsProcessor(
         val declarations =
             MoveDeclarationsCopyPasteProcessor.rangeToDeclarations(
                 sourcePsiFile,
-                insertedRange.startOffset,
-                insertedRange.endOffset
-            )
+                insertedRange.textRange)
 
         return Pair(insertedRange, declarations)
     }

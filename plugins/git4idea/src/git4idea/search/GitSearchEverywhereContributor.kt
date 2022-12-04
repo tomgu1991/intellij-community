@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package git4idea.search
 
 import com.intellij.icons.AllIcons
@@ -18,6 +18,7 @@ import com.intellij.ui.render.IconCompCompPanel
 import com.intellij.util.Processor
 import com.intellij.util.text.Matcher
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.NamedColorUtil
 import com.intellij.util.ui.UIUtil
 import com.intellij.vcs.log.Hash
 import com.intellij.vcs.log.VcsCommitMetadata
@@ -25,6 +26,7 @@ import com.intellij.vcs.log.VcsRef
 import com.intellij.vcs.log.data.DataPack
 import com.intellij.vcs.log.data.VcsLogData
 import com.intellij.vcs.log.impl.VcsLogContentUtil
+import com.intellij.vcs.log.impl.VcsLogNavigationUtil.jumpToCommit
 import com.intellij.vcs.log.impl.VcsProjectLog
 import com.intellij.vcs.log.ui.render.LabelIcon
 import com.intellij.vcs.log.util.VcsLogUtil
@@ -70,9 +72,9 @@ internal class GitSearchEverywhereContributor(private val project: Project) : We
         it.hash.asString().startsWith(pattern, true) && dataPack.containsAll(listOf(it), storage)
       }?.let { commitId ->
         val id = storage.getCommitIndex(commitId.hash, commitId.root)
-        dataManager.miniDetailsGetter.loadCommitsData(listOf(id), {
+        dataManager.miniDetailsGetter.loadCommitsDataSynchronously(listOf(id), progressIndicator) {
           consumer.process(FoundItemDescriptor(it, COMMIT_BY_HASH.weight))
-        }, progressIndicator)
+        }
       }
     }
 
@@ -98,9 +100,9 @@ internal class GitSearchEverywhereContributor(private val project: Project) : We
 
       index.dataGetter?.filterMessages(VcsLogFilterObject.fromPattern(pattern)) { commitIdx ->
         progressIndicator.checkCanceled()
-        dataManager.miniDetailsGetter.loadCommitsData(listOf(commitIdx), {
+        dataManager.miniDetailsGetter.loadCommitsDataSynchronously(listOf(commitIdx), progressIndicator) {
           consumer.process(FoundItemDescriptor(it, COMMIT_BY_MESSAGE.weight))
-        }, progressIndicator)
+        }
       }
     }
   }
@@ -156,7 +158,7 @@ internal class GitSearchEverywhereContributor(private val project: Project) : We
           is VcsCommitMetadata -> value.id.toShortString()
           else -> null
         }
-        foreground = if (!isSelected) UIUtil.getInactiveTextColor() else UIUtil.getListForeground(isSelected, cellHasFocus)
+        foreground = if (!isSelected) NamedColorUtil.getInactiveTextColor() else UIUtil.getListForeground(isSelected, cellHasFocus)
       }
       return panel
     }
@@ -192,9 +194,7 @@ internal class GitSearchEverywhereContributor(private val project: Project) : We
     }
 
     if (hash != null && root != null) {
-      VcsLogContentUtil.runInMainLog(project) {
-        it.vcsLog.jumpToCommit(hash, root)
-      }
+      VcsLogContentUtil.runInMainLog(project) { it.jumpToCommit(hash, root, false, true) }
       return true
     }
     return false

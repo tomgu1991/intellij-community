@@ -11,8 +11,6 @@
     <plugin id="com.intellij.modules.lang"/>
   </dependencies>
 
-  <depends optional="true" config-file="ml-in-se.xml">com.intellij.searcheverywhere.ml</depends>
-
   <extensions defaultExtensionNs="com.intellij">
     <!-- YAML -->
     <additionalTextAttributes scheme="Default" file="colorSchemes/YAMLDefault.xml"/>
@@ -65,6 +63,7 @@
     <renamePsiElementProcessor implementation="org.jetbrains.yaml.resolve.YAMLRenamePsiElementProcessor"/>
     <languageInjectionContributor implementationClass="org.jetbrains.yaml.schema.YamlJsonSchemaLanguageInjector" language="yaml"/>
     <languageInjectionPerformer implementationClass="org.jetbrains.yaml.YamlLanguageInjectionPerformer" language="yaml"/>
+    <lang.inspectionSuppressor language="yaml" implementationClass="org.jetbrains.yaml.YAMLlInspectionSuppressor"/>
     <annotator language="yaml" implementationClass="org.jetbrains.yaml.annotator.YAMLInvalidBlockChildrenErrorAnnotator"/>
     <applicationService serviceImplementation="org.jetbrains.yaml.smart.YAMLEditorOptions"/>
     <editorSmartKeysConfigurable instance="org.jetbrains.yaml.smart.YAMLSmartOptionsProvider"

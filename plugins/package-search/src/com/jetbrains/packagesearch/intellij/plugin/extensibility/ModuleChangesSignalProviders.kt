@@ -18,9 +18,9 @@ package com.jetbrains.packagesearch.intellij.plugin.extensibility
 
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
-import com.intellij.util.messages.SimpleMessageBusConnection
-import com.jetbrains.packagesearch.intellij.plugin.util.dumbService
 import com.jetbrains.packagesearch.intellij.plugin.util.filesChangedEventFlow
+import com.jetbrains.packagesearch.intellij.plugin.util.send
+import com.jetbrains.packagesearch.intellij.plugin.util.toNioPathOrNull
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
@@ -30,32 +30,8 @@ import kotlinx.coroutines.flow.flatMapMerge
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import java.nio.file.Path
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.name
-
-abstract class AbstractMessageBusModuleChangesSignalProvider : ModuleChangesSignalProvider {
-
-    override fun registerModuleChangesListener(project: Project, listener: Runnable): Subscription {
-        val isSubscribed = AtomicBoolean(true)
-        val simpleConnect: SimpleMessageBusConnection = project.messageBus.simpleConnect()
-        registerModuleChangesListener(project, simpleConnect) { if (isSubscribed.get()) listener() }
-        return Subscription {
-            isSubscribed.set(false)
-            simpleConnect.disconnect()
-        }
-    }
-
-    protected abstract fun registerModuleChangesListener(project: Project, bus: SimpleMessageBusConnection, listener: Runnable)
-}
-
-abstract class DumbAwareMessageBusModuleChangesSignalProvider : AbstractMessageBusModuleChangesSignalProvider() {
-
-    override fun registerModuleChangesListener(project: Project, bus: SimpleMessageBusConnection, listener: Runnable) =
-        registerDumbAwareModuleChangesListener(project, bus) { project.dumbService.runWhenSmart(listener) }
-
-    abstract fun registerDumbAwareModuleChangesListener(project: Project, bus: SimpleMessageBusConnection, listener: Runnable)
-}
 
 open class FileWatcherSignalProvider(private val paths: List<Path>) : FlowModuleChangesSignalProvider {
 
@@ -71,10 +47,11 @@ open class FileWatcherSignalProvider(private val paths: List<Path>) : FlowModule
         return channelFlow {
             project.filesChangedEventFlow.flatMapMerge { it.asFlow() }
                 .filter { vFileEvent -> paths.any { it.name == vFileEvent.file?.name } } // check the file name before resolving the absolute path string
-                .filter { vFileEvent -> absolutePathStrings.any { it == vFileEvent.file?.toNioPath()?.absolutePathString() } }
-                .onEach { send(Unit) }
+                .filter { vFileEvent -> absolutePathStrings.any { it == vFileEvent.file?.toNioPathOrNull()?.absolutePathString() } }
+                .onEach { send() }
                 .launchIn(this)
             awaitClose { watchRequests.forEach { request -> localFs.removeWatchedRoot(request) } }
         }
     }
 }
+

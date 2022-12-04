@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.codeInliner
 
@@ -47,7 +47,7 @@ internal fun MutableCodeToInline.introduceValue(
 ) {
     assert(usages.all { it in this })
 
-    val psiFactory = KtPsiFactory(value)
+    val psiFactory = KtPsiFactory(value.project)
 
     val bindingContext = expressionToBeReplaced.analyze(BodyResolveMode.FULL)
 

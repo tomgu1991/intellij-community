@@ -1,6 +1,7 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.keymap.impl.ui;
 
+import com.intellij.diagnostic.PluginException;
 import com.intellij.icons.AllIcons;
 import com.intellij.ide.IdeBundle;
 import com.intellij.ide.actionMacro.ActionMacro;
@@ -8,6 +9,7 @@ import com.intellij.ide.plugins.IdeaPluginDescriptor;
 import com.intellij.ide.plugins.PluginManagerCore;
 import com.intellij.ide.ui.customization.ActionUrl;
 import com.intellij.ide.ui.search.SearchUtil;
+import com.intellij.idea.ActionsBundle;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.actionSystem.ex.ActionManagerEx;
 import com.intellij.openapi.actionSystem.ex.QuickList;
@@ -89,7 +91,7 @@ public final class ActionsTreeUtil {
       .unique().toList();
     for (PluginId pluginId : pluginsIds) {
       if (PluginManagerCore.CORE_ID.equals(pluginId)
-          || KeymapExtension.EXTENSION_POINT_NAME.extensions().anyMatch(e -> e.skipPluginGroup(pluginId))) {
+          || KeymapExtension.EXTENSION_POINT_NAME.getExtensionList().stream().anyMatch(e -> e.skipPluginGroup(pluginId))) {
         continue;
       }
       String[] pluginActions = actionManager.getPluginActions(pluginId);
@@ -250,7 +252,9 @@ public final class ActionsTreeUtil {
         }
       }
       else if (action instanceof Separator) {
-        group.addSeparator();
+        if (filtered == null || filtered.value(action)) {
+          group.addSeparator();
+        }
       }
       else {
         String id = action instanceof ActionStub ? ((ActionStub)action).getId() : actionManager.getId(action);
@@ -273,10 +277,15 @@ public final class ActionsTreeUtil {
     path.add(groupName);
 
     ActionManager actionManager = ActionManager.getInstance();
-    Group group = new Group(groupName, actionManager.getId(actionGroup), actionGroup.getTemplatePresentation().getIcon());
+    String groupId = actionManager.getId(actionGroup);
+    Group group = new Group(groupName, groupId, actionGroup.getTemplatePresentation().getIcon());
     List<AnAction> children = ContainerUtil.newArrayList(getActions(actionGroup, actionManager));
 
     for (ActionUrl actionUrl : actionUrls) {
+      Object component = actionUrl.getComponent();
+      if (component instanceof Group correctedGroup && Objects.equals(correctedGroup.getId(), groupId)) {
+        group.setForceShowAsPopup(correctedGroup.isForceShowAsPopup());
+      }
       if (areEqual(path, actionUrl)) { //actual path is shorter when we use custom root
         AnAction componentAction = actionUrl.getComponentAction();
         if (componentAction != null) {
@@ -685,7 +694,7 @@ public final class ActionsTreeUtil {
       }
     }
     else if (action instanceof Separator) {
-      if (group instanceof Group) {
+      if (group instanceof Group && (filtered == null || filtered.value(action))) {
         ((Group)group).addSeparator();
       }
     }
@@ -706,9 +715,17 @@ public final class ActionsTreeUtil {
 
   private static AnAction @NotNull [] getActions(@NotNull ActionGroup group, @NotNull ActionManager actionManager) {
     // ActionManagerImpl#preloadActions does not preload action groups, e.g. File | New, so unstub it
-    ActionGroup adjusted = group instanceof ActionGroupStub
-                           ? (ActionGroup)actionManager.getAction(((ActionGroupStub)group).getId())
-                           : group;
+    ActionGroup adjusted = group;
+    if (group instanceof ActionGroupStub) {
+      String id = ((ActionGroupStub)group).getId();
+      AnAction action = actionManager.getAction(id);
+      if (action instanceof ActionGroup) {
+        adjusted = (ActionGroup)action;
+      }
+      else {
+        PluginException.logPluginError(LOG, "not an ActionGroup: " + action + " id=" + id, null, action.getClass());
+      }
+    }
     return adjusted instanceof DefaultActionGroup
            ? ((DefaultActionGroup)adjusted).getChildActionsOrStubs()
            : adjusted.getChildren(null);
@@ -731,6 +748,21 @@ public final class ActionsTreeUtil {
   @Nls
   public static String getMainToolbar() {
     return KeyMapBundle.message("main.toolbar.title");
+  }
+
+  @Nls
+  public static String getMainToolbarLeft() {
+    return ActionsBundle.message("group.MainToolbarLeft.text");
+  }
+
+  @Nls
+  public static String getMainToolbarCenter() {
+    return ActionsBundle.message("group.MainToolbarCenter.text");
+  }
+
+  @Nls
+  public static String getMainToolbarRight() {
+    return ActionsBundle.message("group.MainToolbarRight.text");
   }
 
   @Nls
@@ -773,23 +805,9 @@ public final class ActionsTreeUtil {
     return KeyMapBundle.message("editor.tab.popup.menu.title");
   }
 
-  @Nls
-  public static String getFavoritesPopup() {
-    return KeyMapBundle.message("favorites.popup.title");
-  }
 
   @Nls
   public static String getProjectViewPopup() {
     return KeyMapBundle.message("project.view.popup.menu.title");
-  }
-
-  @Nls
-  public static String getCommanderPopup() {
-    return KeyMapBundle.message("commender.view.popup.menu.title");
-  }
-
-  @Nls
-  public static String getJ2EEPopup() {
-    return KeyMapBundle.message("j2ee.view.popup.menu.title");
   }
 }

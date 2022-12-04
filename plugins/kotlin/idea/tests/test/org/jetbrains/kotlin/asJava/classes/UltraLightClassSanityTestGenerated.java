@@ -6,7 +6,7 @@ import com.intellij.testFramework.TestDataPath;
 import org.jetbrains.kotlin.idea.test.JUnit3RunnerWithInners;
 import org.jetbrains.kotlin.idea.test.KotlinTestUtils;
 import org.jetbrains.kotlin.test.TestMetadata;
-import org.jetbrains.kotlin.idea.test.TestRoot;
+import org.jetbrains.kotlin.idea.base.test.TestRoot;
 import org.junit.runner.RunWith;
 import static org.jetbrains.kotlin.idea.base.plugin.artifacts.TestKotlinArtifacts.compilerTestData;
 
@@ -83,6 +83,11 @@ public abstract class UltraLightClassSanityTestGenerated extends AbstractUltraLi
             runTest(compilerTestData("compiler/testData/asJava/lightClasses/compilationErrors/ExpectedNestedClassInObject.kt"));
         }
 
+        @TestMetadata("FunctionWithoutName.kt")
+        public void testFunctionWithoutName() throws Exception {
+            runTest(compilerTestData("compiler/testData/asJava/lightClasses/compilationErrors/FunctionWithoutName.kt"));
+        }
+
         @TestMetadata("JvmPackageName.kt")
         public void testJvmPackageName() throws Exception {
             runTest(compilerTestData("compiler/testData/asJava/lightClasses/compilationErrors/JvmPackageName.kt"));
@@ -96,6 +101,11 @@ public abstract class UltraLightClassSanityTestGenerated extends AbstractUltraLi
         @TestMetadata("PrivateInTrait.kt")
         public void testPrivateInTrait() throws Exception {
             runTest(compilerTestData("compiler/testData/asJava/lightClasses/compilationErrors/PrivateInTrait.kt"));
+        }
+
+        @TestMetadata("PropertyWithoutName.kt")
+        public void testPropertyWithoutName() throws Exception {
+            runTest(compilerTestData("compiler/testData/asJava/lightClasses/compilationErrors/PropertyWithoutName.kt"));
         }
 
         @TestMetadata("RepetableAnnotations.kt")
@@ -528,6 +538,11 @@ public abstract class UltraLightClassSanityTestGenerated extends AbstractUltraLi
         @TestMetadata("DollarsInNameNoPackage.kt")
         public void testDollarsInNameNoPackage() throws Exception {
             runTest(compilerTestData("compiler/testData/asJava/lightClasses/DollarsInNameNoPackage.kt"));
+        }
+
+        @TestMetadata("EnumEntry.kt")
+        public void testEnumEntry() throws Exception {
+            runTest(compilerTestData("compiler/testData/asJava/lightClasses/EnumEntry.kt"));
         }
 
         @TestMetadata("ExtendingInterfaceWithDefaultImpls.kt")

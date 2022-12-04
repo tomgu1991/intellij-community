@@ -16,10 +16,13 @@
 package com.intellij.psi.formatter;
 
 import com.intellij.lang.ASTNode;
+import com.intellij.lang.Language;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.impl.source.tree.LeafElement;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Defines common contract for strategy that determines if particular symbol or sequence of symbols may be treated as
@@ -29,6 +32,7 @@ import org.jetbrains.annotations.NotNull;
  * 'white space symbols' if necessary.
  *
  * @author Denis Zhdanov
+ * @see WhiteSpaceFormattingStrategyFactory
  */
 public interface WhiteSpaceFormattingStrategy {
 
@@ -46,6 +50,22 @@ public interface WhiteSpaceFormattingStrategy {
   int check(@NotNull CharSequence text, int start, int end);
 
   /**
+   * Checks if given sub-sequence of the given text contains symbols that may be treated as white spaces.
+   *
+   * @param startElementLanguage specifies Language at the start offset
+   * @param start                start offset to use with the given text (inclusive)
+   * @param end                  end offset to use with the given text (exclusive)
+   * @return offset of the first symbol that belongs to {@code [startOffset; endOffset)} range
+   * and is not treated as white space by the current strategy <b>or</b> value that is greater
+   * or equal to the given {@code 'end'} parameter if all target sub-sequence symbols
+   * can be treated as white spaces
+   */
+  @ApiStatus.Experimental
+  default int check(@Nullable Language startElementLanguage, @NotNull CharSequence text, int start, int end) {
+    return check(text, start, end);
+  }
+
+  /**
    * Allows to answer if given node should be treated as white space node.
    * 
    * @param node  node to check
@@ -58,6 +78,7 @@ public interface WhiteSpaceFormattingStrategy {
    *            {@code false} to indicate that current strategy should be used in composition with default strategy
    *            if any, i.e. particular symbols sequence should be considered as white spaces if any of composed
    *            strategies defines so
+   * @see WhiteSpaceFormattingStrategyFactory#DEFAULT_STRATEGY
    */
   boolean replaceDefaultStrategy();
 

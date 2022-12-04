@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring.changeSignature
 
@@ -24,7 +24,7 @@ import org.jetbrains.kotlin.asJava.getRepresentativeLightMethod
 import org.jetbrains.kotlin.descriptors.CallableDescriptor
 import org.jetbrains.kotlin.descriptors.ClassDescriptor
 import org.jetbrains.kotlin.descriptors.ClassKind
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.codeInsight.DescriptorToSourceUtilsIde
 import org.jetbrains.kotlin.idea.refactoring.CallableRefactoring
 import org.jetbrains.kotlin.idea.refactoring.broadcastRefactoringExit
@@ -32,7 +32,6 @@ import org.jetbrains.kotlin.idea.refactoring.changeSignature.ui.KotlinChangeProp
 import org.jetbrains.kotlin.idea.refactoring.changeSignature.ui.KotlinChangeSignatureDialog
 import org.jetbrains.kotlin.idea.refactoring.createJavaMethod
 import org.jetbrains.kotlin.idea.util.application.isUnitTestMode
-import org.jetbrains.kotlin.idea.util.application.withPsiAttachment
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.utils.KotlinExceptionWithAttachments
 
@@ -66,12 +65,12 @@ fun runChangeSignature(
 }
 
 class KotlinChangeSignature(
-    project: Project,
-    editor: Editor?,
-    callableDescriptor: CallableDescriptor,
-    val configuration: KotlinChangeSignatureConfiguration,
-    val defaultValueContext: PsiElement,
-    @NlsContexts.Command commandName: String?
+  project: Project,
+  editor: Editor?,
+  callableDescriptor: CallableDescriptor,
+  val configuration: KotlinChangeSignatureConfiguration,
+  private val defaultValueContext: PsiElement,
+  @NlsContexts.Command commandName: String?
 ) : CallableRefactoring<CallableDescriptor>(
     project,
     editor,
@@ -216,7 +215,7 @@ class KotlinChangeSignature(
             append("class $previewClassName {\n").append(ktSignature).append("{}\n}")
             toString()
         }
-        val dummyFile = KtPsiFactory(project).createFileWithLightClassSupport("dummy.kt", dummyFileText, originalMethod)
+        val dummyFile = KtPsiFactory(originalMethod.project).createPhysicalFile("dummy.kt", dummyFileText)
         val dummyDeclaration = (dummyFile.declarations.first() as KtClass).body!!.declarations.first()
 
         // Convert to PsiMethod which can be used in Change Signature dialog

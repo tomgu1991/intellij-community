@@ -16,6 +16,7 @@
 
 package com.jetbrains.packagesearch.intellij.plugin.intentions
 
+import com.intellij.codeInsight.intention.FileModifier.SafeFieldForPreview
 import com.intellij.codeInsight.intention.HighPriorityAction
 import com.intellij.codeInspection.LocalQuickFixAndIntentionActionOnPsiElement
 import com.intellij.openapi.editor.Editor
@@ -31,8 +32,8 @@ import com.jetbrains.packagesearch.intellij.plugin.ui.toolwindow.panels.manageme
 internal class PackageSearchDependencyUpgradeQuickFix(
     element: PsiElement,
     private val identifier: PackageIdentifier,
-    private val targetVersion: PackageVersion.Named,
-    private val operations: List<PackageSearchOperation<*>>
+    @SafeFieldForPreview private val targetVersion: PackageVersion.Named,
+    @SafeFieldForPreview private val operations: List<PackageSearchOperation<*>>
 ) : LocalQuickFixAndIntentionActionOnPsiElement(element), HighPriorityAction {
 
     override fun getFamilyName() = PackageSearchBundle.message("packagesearch.quickfix.upgrade.family")

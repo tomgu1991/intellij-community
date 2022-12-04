@@ -2,6 +2,7 @@
 package com.intellij.openapi.project;
 
 import com.intellij.openapi.Disposable;
+import com.intellij.openapi.application.AccessToken;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.ReadAction;
@@ -34,8 +35,6 @@ import java.util.*;
  * {@link com.intellij.openapi.application.NonBlockingReadAction#inSmartMode}.
  * <p>
  * More information about dumb mode could be found here: {@link IndexNotReadyException}
- *
- * @author peter
  */
 public abstract class DumbService {
   @Topic.ProjectLevel
@@ -70,7 +69,7 @@ public abstract class DumbService {
     }
 
     List<T> result = new ArrayList<>(size);
-    for (T element : ((ExtensionPointImpl<T>)point)) {
+    for (T element : (ExtensionPointImpl<T>)point) {
       if (isDumbAware(element)) {
         result.add(element);
       }
@@ -360,21 +359,6 @@ public abstract class DumbService {
   }
 
   /**
-   * Invokes the given runnable with alternative resolve set to true.
-   *
-   * @see #setAlternativeResolveEnabled(boolean)
-   */
-  public void withAlternativeResolveEnabledForcibly(@NotNull Runnable runnable) {
-    setAlternativeResolveEnabled(true);
-    try {
-      runnable.run();
-    }
-    finally {
-      setAlternativeResolveEnabled(false);
-    }
-  }
-
-  /**
    * Invokes the given computable with alternative resolve set to true if dumb mode is enabled.
    *
    * @see #setAlternativeResolveEnabled(boolean)
@@ -387,21 +371,6 @@ public abstract class DumbService {
     }
     finally {
       if (isDumb) setAlternativeResolveEnabled(false);
-    }
-  }
-
-  /**
-   * Invokes the given computable with alternative resolve set to true.
-   *
-   * @see #setAlternativeResolveEnabled(boolean)
-   */
-  public <T, E extends Throwable> T computeWithAlternativeResolveEnabledForcibly(@NotNull ThrowableComputable<T, E> runnable) throws E {
-    setAlternativeResolveEnabled(true);
-    try {
-      return runnable.compute();
-    }
-    finally {
-      setAlternativeResolveEnabled(false);
     }
   }
 
@@ -446,7 +415,7 @@ public abstract class DumbService {
   public abstract void suspendIndexingAndRun(@NotNull @NlsContexts.ProgressText String activityName, @NotNull Runnable activity);
 
   @ApiStatus.Internal
-  public abstract void runWithWaitForSmartModeDisabled(@NotNull Runnable runnable);
+  public abstract AccessToken runWithWaitForSmartModeDisabled();
 
   /**
    * @see #DUMB_MODE

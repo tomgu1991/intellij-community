@@ -14,14 +14,14 @@ import com.intellij.ui.*
 import java.awt.event.KeyEvent
 import javax.swing.KeyStroke
 
-class TextCompletionComboBox<T>(
+open class TextCompletionComboBox<T>(
   project: Project?,
   private val converter: TextCompletionComboBoxConverter<T>
 ) : TextCompletionField<T>(project) {
 
   val collectionModel = CollectionComboBoxModel<T>()
 
-  val selectedItemProperty = AtomicProperty(converter.getItem(""))
+  private val selectedItemProperty = AtomicProperty(converter.getItem(""))
   var selectedItem by selectedItemProperty
 
   override fun getCompletionVariants(): List<T> {

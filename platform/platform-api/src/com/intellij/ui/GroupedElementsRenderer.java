@@ -5,6 +5,7 @@ import com.intellij.openapi.util.NlsContexts;
 import com.intellij.ui.components.panels.NonOpaquePanel;
 import com.intellij.ui.components.panels.OpaquePanel;
 import com.intellij.util.ui.JBUI;
+import com.intellij.util.ui.NamedColorUtil;
 import com.intellij.util.ui.UIUtil;
 import com.intellij.util.ui.accessibility.AccessibleContextUtil;
 
@@ -51,16 +52,19 @@ public abstract class GroupedElementsRenderer implements Accessible {
     AccessibleContextUtil.setDescription(myRendererComponent, myTextLabel);
 
     setComponentIcon(icon, disabledIcon);
-
-    if (!ExperimentalUI.isNewUI()) {
-      setSelected(myComponent, isSelected);
-    }
-
-    setSelected(myTextLabel, isSelected);
-
+    updateSelection(isSelected, myComponent, myTextLabel);
     myRendererComponent.setPreferredWidth(preferredForcedWidth);
 
     return myRendererComponent;
+  }
+
+  protected void updateSelection(boolean isSelected, JComponent component, JComponent innerComponent) {
+    if (!ExperimentalUI.isNewUI()) {
+      setSelected(component, isSelected);
+    } else {
+      UIUtil.setNotOpaqueRecursively(component);
+    }
+    setSelected(innerComponent, isSelected);
   }
 
   protected void setComponentIcon(Icon icon, Icon disabledIcon) {
@@ -128,7 +132,7 @@ public abstract class GroupedElementsRenderer implements Accessible {
 
     @Override
     protected final Color getSelectionForeground() {
-      return UIUtil.getListSelectionForeground(true);
+      return NamedColorUtil.getListSelectionForeground(true);
     }
 
     @Override
@@ -171,7 +175,7 @@ public abstract class GroupedElementsRenderer implements Accessible {
     }
   }
 
-  protected class MyComponent extends OpaquePanel {
+  public class MyComponent extends OpaquePanel {
 
     private int myPrefWidth = -1;
 

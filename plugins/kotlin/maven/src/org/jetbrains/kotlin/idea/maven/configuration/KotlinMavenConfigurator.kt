@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.maven.configuration
 
@@ -6,6 +6,7 @@ import com.intellij.codeInsight.CodeInsightUtilCore
 import com.intellij.codeInsight.daemon.impl.quickfix.OrderEntryFix
 import com.intellij.ide.actions.OpenFileAction
 import com.intellij.ide.highlighter.JavaFileType
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.module.Module
@@ -30,15 +31,16 @@ import org.jetbrains.idea.maven.project.MavenProjectsManager
 import org.jetbrains.idea.maven.utils.MavenArtifactScope
 import org.jetbrains.kotlin.config.ApiVersion
 import org.jetbrains.kotlin.config.LanguageFeature
+import org.jetbrains.kotlin.idea.base.projectStructure.ModuleSourceRootGroup
 import org.jetbrains.kotlin.idea.compiler.configuration.IdeKotlinVersion
 import org.jetbrains.kotlin.idea.configuration.*
 import org.jetbrains.kotlin.idea.facet.getRuntimeLibraryVersion
 import org.jetbrains.kotlin.idea.facet.getRuntimeLibraryVersionOrDefault
 import org.jetbrains.kotlin.idea.framework.ui.ConfigureDialogWithModulesAndVersion
 import org.jetbrains.kotlin.idea.maven.*
-import org.jetbrains.kotlin.idea.quickfix.ChangeGeneralLanguageFeatureSupportFix
-import org.jetbrains.kotlin.idea.util.application.runReadAction
-import org.jetbrains.kotlin.idea.versions.LibraryJarDescriptor
+import org.jetbrains.kotlin.idea.projectConfiguration.LibraryJarDescriptor
+import org.jetbrains.kotlin.idea.configuration.NotificationMessageCollector
+import org.jetbrains.kotlin.idea.quickfix.AbstractChangeFeatureSupportLevelFix
 
 abstract class KotlinMavenConfigurator
 protected constructor(
@@ -105,7 +107,7 @@ protected constructor(
         if (!dialog.isOK) return
 
         WriteCommandAction.runWriteCommandAction(project) {
-            val collector = createConfigureKotlinNotificationCollector(project)
+            val collector = NotificationMessageCollector.create(project)
             for (module in excludeMavenChildrenModules(project, dialog.modulesToConfigure)) {
                 val file = findModulePomFile(module)
                 if (file != null && canConfigureFile(file)) {
@@ -256,7 +258,7 @@ protected constructor(
     ) {
         val sinceVersion = feature.sinceApiVersion
 
-        val messageTitle = ChangeGeneralLanguageFeatureSupportFix.getFixText(feature, state)
+        val messageTitle = AbstractChangeFeatureSupportLevelFix.getFixText(state, feature.presentableName)
         if (state != LanguageFeature.State.DISABLED && getRuntimeLibraryVersionOrDefault(module).apiVersion < sinceVersion) {
             Messages.showErrorDialog(
                 module.project,

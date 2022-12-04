@@ -1,9 +1,10 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.reporter
 
 import com.intellij.diagnostic.ReportMessages
 import com.intellij.ide.DataManager
+import com.intellij.ide.plugins.PluginUpdateStatus
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.CommonDataKeys
@@ -16,9 +17,8 @@ import com.intellij.openapi.ui.Messages
 import com.intellij.util.Consumer
 import com.intellij.util.ThreeState
 import org.jetbrains.annotations.Nls
-import org.jetbrains.kotlin.idea.KotlinBundle
 import org.jetbrains.kotlin.idea.KotlinPluginUpdater
-import org.jetbrains.kotlin.idea.PluginUpdateStatus
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinIdePlugin
 import org.jetbrains.kotlin.idea.util.application.isApplicationInternalMode
 import org.jetbrains.kotlin.idea.util.application.isUnitTestMode

@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring.move.moveMethod;
 
@@ -18,14 +18,14 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.kotlin.asJava.LightClassUtilsKt;
 import org.jetbrains.kotlin.asJava.classes.KtLightClassForSourceDeclaration;
-import org.jetbrains.kotlin.idea.KotlinBundle;
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle;
 import org.jetbrains.kotlin.idea.KotlinFileType;
 import org.jetbrains.kotlin.idea.KotlinIconProvider;
 import org.jetbrains.kotlin.idea.base.codeInsight.KotlinNameSuggestionProvider;
 import org.jetbrains.kotlin.idea.base.fe10.codeInsight.newDeclaration.Fe10KotlinNameSuggester;
 import org.jetbrains.kotlin.idea.base.fe10.codeInsight.newDeclaration.Fe10KotlinNewDeclarationNameValidator;
 import org.jetbrains.kotlin.idea.completion.CompletionUtilsKt;
-import org.jetbrains.kotlin.idea.core.completion.DeclarationLookupObject;
+import org.jetbrains.kotlin.idea.core.completion.DescriptorBasedDeclarationLookupObject;
 import org.jetbrains.kotlin.idea.core.completion.PackageLookupObject;
 import org.jetbrains.kotlin.idea.projectView.KtClassOrObjectTreeNode;
 import org.jetbrains.kotlin.idea.refactoring.KotlinRefactoringUtilKt;
@@ -211,8 +211,8 @@ public class MoveKotlinMethodDialog extends RefactoringDialog {
                     codeFragment,
                     lookupElement -> {
                         Object lookupObject = lookupElement.getObject();
-                        if (!(lookupObject instanceof DeclarationLookupObject)) return false;
-                        PsiElement psiElement = ((DeclarationLookupObject) lookupObject).getPsiElement();
+                        if (!(lookupObject instanceof DescriptorBasedDeclarationLookupObject)) return false;
+                        PsiElement psiElement = ((DescriptorBasedDeclarationLookupObject) lookupObject).getPsiElement();
                         if (lookupObject instanceof PackageLookupObject) return true;
                         return (psiElement instanceof KtObjectDeclaration) && KotlinRefactoringUtilKt.canRefactor(psiElement);
                     }

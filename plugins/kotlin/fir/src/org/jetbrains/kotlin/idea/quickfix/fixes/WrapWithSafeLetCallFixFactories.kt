@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package org.jetbrains.kotlin.idea.quickfix.fixes
 
@@ -10,13 +10,14 @@ import org.jetbrains.kotlin.analysis.api.KtAnalysisSession
 import org.jetbrains.kotlin.analysis.api.calls.*
 import org.jetbrains.kotlin.analysis.api.fir.diagnostics.KtFirDiagnostic
 import org.jetbrains.kotlin.analysis.api.symbols.KtCallableSymbol
-import org.jetbrains.kotlin.idea.KotlinBundle
-import org.jetbrains.kotlin.idea.api.applicator.HLApplicator
-import org.jetbrains.kotlin.idea.api.applicator.HLApplicatorInput
-import org.jetbrains.kotlin.idea.api.applicator.applicator
+import org.jetbrains.kotlin.analysis.api.symbols.receiverType
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
+import org.jetbrains.kotlin.idea.codeinsight.api.applicators.KotlinApplicator
+import org.jetbrains.kotlin.idea.codeinsight.api.applicators.KotlinApplicatorInput
+import org.jetbrains.kotlin.idea.codeinsight.api.applicators.applicator
+import org.jetbrains.kotlin.idea.codeinsight.api.applicators.fixes.KotlinApplicatorBasedQuickFix
+import org.jetbrains.kotlin.idea.codeinsight.api.applicators.fixes.diagnosticFixFactory
 import org.jetbrains.kotlin.idea.core.FirKotlinNameSuggester
-import org.jetbrains.kotlin.idea.fir.api.fixes.HLQuickFix
-import org.jetbrains.kotlin.idea.fir.api.fixes.diagnosticFixFactory
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.*
@@ -27,7 +28,7 @@ object WrapWithSafeLetCallFixFactories {
         val nullableExpressionPointer: SmartPsiElementPointer<KtExpression>,
         val suggestedVariableName: String,
         val isImplicitInvokeCallToMemberProperty: Boolean,
-    ) : HLApplicatorInput
+    ) : KotlinApplicatorInput
 
     private val LOG = Logger.getInstance(this::class.java)
 
@@ -58,7 +59,7 @@ object WrapWithSafeLetCallFixFactories {
      *  `isImplicitInvokeCallToMemberProperty` controls the behavior when hoisting up the nullable expression. It should be set to true
      *  if the call is to a invocable member property.
      */
-    val applicator: HLApplicator<KtExpression, Input> = applicator {
+    val applicator: KotlinApplicator<KtExpression, Input> = applicator {
         familyAndActionName(KotlinBundle.lazyMessage("wrap.with.let.call"))
         applyTo { targetExpression, input ->
             val nullableExpression = input.nullableExpressionPointer.element ?: return@applyTo
@@ -70,12 +71,12 @@ object WrapWithSafeLetCallFixFactories {
                 return@applyTo
             }
             val suggestedVariableName = input.suggestedVariableName
-            val factory = KtPsiFactory(targetExpression)
+            val psiFactory = KtPsiFactory(targetExpression.project)
 
             fun getNewExpression(nullableExpressionText: String, expressionUnderLetText: String): KtExpression {
                 return when (suggestedVariableName) {
-                    "it" -> factory.createExpressionByPattern("$0?.let { $1 }", nullableExpressionText, expressionUnderLetText)
-                    else -> factory.createExpressionByPattern(
+                    "it" -> psiFactory.createExpressionByPattern("$0?.let { $1 }", nullableExpressionText, expressionUnderLetText)
+                    else -> psiFactory.createExpressionByPattern(
                         "$0?.let { $1 -> $2 }",
                         nullableExpressionText,
                         suggestedVariableName,
@@ -120,7 +121,7 @@ object WrapWithSafeLetCallFixFactories {
                 if (qualifiedExpression == targetExpression) {
                     targetExpression.replace(getNewExpression(nullableExpressionText, newInvokeCallText))
                 } else {
-                    qualifiedExpression.replace(factory.createExpression(newInvokeCallText))
+                    qualifiedExpression.replace(psiFactory.createExpression(newInvokeCallText))
                     targetExpression.replace(getNewExpression(nullableExpressionText, targetExpression.text))
                 }
 
@@ -129,7 +130,7 @@ object WrapWithSafeLetCallFixFactories {
                     is KtBinaryExpression, is KtBinaryExpressionWithTypeRHS -> "(${nullableExpression.text})"
                     else -> nullableExpression.text
                 }
-                nullableExpression.replace(factory.createExpression(suggestedVariableName))
+                nullableExpression.replace(psiFactory.createExpression(suggestedVariableName))
                 targetExpression.replace(getNewExpression(nullableExpressionText, targetExpression.text))
             }
         }
@@ -176,7 +177,7 @@ object WrapWithSafeLetCallFixFactories {
     private fun KtAnalysisSession.createWrapWithSafeLetCallInputForNullableExpressionIfMoreThanImmediateParentIsWrapped(
         nullableExpression: KtExpression?,
         isImplicitInvokeCallToMemberProperty: Boolean = false,
-    ): List<HLQuickFix<KtExpression, Input>> {
+    ): List<KotlinApplicatorBasedQuickFix<KtExpression, Input>> {
         val surroundingExpression = nullableExpression?.surroundingExpression
         if (
             surroundingExpression == null ||
@@ -201,7 +202,7 @@ object WrapWithSafeLetCallFixFactories {
         isImplicitInvokeCallToMemberProperty: Boolean = false,
         surroundingExpression: KtExpression? = findParentExpressionAtNullablePosition(nullableExpression)
             ?: nullableExpression?.surroundingExpression
-    ): List<HLQuickFix<KtExpression, Input>> {
+    ): List<KotlinApplicatorBasedQuickFix<KtExpression, Input>> {
         if (nullableExpression == null || surroundingExpression == null) return emptyList()
         val existingNames =
             nullableExpression.containingKtFile.getScopeContextForPosition(nullableExpression).scopes.getPossibleCallableNames()
@@ -211,7 +212,7 @@ object WrapWithSafeLetCallFixFactories {
         val candidateNames = listOfNotNull("it", getDeclaredParameterNameForArgument(nullableExpression))
         val suggestedName = FirKotlinNameSuggester.suggestNameByMultipleNames(candidateNames) { it !in existingNames }
         return listOf(
-            HLQuickFix(
+            KotlinApplicatorBasedQuickFix(
                 surroundingExpression,
                 Input(nullableExpression.createSmartPointer(), suggestedName, isImplicitInvokeCallToMemberProperty),
                 applicator
@@ -276,7 +277,7 @@ object WrapWithSafeLetCallFixFactories {
                     else -> true
                 }
             }
-            // Qualified expression can always just be updated with a safe call operator to to make it accept nullable receiver. Hence we
+            // Qualified expression can always be updated with a safe call operator to make it accept nullable receiver. Hence, we
             // don't want to offer the wrap with let call quickfix.
             parent is KtQualifiedExpression && parent.receiverExpression == expression -> true
             // Ideally we should do more analysis on the control structure to determine if the type can actually allow null here. But that

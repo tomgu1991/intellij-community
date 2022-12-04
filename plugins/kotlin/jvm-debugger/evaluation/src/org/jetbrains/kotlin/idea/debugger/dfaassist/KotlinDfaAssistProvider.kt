@@ -23,7 +23,7 @@ import com.sun.jdi.Value
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
 import org.jetbrains.kotlin.idea.base.psi.KotlinPsiHeuristics
 import org.jetbrains.kotlin.idea.caches.resolve.safeAnalyzeNonSourceRootCode
-import org.jetbrains.kotlin.idea.debugger.ClassNameCalculator
+import org.jetbrains.kotlin.idea.debugger.base.util.ClassNameCalculator
 import org.jetbrains.kotlin.idea.debugger.evaluate.variables.EvaluatorValueConverter
 import org.jetbrains.kotlin.idea.inspections.dfa.*
 import org.jetbrains.kotlin.lexer.KtTokens
@@ -47,7 +47,7 @@ class KotlinDfaAssistProvider : DfaAssistProvider {
     override fun getAnchor(element: PsiElement): KtExpression? {
         var cur = element
         while (cur is PsiWhiteSpace || cur is PsiComment) {
-            cur = element.nextSibling
+            cur = cur.nextSibling
         }
         while (true) {
             val parent = cur.parent

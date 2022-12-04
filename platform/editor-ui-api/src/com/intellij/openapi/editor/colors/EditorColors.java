@@ -71,7 +71,17 @@ public interface EditorColors {
 
   ColorKey TEARLINE_COLOR = ColorKey.createColorKey("TEARLINE_COLOR");
   ColorKey SELECTED_TEARLINE_COLOR = ColorKey.createColorKey("SELECTED_TEARLINE_COLOR");
+
+  /**
+   * @deprecated use {@link #TEARLINE_COLOR}
+   */
+  @Deprecated(forRemoval = true)
   ColorKey SEPARATOR_ABOVE_COLOR = ColorKey.createColorKey("SEPARATOR_ABOVE_COLOR");
+
+  /**
+   * @deprecated use {@link #TEARLINE_COLOR}
+   */
+  @Deprecated(forRemoval = true)
   ColorKey SEPARATOR_BELOW_COLOR = ColorKey.createColorKey("SEPARATOR_BELOW_COLOR");
 
   ColorKey ADDED_LINES_COLOR = ColorKey.createColorKey("ADDED_LINES_COLOR");
@@ -82,6 +92,7 @@ public interface EditorColors {
   ColorKey IGNORED_ADDED_LINES_BORDER_COLOR = ColorKey.createColorKey("IGNORED_ADDED_LINES_BORDER_COLOR");
   ColorKey IGNORED_MODIFIED_LINES_BORDER_COLOR = ColorKey.createColorKey("IGNORED_MODIFIED_LINES_BORDER_COLOR");
   ColorKey IGNORED_DELETED_LINES_BORDER_COLOR = ColorKey.createColorKey("IGNORED_DELETED_LINES_BORDER_COLOR");
+  ColorKey CHANGED_LINES_POPUP = ColorKey.createColorKey("CHANGED_LINES_POPUP");
 
   TextAttributesKey INJECTED_LANGUAGE_FRAGMENT = TextAttributesKey.createTextAttributesKey("INJECTED_LANGUAGE_FRAGMENT");
 
@@ -96,6 +107,9 @@ public interface EditorColors {
   ColorKey VISUAL_INDENT_GUIDE_COLOR = ColorKey.createColorKey("VISUAL_INDENT_GUIDE");
 
   ColorKey DOCUMENTATION_COLOR = ColorKey.createColorKey("DOCUMENTATION_COLOR");
+
+  ColorKey PREVIEW_BACKGROUND = ColorKey.createColorKey("PREVIEW_BACKGROUND");
+  ColorKey PREVIEW_BORDER_COLOR = ColorKey.createColorKeyWithFallback("PREVIEW_BORDER_COLOR", INDENT_GUIDE_COLOR);
 
   @NotNull
   static TextAttributesKey createInjectedLanguageFragmentKey(@Nullable Language language) {
@@ -113,5 +127,12 @@ public interface EditorColors {
         currentKey);
     }
     return currentKey;
+  }
+
+  class GlobalScheme {
+    @Nullable
+    public static Color getColor(@NotNull ColorKey key) {
+      return EditorColorsManager.getInstance().getGlobalScheme().getColor(key);
+    }
   }
 }

@@ -10,18 +10,21 @@ import com.intellij.codeInsight.codeVision.ui.model.RichTextCodeVisionEntry
 import com.intellij.codeInsight.codeVision.ui.model.richText.RichText
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
 import com.intellij.codeInsight.hints.InlayGroup
-import com.intellij.codeInsight.hints.settings.InlayHintsConfigurable
+import com.intellij.codeInsight.hints.codeVision.CodeVisionPassFactory
 import com.intellij.codeInsight.hints.settings.language.isInlaySettingsEditor
+import com.intellij.codeInsight.hints.settings.showInlaySettings
 import com.intellij.ide.plugins.DynamicPluginListener
 import com.intellij.ide.plugins.IdeaPluginDescriptor
 import com.intellij.lang.Language
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.asContextElement
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.ControlFlowException
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
@@ -31,38 +34,41 @@ import com.intellij.openapi.fileEditor.impl.BaseRemoteFileEditor
 import com.intellij.openapi.progress.EmptyProgressIndicator
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.progress.util.ProgressIndicatorUtils
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.rd.createLifetime
 import com.intellij.openapi.rd.createNestedDisposable
-import com.intellij.openapi.roots.ProjectRootManager
+import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
 import com.intellij.psi.SyntaxTraverser
+import com.intellij.testFramework.TestModeFlags
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.util.Alarm
 import com.intellij.util.application
 import com.intellij.util.concurrency.AppExecutorUtil
+import com.intellij.util.concurrency.annotations.RequiresReadLock
 import com.intellij.util.ui.update.MergingUpdateQueue
 import com.intellij.util.ui.update.Update
 import com.jetbrains.rd.util.error
 import com.jetbrains.rd.util.getLogger
 import com.jetbrains.rd.util.lifetime.Lifetime
 import com.jetbrains.rd.util.lifetime.SequentialLifetimes
-import com.jetbrains.rd.util.lifetime.onTermination
 import com.jetbrains.rd.util.reactive.Signal
 import com.jetbrains.rd.util.reactive.whenTrue
 import com.jetbrains.rd.util.trace
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.jetbrains.annotations.TestOnly
 import java.util.concurrent.CompletableFuture
 
 open class CodeVisionHost(val project: Project) {
   companion object {
     private val logger = getLogger<CodeVisionHost>()
-    const val defaultVisibleLenses = 5
-    const val settingsLensProviderId = "!Settings"
-    const val moreLensProviderId = "!More"
+    const val defaultVisibleLenses: Int = 5
+    const val settingsLensProviderId: String = "!Settings"
 
     /**
      * Flag which is enabled when executed test in [com.intellij.java.codeInsight.codeVision.CodeVisionTestCase].
@@ -76,12 +82,14 @@ open class CodeVisionHost(val project: Project) {
      * Returns true iff we are in test in [com.intellij.java.codeInsight.codeVision.CodeVisionTestCase].
      */
     @JvmStatic
-    fun isCodeLensTest(editor: Editor): Boolean {
-      return editor.project?.getUserData(isCodeVisionTestKey) == true
+    fun isCodeLensTest(): Boolean {
+      return TestModeFlags.`is`(isCodeVisionTestKey)
     }
   }
 
-  protected val codeVisionLifetime = project.createLifetime()
+  // used externally
+  @Suppress("MemberVisibilityCanBePrivate")
+  val codeVisionLifetime: Lifetime = project.createLifetime()
 
   /**
    * Pass empty list to update ALL providers in editor
@@ -94,7 +102,7 @@ open class CodeVisionHost(val project: Project) {
 
   @Suppress("MemberVisibilityCanBePrivate")
   // Uses in Rider
-  protected val lifeSettingModel = CodeVisionSettingsLiveModel(codeVisionLifetime)
+  protected val lifeSettingModel: CodeVisionSettingsLiveModel = CodeVisionSettingsLiveModel(codeVisionLifetime)
 
   var providers: List<CodeVisionProvider<*>> = CodeVisionProviderFactory.createAllProviders(project)
 
@@ -159,7 +167,11 @@ open class CodeVisionHost(val project: Project) {
 
             override fun providerAvailabilityChanged(id: String, isEnabled: Boolean) {
               PsiManager.getInstance(project).dropPsiCaches()
+              for (editor in EditorFactory.getInstance().allEditors) {
+                CodeVisionPassFactory.clearModificationStamp(editor)
+              }
               DaemonCodeAnalyzer.getInstance(project).restart()
+              invalidateProviderSignal.fire(LensInvalidateSignal(null))
             }
           })
       }
@@ -168,13 +180,21 @@ open class CodeVisionHost(val project: Project) {
   }
 
 
-  // run in read action
+  @RequiresReadLock
   fun collectPlaceholders(editor: Editor,
                           psiFile: PsiFile?): List<Pair<TextRange, CodeVisionEntry>> {
+    return ProgressIndicatorUtils.withTimeout(100) {
+      collectPlaceholdersInner(editor, psiFile)
+    } ?: emptyList()
+  }
+
+  private fun collectPlaceholdersInner(editor: Editor,
+                    psiFile: PsiFile?): List<Pair<TextRange, CodeVisionEntry>> {
     if (!lifeSettingModel.isEnabledWithRegistry.value) return emptyList()
     val project = editor.project ?: return emptyList()
-    if (psiFile != null && psiFile.virtualFile != null &&
-        !ProjectRootManager.getInstance(project).fileIndex.isInSourceContent(psiFile.virtualFile)) return emptyList()
+    if (psiFile != null && psiFile.virtualFile != null) {
+      if (ProjectFileIndex.getInstance(project).isInLibrarySource(psiFile.virtualFile)) return emptyList()
+    }
     val bypassBasedCollectors = ArrayList<Pair<BypassBasedPlaceholderCollector, CodeVisionProvider<*>>>()
     val placeholders = ArrayList<Pair<TextRange, CodeVisionEntry>>()
     val settings = CodeVisionSettings.instance()
@@ -263,8 +283,9 @@ open class CodeVisionHost(val project: Project) {
     logger.trace { "No provider found with id ${entry.providerId}" }
   }
 
-  protected fun CodeVisionAnchorKind?.nullIfDefault(): CodeVisionAnchorKind? = if (this === CodeVisionAnchorKind.Default) null else this
-
+  // used externally
+  @Suppress("MemberVisibilityCanBePrivate")
+  fun CodeVisionAnchorKind?.nullIfDefault(): CodeVisionAnchorKind? = if (this === CodeVisionAnchorKind.Default) null else this
 
   open fun getAnchorForEntry(entry: CodeVisionEntry): CodeVisionAnchorKind {
     val provider = getProviderById(entry.providerId) ?: return lifeSettingModel.defaultPosition.value
@@ -296,7 +317,6 @@ open class CodeVisionHost(val project: Project) {
 
     val calculationLifetimes = SequentialLifetimes(editorLifetime)
 
-    val editorManager = FileEditorManager.getInstance(project)
     var recalculateWhenVisible = false
 
     var previousLenses: List<Pair<TextRange, CodeVisionEntry>> = ArrayList()
@@ -308,6 +328,7 @@ open class CodeVisionHost(val project: Project) {
     var calcRunning = false
 
     fun recalculateLenses(groupToRecalculate: Collection<String> = emptyList()) {
+      val editorManager = FileEditorManager.getInstance(project)
       if (!isInlaySettingsEditor(editor) && !editorManager.selectedEditors.any {
           isAllowedFileEditor(it) && (it as TextEditor).editor == editor
         }) {
@@ -315,8 +336,9 @@ open class CodeVisionHost(val project: Project) {
         return
       }
       recalculateWhenVisible = false
-      if (calcRunning && groupToRecalculate.isNotEmpty())
+      if (calcRunning && groupToRecalculate.isNotEmpty()) {
         return recalculateLenses(emptyList())
+      }
       calcRunning = true
       val lt = calculationLifetimes.next()
       calculateFrontendLenses(lt, editor, groupToRecalculate) { lenses, providersToUpdate ->
@@ -334,9 +356,9 @@ open class CodeVisionHost(val project: Project) {
       mergingQueueFront.cancelAllUpdates()
       mergingQueueFront.queue(object : Update("") {
         override fun run() {
-          application.invokeLater(
-            { recalculateLenses(if (shouldRecalculateAll) emptyList() else providersToRecalculate) },
-            ModalityState.stateForComponent(editor.contentComponent))
+          project.coroutineScope.launch(Dispatchers.EDT + ModalityState.stateForComponent(editor.contentComponent).asContextElement()) {
+            recalculateLenses(if (shouldRecalculateAll) emptyList() else providersToRecalculate)
+          }
         }
       })
     }
@@ -499,10 +521,10 @@ open class CodeVisionHost(val project: Project) {
   }
 
   protected open fun openCodeVisionSettings(groupId: String? = null) {
-    InlayHintsConfigurable.showSettingsDialogForLanguage(project, Language.ANY) {
-      if (groupId == null) return@showSettingsDialogForLanguage it.group == InlayGroup.CODE_VISION_GROUP_NEW
+    showInlaySettings(project, Language.ANY) {
+      if (groupId == null) return@showInlaySettings it.group == InlayGroup.CODE_VISION_GROUP_NEW
 
-      return@showSettingsDialogForLanguage it.group == InlayGroup.CODE_VISION_GROUP_NEW && it.id == groupId
+      return@showInlaySettings it.group == InlayGroup.CODE_VISION_GROUP_NEW && it.id == groupId
     }
   }
 

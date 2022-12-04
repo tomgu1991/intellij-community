@@ -10,12 +10,11 @@ import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.Pair;
-import com.intellij.openapi.vfs.newvfs.ManagingFS;
-import com.intellij.openapi.vfs.newvfs.persistent.PersistentFS;
 import com.intellij.psi.codeStyle.CodeStyleSchemes;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.impl.source.tree.injected.InjectedLanguageManagerImpl;
 import com.intellij.testFramework.*;
+import com.intellij.testFramework.common.TestApplicationKt;
 import com.intellij.testFramework.fixtures.LightIdeaTestFixture;
 import org.jetbrains.annotations.NotNull;
 
@@ -39,8 +38,8 @@ public final class LightIdeaTestFixtureImpl extends BaseFixture implements Light
     super.setUp();
 
     TestApplicationManager application = TestApplicationManager.getInstance();
-    Pair<Project, Module> setup = LightPlatformTestCase.doSetup(myProjectDescriptor, LocalInspectionTool.EMPTY_ARRAY, getTestRootDisposable(),
-                                                                mySdkParentDisposable, myName);
+    Pair<Project, Module> setup = LightPlatformTestCase.doSetup(
+      myProjectDescriptor, LocalInspectionTool.EMPTY_ARRAY, getTestRootDisposable(), mySdkParentDisposable, myName);
     myProject = setup.getFirst();
     myModule = setup.getSecond();
     InjectedLanguageManagerImpl.pushInjectors(getProject());
@@ -51,16 +50,21 @@ public final class LightIdeaTestFixtureImpl extends BaseFixture implements Light
     myOldSdks = new SdkLeakTracker();
   }
 
+  private CodeStyleSettings getCurrentCodeStyleSettings() {
+    return CodeStyleSchemes.getInstance().getCurrentScheme() == null ? CodeStyle.createTestSettings() : CodeStyle.getSettings(getProject());
+  }
+
   @Override
   public void tearDown() {
     Project project = getProject();
-    if (project != null) {
-      CodeStyle.dropTemporarySettings(project);
-    }
-
     // don't use method references here to make stack trace reading easier
     //noinspection Convert2MethodRef
     new RunAll(
+      () -> {
+        if (project != null) {
+          CodeStyle.dropTemporarySettings(project);
+        }
+      },
       () -> {
         if (myCodeStyleSettingsTracker != null) {
           myCodeStyleSettingsTracker.checkForSettingsDamage();
@@ -95,10 +99,7 @@ public final class LightIdeaTestFixtureImpl extends BaseFixture implements Light
       () -> {
         Application app = ApplicationManager.getApplication();
         if (app != null) {
-          ManagingFS managingFS = app.getServiceIfCreated(ManagingFS.class);
-          if (managingFS != null) {
-            ((PersistentFS)managingFS).clearIdCache();
-          }
+          TestApplicationKt.clearIdCache(app);
         }
       },
       () -> HeavyPlatformTestCase.cleanupApplicationCaches(project)
@@ -108,11 +109,6 @@ public final class LightIdeaTestFixtureImpl extends BaseFixture implements Light
   @Override
   public Project getProject() {
     return myProject;
-  }
-
-  private CodeStyleSettings getCurrentCodeStyleSettings() {
-    if (CodeStyleSchemes.getInstance().getCurrentScheme() == null) return CodeStyle.createTestSettings();
-    return CodeStyle.getSettings(getProject());
   }
 
   @Override

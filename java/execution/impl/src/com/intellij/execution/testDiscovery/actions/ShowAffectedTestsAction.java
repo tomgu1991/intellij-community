@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.execution.testDiscovery.actions;
 
 import com.intellij.codeInsight.actions.VcsFacadeImpl;
@@ -80,6 +80,7 @@ import javax.swing.tree.TreeModel;
 import java.awt.event.ActionEvent;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.intellij.openapi.actionSystem.CommonDataKeys.*;
 import static com.intellij.openapi.util.Pair.pair;
@@ -216,34 +217,52 @@ public class ShowAffectedTestsAction extends AnAction {
   public static PsiMethod @NotNull [] findMethods(@NotNull Project project, Change @NotNull ... changes) {
     UastMetaLanguage jvmLanguage = Language.findInstance(UastMetaLanguage.class);
 
-    return PsiDocumentManager.getInstance(project).commitAndRunReadAction(
-      () -> VcsFacadeImpl.getVcsInstance().getChangedElements(project, changes, file -> {
-        if (DumbService.isDumb(project) || project.isDisposed() || !file.isValid()) return null;
-        ProjectFileIndex index = ProjectFileIndex.getInstance(project);
-        if (!index.isInSource(file)) return null;
-        PsiFile psiFile = PsiManager.getInstance(project).findFile(file);
-        if (psiFile == null || !jvmLanguage.matchesLanguage(psiFile.getLanguage())) return null;
-        Document document = FileDocumentManager.getInstance().getDocument(file);
-        if (document == null) return null;
-
-        List<PsiElement> physicalMethods = new SmartList<>();
-        psiFile.accept(new PsiRecursiveElementWalkingVisitor() {
-          @Override
-          public void visitElement(@NotNull PsiElement element) {
-            UMethod method = UastContextKt.toUElement(element, UMethod.class);
-            if (method != null) {
-              ContainerUtil.addAllNotNull(physicalMethods, method.getSourcePsi());
-            }
-            super.visitElement(element);
-          }
-        });
-        return physicalMethods;
-      }).stream()
+    return PsiDocumentManager.getInstance(project).commitAndRunReadAction(() -> {
+      return findChangedMethods(project, jvmLanguage, changes)
         .map(m -> UastContextKt.toUElement(m))
         .filter(Objects::nonNull)
         .map(m -> ObjectUtils.tryCast(m.getJavaPsi(), PsiMethod.class))
         .filter(Objects::nonNull)
-        .toArray(PsiMethod.ARRAY_FACTORY::create));
+        .toArray(PsiMethod.ARRAY_FACTORY::create);
+    });
+  }
+
+  @NotNull
+  private static Stream<PsiElement> findChangedMethods(@NotNull Project project,
+                                                       @NotNull UastMetaLanguage jvmLanguage,
+                                                       Change @NotNull [] changes) {
+    return Arrays.stream(changes).flatMap(change -> {
+      return VcsFacadeImpl.getVcsInstance().getLocalChangedElements(project, change, file -> {
+          return getMethodsFromFile(project, jvmLanguage, file);
+        })
+        .stream();
+    });
+  }
+
+  @Nullable
+  private static List<PsiElement> getMethodsFromFile(@NotNull Project project,
+                                                     @NotNull UastMetaLanguage jvmLanguage,
+                                                     @NotNull VirtualFile file) {
+    if (DumbService.isDumb(project) || project.isDisposed() || !file.isValid()) return null;
+    ProjectFileIndex index = ProjectFileIndex.getInstance(project);
+    if (!index.isInSource(file)) return null;
+    PsiFile psiFile = PsiManager.getInstance(project).findFile(file);
+    if (psiFile == null || !jvmLanguage.matchesLanguage(psiFile.getLanguage())) return null;
+    Document document = FileDocumentManager.getInstance().getDocument(file);
+    if (document == null) return null;
+
+    List<PsiElement> physicalMethods = new SmartList<>();
+    psiFile.accept(new PsiRecursiveElementWalkingVisitor() {
+      @Override
+      public void visitElement(@NotNull PsiElement element) {
+        UMethod method = UastContextKt.toUElement(element, UMethod.class);
+        if (method != null) {
+          ContainerUtil.addAllNotNull(physicalMethods, method.getSourcePsi());
+        }
+        super.visitElement(element);
+      }
+    });
+    return physicalMethods;
   }
 
   public static boolean isEnabled(@Nullable Project project) {
@@ -383,8 +402,8 @@ public class ShowAffectedTestsAction extends AnAction {
                                     @NotNull List<String> filePaths,
                                     @NotNull TestDiscoveryProducer.PsiTestProcessor processor) {
     List<Couple<String>> classesAndMethods =
-      ReadAction.compute(() -> Arrays.stream(methods)
-      .map(method -> getMethodKey(method)).filter(Objects::nonNull).collect(Collectors.toList()));
+      ReadAction.nonBlocking(() -> Arrays.stream(methods)
+      .map(method -> getMethodKey(method)).filter(Objects::nonNull).collect(Collectors.toList())).executeSynchronously();
     processTestDiscovery(project, processor, classesAndMethods, filePaths);
   }
 

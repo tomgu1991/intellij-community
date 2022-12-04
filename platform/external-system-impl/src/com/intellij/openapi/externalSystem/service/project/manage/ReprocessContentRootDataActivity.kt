@@ -3,21 +3,25 @@ package com.intellij.openapi.externalSystem.service.project.manage
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.extensions.ExtensionNotApplicableException
 import com.intellij.openapi.externalSystem.util.ExternalSystemUtil
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.startup.StartupActivity
+import com.intellij.openapi.startup.ProjectPostStartupActivity
 
-private class ReprocessContentRootDataActivity : StartupActivity.Background {
-  override fun runActivity(project: Project) {
+private class ReprocessContentRootDataActivity : ProjectPostStartupActivity {
+
+  init {
     if (ApplicationManager.getApplication().isUnitTestMode) {
-      return
+      throw ExtensionNotApplicableException.create()
     }
+  }
+
+  override suspend fun execute(project: Project) {
     if (ExternalSystemUtil.isNewProject(project)) {
       thisLogger().info("Ignored reprocess of content root data service for new projects")
       return
     }
 
-    val instance = SourceFolderManager.getInstance(project) as SourceFolderManagerImpl
-    instance.rescanAndUpdateSourceFolders()
+    SourceFolderManager.getInstance(project).rescanAndUpdateSourceFolders()
   }
 }

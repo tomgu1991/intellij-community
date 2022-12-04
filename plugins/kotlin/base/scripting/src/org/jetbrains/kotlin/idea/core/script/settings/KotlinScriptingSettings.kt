@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.core.script.settings
 
@@ -8,7 +8,6 @@ import com.intellij.openapi.components.Storage
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.util.addOptionTag
-import com.intellij.util.getAttributeBooleanValue
 import org.jdom.Element
 import org.jetbrains.kotlin.idea.core.script.ScriptDefinitionsManager
 import org.jetbrains.kotlin.idea.core.script.settings.KotlinScriptingSettings.KotlinScriptDefinitionValue.Companion.DEFAULT
@@ -26,6 +25,8 @@ class KotlinScriptingSettings(private val project: Project) : PersistentStateCom
     var suppressDefinitionsCheck = false
 
     var showSupportWarning = true
+
+    var decideOnRemainingInSourceRootLater = false
 
     private var scriptDefinitions = linkedMapOf<KotlinScriptDefinitionKey, KotlinScriptDefinitionValue>()
 
@@ -142,12 +143,12 @@ class KotlinScriptingSettings(private val project: Project) : PersistentStateCom
 
             if (!settings.isEnabled) {
                 addElement(KotlinScriptDefinitionValue::isEnabled.name).apply {
-                    text = settings.isEnabled.toString()
+                    text = "false"
                 }
             }
             if (settings.autoReloadConfigurations) {
                 addElement(KotlinScriptDefinitionValue::autoReloadConfigurations.name).apply {
-                    text = settings.autoReloadConfigurations.toString()
+                    text = "true"
                 }
             }
         }

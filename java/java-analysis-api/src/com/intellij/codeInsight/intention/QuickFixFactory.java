@@ -1,10 +1,8 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.codeInsight.intention;
 
-import com.intellij.codeInsight.daemon.QuickFixActionRegistrar;
 import com.intellij.codeInspection.LocalQuickFix;
 import com.intellij.codeInspection.LocalQuickFixAndIntentionActionOnPsiElement;
-import com.intellij.codeInspection.LocalQuickFixOnPsiElement;
 import com.intellij.codeInspection.util.IntentionName;
 import com.intellij.lang.jvm.actions.JvmElementActionsFactory;
 import com.intellij.openapi.application.ApplicationManager;
@@ -33,7 +31,7 @@ public abstract class QuickFixFactory {
    * {@link QuickFixFactory#createModifierListFix(PsiModifierListOwner, String, boolean, boolean)} for java only fix or
    * {@link JvmElementActionsFactory#createChangeModifierActions(com.intellij.lang.jvm.JvmModifiersOwner, com.intellij.lang.jvm.actions.ChangeModifierRequest)}
    * for jvm languages transparent fix
-   *
+   * <p>
    * Usage of this method might be unsafe in case of fixing java multi variable declaration modifier list
    */
   @NotNull
@@ -89,7 +87,7 @@ public abstract class QuickFixFactory {
   public abstract LocalQuickFixAndIntentionActionOnPsiElement createImplementMethodsFix(@NotNull PsiClass psiElement);
 
   @NotNull
-  public abstract LocalQuickFixOnPsiElement createMethodThrowsFix(@NotNull PsiMethod method,
+  public abstract LocalQuickFixAndIntentionActionOnPsiElement createMethodThrowsFix(@NotNull PsiMethod method,
                                                                   @NotNull PsiClassType exceptionClass,
                                                                   boolean shouldThrow,
                                                                   boolean showContainingClass);
@@ -163,9 +161,6 @@ public abstract class QuickFixFactory {
 
   @NotNull
   public abstract IntentionAction createAddTypeCastFix(@NotNull PsiType type, @NotNull PsiExpression expression);
-
-  @NotNull
-  public abstract IntentionAction createWrapExpressionFix(@NotNull PsiType type, @NotNull PsiExpression expression);
 
   @NotNull
   public abstract IntentionAction createReuseVariableDeclarationFix(@NotNull PsiLocalVariable variable);
@@ -256,7 +251,7 @@ public abstract class QuickFixFactory {
   public abstract IntentionAction createRenameFileFix(@NotNull String newName);
 
   @Nullable
-  public abstract IntentionAction createRenameFix(@NotNull PsiElement element, @Nullable Object highlightInfo);
+  public abstract IntentionAction createRenameFix(@NotNull PsiElement element);
 
   @NotNull
   public abstract LocalQuickFixAndIntentionActionOnPsiElement createRenameElementFix(@NotNull PsiNamedElement element);
@@ -386,13 +381,13 @@ public abstract class QuickFixFactory {
   @NotNull
   public abstract IntentionAction createMoveBoundClassToFrontFix(@NotNull PsiClass aClass, @NotNull PsiClassType type);
 
-  public abstract void registerPullAsAbstractUpFixes(@NotNull PsiMethod method, @NotNull QuickFixActionRegistrar registrar);
+  public abstract void registerPullAsAbstractUpFixes(@NotNull PsiMethod method, @NotNull List<? super IntentionAction> registrar);
 
   @NotNull
   public abstract IntentionAction createCreateAnnotationMethodFromUsageFix(@NotNull PsiNameValuePair pair);
 
   @NotNull
-  public abstract IntentionAction createOptimizeImportsFix(boolean onTheFly);
+  public abstract IntentionAction createOptimizeImportsFix(boolean onTheFly, boolean isInContent);
 
   @NotNull
   public abstract IntentionAction createSafeDeleteUnusedParameterInHierarchyFix(@NotNull PsiParameter parameter, boolean excludingHierarchy);
@@ -428,7 +423,8 @@ public abstract class QuickFixFactory {
   public abstract IntentionAction createSafeDeleteFix(@NotNull PsiElement element);
 
   @NotNull
-  public abstract List<LocalQuickFix> registerOrderEntryFixes(@NotNull QuickFixActionRegistrar registrar, @NotNull PsiReference reference);
+  public abstract List<LocalQuickFix> registerOrderEntryFixes(@NotNull PsiReference reference,
+                                                              @NotNull List<? super IntentionAction> registrar);
 
   @NotNull
   public abstract IntentionAction createAddMissingRequiredAnnotationParametersFix(@NotNull PsiAnnotation annotation,
@@ -530,7 +526,7 @@ public abstract class QuickFixFactory {
 
   public abstract @NotNull IntentionAction createSealClassFromPermitsListFix(@NotNull PsiClass classFromPermitsList);
 
-  public abstract @NotNull IntentionAction createUnimplementInterfaceAction(@NotNull String className, boolean isDuplicates);
+  public abstract @NotNull IntentionAction createRemoveDuplicateExtendsAction(@NotNull String className);
 
   public abstract @NotNull IntentionAction createMoveMemberIntoClassFix(@NotNull PsiErrorElement errorElement);
 
@@ -564,8 +560,8 @@ public abstract class QuickFixFactory {
 
   public abstract @NotNull IntentionAction createDeleteSwitchLabelFix(@NotNull PsiCaseLabelElement labelElement);
 
-  @Nullable
-  public abstract IntentionAction createDeleteDefaultFix(@NotNull PsiFile file, @Nullable Object highlightInfo);
+  @NotNull
+  public abstract IntentionAction createDeleteDefaultFix(@NotNull PsiFile file, @NotNull PsiElement duplicateElement);
 
   public abstract @NotNull IntentionAction createAddAnnotationTargetFix(@NotNull PsiAnnotation annotation, PsiAnnotation.TargetType target);
 
@@ -594,9 +590,9 @@ public abstract class QuickFixFactory {
    * @param parameter receiver parameter to change name for
    * @param newName   new name of the receiver parameter
    *                  <p>
-   *                  In an instance method the name of the receiver parameter must be <code>this</code>.
+   *                  In an instance method the name of the receiver parameter must be {@code this}.
    *                  <p>
-   *                  In an inner class's constructor the name of the receiver parameter must be <i>Identifier</i> . <code>this</code>
+   *                  In an inner class's constructor the name of the receiver parameter must be <i>Identifier</i>.{@code this}
    *                  where <i>Identifier</i> is the simple name of the class or interface which is the immediately enclosing type
    *                  declaration of the inner class.
    * @return a new fix
@@ -613,4 +609,26 @@ public abstract class QuickFixFactory {
    */
   public abstract @NotNull IntentionAction createRemoveRedundantLambdaParameterTypesFix(@NotNull PsiLambdaExpression lambdaExpression,
                                                                                         @IntentionName String message);
+
+  /**
+   * @param anonymousClass class to convert
+   * @return a fix that converts an anonymous class to an inner class
+   */
+  public abstract @NotNull IntentionAction createConvertAnonymousToInnerAction(@NotNull PsiAnonymousClass anonymousClass);
+
+  public abstract @NotNull IntentionAction createSplitSwitchBranchWithSeveralCaseValuesAction();
+
+  /**
+   * @param variable variable to make an effectively final
+   * @return a fix that refactors code to make variable effectively final when possible. Null, if it cannot create such a fix.
+   */
+  public abstract @Nullable IntentionAction createMakeVariableEffectivelyFinalFix(@NotNull PsiVariable variable);
+
+  /**
+   * @param elements elements to delete
+   * @param text     the text to show in the intention popup
+   * @return a fix that deletes the elements
+   */
+  @NotNull
+  public abstract IntentionAction createDeleteFix(@NotNull PsiElement @NotNull [] elements, @NotNull @Nls String text);
 }

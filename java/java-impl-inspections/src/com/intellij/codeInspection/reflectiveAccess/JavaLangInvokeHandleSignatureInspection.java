@@ -2,6 +2,7 @@
 package com.intellij.codeInspection.reflectiveAccess;
 
 import com.intellij.codeInsight.daemon.JavaErrorBundle;
+import com.intellij.codeInsight.intention.preview.IntentionPreviewInfo;
 import com.intellij.codeInsight.lookup.*;
 import com.intellij.codeInspection.*;
 import com.intellij.java.JavaBundle;
@@ -15,6 +16,7 @@ import com.intellij.psi.*;
 import com.intellij.psi.codeStyle.JavaCodeStyleManager;
 import com.intellij.psi.impl.source.resolve.reference.impl.JavaReflectionReferenceUtil;
 import com.intellij.psi.util.InheritanceUtil;
+import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.util.PsiUtil;
 import com.intellij.util.containers.ContainerUtil;
 import org.jetbrains.annotations.Nls;
@@ -107,32 +109,20 @@ public class JavaLangInvokeHandleSignatureInspection extends AbstractBaseJavaLoc
           if (typeExpression == null) return;
 
           switch (factoryMethodName) {
-            case FIND_GETTER:
-            case FIND_SETTER:
-            case FIND_VAR_HANDLE:
+            case FIND_GETTER, FIND_SETTER, FIND_VAR_HANDLE ->
               checkField(ownerClass, memberName, nameExpression, typeExpression, false, factoryMethodExpression, holder);
-              break;
-
-            case FIND_STATIC_GETTER:
-            case FIND_STATIC_SETTER:
-            case FIND_STATIC_VAR_HANDLE:
+            case FIND_STATIC_GETTER, FIND_STATIC_SETTER, FIND_STATIC_VAR_HANDLE ->
               checkField(ownerClass, memberName, nameExpression, typeExpression, true, factoryMethodExpression, holder);
-              break;
-
-            case FIND_VIRTUAL:
+            case FIND_VIRTUAL ->
               checkMethod(ownerClass, memberName, nameExpression, typeExpression, false, true, factoryMethodExpression, holder);
-              break;
-
-            case FIND_STATIC:
+            case FIND_STATIC ->
               checkMethod(ownerClass, memberName, nameExpression, typeExpression, true, true, factoryMethodExpression, holder);
-              break;
-
-            case FIND_SPECIAL:
+            case FIND_SPECIAL -> {
               checkMethod(ownerClass, memberName, nameExpression, typeExpression, false, false, factoryMethodExpression, holder);
               if (arguments.length > 3) {
                 checkSpecial(ownerClass, arguments[3], holder);
               }
-              break;
+            }
           }
         }
       }
@@ -432,6 +422,11 @@ public class JavaLangInvokeHandleSignatureInspection extends AbstractBaseJavaLoc
     }
 
     @Override
+    public boolean startInWriteAction() {
+      return mySignatures.size() == 1 || ApplicationManager.getApplication().isUnitTestMode();
+    }
+
+    @Override
     public void invoke(@NotNull Project project,
                        @NotNull PsiFile file,
                        @Nullable Editor editor,
@@ -455,6 +450,17 @@ public class JavaLangInvokeHandleSignatureInspection extends AbstractBaseJavaLoc
       else if (editor != null) {
         showLookup(project, editor);
       }
+    }
+
+    @Override
+    public @NotNull IntentionPreviewInfo generatePreview(@NotNull Project project, @NotNull Editor editor, @NotNull PsiFile file) {
+      if (mySignatures.isEmpty()) return IntentionPreviewInfo.EMPTY;
+      // Show first even if lookup is displayed
+      ReflectiveSignature signature = mySignatures.get(0);
+      PsiElement element = PsiTreeUtil.findSameElementInCopy(getStartElement(), file);
+      if (element == null) return IntentionPreviewInfo.EMPTY;
+      applyFix(project, element, signature);
+      return IntentionPreviewInfo.DIFF;
     }
 
     @NotNull
@@ -483,7 +489,7 @@ public class JavaLangInvokeHandleSignatureInspection extends AbstractBaseJavaLoc
           public void itemSelected(@NotNull LookupEvent event) {
             final LookupElement item = event.getItem();
             if (item != null) {
-              final PsiElement element = myStartElement.getElement();
+              final PsiElement element = getStartElement();
               final Object object = item.getObject();
               if (element != null && object instanceof ReflectiveSignature) {
                 WriteAction.run(() -> applyFix(project, element, (ReflectiveSignature)object));

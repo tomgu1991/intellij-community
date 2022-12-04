@@ -7,16 +7,15 @@ import com.intellij.diff.chains.DiffRequestChain;
 import com.intellij.diff.chains.DiffRequestProducerException;
 import com.intellij.diff.util.DiffUserDataKeysEx;
 import com.intellij.openapi.ListSelection;
-import com.intellij.openapi.actionSystem.ActionPlaces;
-import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.AnActionExtensionProvider;
-import com.intellij.openapi.actionSystem.CommonDataKeys;
+import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vcs.FilePath;
+import com.intellij.openapi.vcs.VcsDataKeys;
 import com.intellij.openapi.vcs.changes.*;
 import com.intellij.openapi.vcs.changes.ui.ChangeDiffRequestChain;
 import com.intellij.openapi.vcs.changes.ui.ChangeDiffRequestChain.Producer;
 import com.intellij.openapi.vcs.changes.ui.ChangesListView;
+import com.intellij.ui.ExperimentalUI;
 import com.intellij.util.concurrency.FutureResult;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.containers.JBIterable;
@@ -26,11 +25,15 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 
 import static com.intellij.openapi.vcs.changes.actions.diff.lst.LocalChangeListDiffTool.ALLOW_EXCLUDE_FROM_COMMIT;
 
 public class ShowDiffFromLocalChangesActionProvider implements AnActionExtensionProvider {
+  @Override
+  public @NotNull ActionUpdateThread getActionUpdateThread() {
+    return ActionUpdateThread.BGT;
+  }
+
   @Override
   public boolean isActive(@NotNull AnActionEvent e) {
     return e.getData(ChangesListView.DATA_KEY) != null;
@@ -43,20 +46,26 @@ public class ShowDiffFromLocalChangesActionProvider implements AnActionExtension
 
   public static void updateAvailability(@NotNull AnActionEvent e) {
     Project project = e.getData(CommonDataKeys.PROJECT);
-    ChangesListView view = e.getData(ChangesListView.DATA_KEY);
-    if (view == null) {
-      e.getPresentation().setEnabled(false);
+    Presentation presentation = e.getPresentation();
+    String place = e.getPlace();
+
+    if (e.getData(ChangesListView.DATA_KEY) == null) {
+      presentation.setEnabled(false);
       return;
     }
 
-    JBIterable<Change> changes = view.getSelectedChanges();
-    JBIterable<FilePath> unversionedFiles = view.getSelectedUnversionedFiles();
+    JBIterable<Change> changes = JBIterable.of(e.getData(VcsDataKeys.CHANGES));
+    JBIterable<FilePath> unversionedFiles = JBIterable.from(e.getData(ChangesListView.UNVERSIONED_FILE_PATHS_DATA_KEY));
 
-    if (ActionPlaces.MAIN_MENU.equals(e.getPlace())) {
-      e.getPresentation().setEnabled(project != null && (changes.isNotEmpty() || unversionedFiles.isNotEmpty()));
+    if (ActionPlaces.MAIN_MENU.equals(place)) {
+      presentation.setEnabled(project != null && (changes.isNotEmpty() || unversionedFiles.isNotEmpty()));
     }
     else {
-      e.getPresentation().setEnabled(project != null && canShowDiff(project, changes, unversionedFiles));
+      presentation.setEnabled(project != null && canShowDiff(project, changes, unversionedFiles));
+    }
+
+    if (ActionPlaces.CHANGES_VIEW_TOOLBAR.equals(place)) {
+      presentation.setVisible(!ExperimentalUI.isNewUI());
     }
   }
 
@@ -84,14 +93,15 @@ public class ShowDiffFromLocalChangesActionProvider implements AnActionExtension
       // this trick is essential since we are under some conditions to refresh changes;
       // but we can only rely on callback after refresh
       ChangeListManager.getInstance(project).invokeAfterUpdate(true, () -> {
-        try {
-          ChangesViewManager.getInstanceEx(project).refreshImmediately();
-          List<Change> actualChanges = loadFakeRevisions(project, changes);
-          resultRef.set(collectRequestProducers(project, actualChanges, unversioned, view));
-        }
-        catch (Throwable err) {
-          resultRef.setException(err);
-        }
+        ChangesViewManager.getInstanceEx(project).promiseRefresh().onProcessed(__ -> {
+          try {
+            List<Change> actualChanges = loadFakeRevisions(project, changes);
+            resultRef.set(collectRequestProducers(project, actualChanges, unversioned, view));
+          }
+          catch (Throwable err) {
+            resultRef.setException(err);
+          }
+        });
       });
 
       chain = new ChangeDiffRequestChain.Async() {
@@ -116,7 +126,6 @@ public class ShowDiffFromLocalChangesActionProvider implements AnActionExtension
     setAllowExcludeFromCommit(project, chain);
     DiffManager.getInstance().showDiff(project, chain, DiffDialogHints.DEFAULT);
   }
-
 
   private static boolean checkIfThereAreFakeRevisions(@NotNull Project project, @NotNull List<? extends Change> changes) {
     boolean needsConversion = false;
@@ -164,7 +173,7 @@ public class ShowDiffFromLocalChangesActionProvider implements AnActionExtension
 
     if (unversioned.size() == 1 && changes.isEmpty()) { // show all unversioned changes
       FilePath selectedFile = unversioned.get(0);
-      List<FilePath> allUnversioned = changesView.getUnversionedFiles().collect(Collectors.toList());
+      List<FilePath> allUnversioned = changesView.getUnversionedFiles().toList();
       int selectedIndex = allUnversioned.indexOf(selectedFile);
       return createUnversionedProducers(project, allUnversioned, selectedIndex);
     }

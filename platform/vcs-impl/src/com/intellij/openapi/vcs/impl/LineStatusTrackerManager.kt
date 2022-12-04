@@ -1,4 +1,6 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+@file:Suppress("ReplacePutWithAssignment")
+
 package com.intellij.openapi.vcs.impl
 
 import com.google.common.collect.HashMultiset
@@ -30,7 +32,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileDocumentManagerListener
 import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
 import com.intellij.openapi.progress.ProcessCanceledException
-import com.intellij.openapi.progress.util.BackgroundTaskUtil
+import com.intellij.openapi.progress.coroutineToIndicator
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.util.Disposer
@@ -57,19 +59,21 @@ import com.intellij.openapi.vfs.newvfs.events.VFileMoveEvent
 import com.intellij.openapi.vfs.newvfs.events.VFilePropertyChangeEvent
 import com.intellij.testFramework.LightVirtualFile
 import com.intellij.util.EventDispatcher
+import com.intellij.util.childScope
 import com.intellij.util.concurrency.Semaphore
 import com.intellij.util.concurrency.annotations.RequiresBackgroundThread
 import com.intellij.util.concurrency.annotations.RequiresEdt
 import com.intellij.util.ui.UIUtil
 import com.intellij.vcs.commit.isNonModalCommit
 import com.intellij.vcsUtil.VcsUtil
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import org.jetbrains.annotations.ApiStatus
 import org.jetbrains.annotations.CalledInAny
 import org.jetbrains.annotations.NonNls
 import org.jetbrains.annotations.TestOnly
 import java.nio.charset.Charset
 import java.util.*
-import java.util.concurrent.Future
 import java.util.function.Supplier
 
 class LineStatusTrackerManager(private val project: Project) : LineStatusTrackerManagerI, Disposable {
@@ -122,6 +126,7 @@ class LineStatusTrackerManager(private val project: Project) : LineStatusTracker
       .subscribe(VirtualFileManager.VFS_CHANGES, MyVirtualFileListener())
 
     LocalLineStatusTrackerProvider.EP_NAME.addChangeListener(Runnable { updateTrackingSettings() }, this)
+    VcsBaseContentProvider.EP_NAME.addChangeListener(project, { onEverythingChanged() }, this)
 
     updatePartialChangeListsAvailability()
 
@@ -551,7 +556,12 @@ class LineStatusTrackerManager(private val project: Project) : LineStatusTracker
     }
 
     private fun handleSuccess(request: RefreshRequest, document: Document, refreshData: RefreshData) {
-      val virtualFile = FileDocumentManager.getInstance().getFile(document)!!
+      val virtualFile = FileDocumentManager.getInstance().getFile(document)
+      if (virtualFile == null) {
+        log("Loading finished: document is not bound", null)
+        return
+      }
+
       val loader = request.loader
 
       val tracker: LocalLineStatusTracker<*>
@@ -561,22 +571,24 @@ class LineStatusTrackerManager(private val project: Project) : LineStatusTracker
           log("Loading finished: tracker already released", virtualFile)
           return
         }
+
+        tracker = data.tracker
+        if (!loader.isMyTracker(tracker)) {
+          log("Loading finished: wrong tracker. tracker: $tracker, loader: $loader", virtualFile)
+          return
+        }
+
         if (!loader.shouldBeUpdated(data.contentInfo, refreshData.contentInfo)) {
           log("Loading finished: no need to update", virtualFile)
           return
         }
 
         data.contentInfo = refreshData.contentInfo
-        tracker = data.tracker
       }
 
-      if (loader.isMyTracker(tracker)) {
-        loader.setLoadedContent(tracker, refreshData.content)
-        log("Loading finished: success", virtualFile)
-      }
-      else {
-        log("Loading finished: wrong tracker. tracker: $tracker, loader: $loader", virtualFile)
-      }
+      log("Loading finished: applying content", virtualFile)
+      loader.setLoadedContent(tracker, refreshData.content)
+      log("Loading finished: success", virtualFile)
 
       restorePendingTrackerState(document)
     }
@@ -899,7 +911,9 @@ class LineStatusTrackerManager(private val project: Project) : LineStatusTracker
   private class RefreshRequest(val document: Document, val loader: LineStatusTrackerContentLoader) {
     override fun equals(other: Any?): Boolean = other is RefreshRequest && document == other.document
     override fun hashCode(): Int = document.hashCode()
-    override fun toString(): String = "RefreshRequest: " + (FileDocumentManager.getInstance().getFile(document)?.path ?: "unknown") // NON-NLS
+    override fun toString(): String {
+      return "RefreshRequest: " + (FileDocumentManager.getInstance().getFile(document)?.path ?: "unknown") // NON-NLS
+    }
   }
 
   private class RefreshData(val content: TrackerContent,
@@ -1131,7 +1145,7 @@ private abstract class SingleThreadLoader<Request, T> : Disposable {
 
   private var isScheduled: Boolean = false
   private var isDisposed: Boolean = false
-  private var lastFuture: Future<*>? = null
+  private val scope = ApplicationManager.getApplication().coroutineScope.childScope()
 
   @RequiresBackgroundThread
   protected abstract fun loadRequest(request: Request): Result<T>
@@ -1139,15 +1153,18 @@ private abstract class SingleThreadLoader<Request, T> : Disposable {
   @RequiresEdt
   protected abstract fun handleResult(request: Request, result: Result<T>)
 
-
   @RequiresEdt
   fun scheduleRefresh(request: Request) {
-    if (isDisposed) return
+    if (isDisposed) {
+      return
+    }
 
     synchronized(LOCK) {
-      if (taskQueue.contains(request)) return
-      taskQueue.add(request)
+      if (taskQueue.contains(request)) {
+        return
+      }
 
+      taskQueue.add(request)
       schedule()
     }
   }
@@ -1159,7 +1176,7 @@ private abstract class SingleThreadLoader<Request, T> : Disposable {
       isDisposed = true
       taskQueue.clear()
       waitingForRefresh.clear()
-      lastFuture?.cancel(true)
+      scope.cancel()
 
       callbacks += callbacksWaitingUpdateCompletion
       callbacksWaitingUpdateCompletion.clear()
@@ -1198,18 +1215,21 @@ private abstract class SingleThreadLoader<Request, T> : Disposable {
 
 
   private fun schedule() {
-    if (isDisposed) return
+    if (isDisposed) {
+      return
+    }
 
     synchronized(LOCK) {
-      if (isScheduled) return
-      if (taskQueue.isEmpty()) return
+      if (isScheduled || taskQueue.isEmpty()) {
+        return
+      }
 
       isScheduled = true
-      lastFuture = ApplicationManager.getApplication().executeOnPooledThread {
+      scope.launch {
         ClientId.withClientId(ClientId.localId) {
-          BackgroundTaskUtil.runUnderDisposeAwareIndicator(this, Runnable {
+          coroutineToIndicator {
             handleRequests()
-          })
+          }
         }
       }
     }
@@ -1346,7 +1366,7 @@ private object DefaultLocalStatusTrackerProvider : BaseRevisionStatusTrackerCont
 
 private abstract class BaseRevisionStatusTrackerContentLoader : LineStatusTrackerContentLoader {
   override fun isTrackedFile(project: Project, file: VirtualFile): Boolean {
-    if (!VcsFileStatusProvider.getInstance(project).isSupported(file)) return false
+    if (!LineStatusTrackerBaseContentUtil.isSupported(project, file)) return false
 
     val status = FileStatusManager.getInstance(project).getStatus(file)
     if (status == FileStatus.ADDED ||
@@ -1359,7 +1379,7 @@ private abstract class BaseRevisionStatusTrackerContentLoader : LineStatusTracke
   }
 
   override fun getContentInfo(project: Project, file: VirtualFile): ContentInfo? {
-    val baseContent = VcsFileStatusProvider.getInstance(project).getBaseRevision(file) ?: return null
+    val baseContent = LineStatusTrackerBaseContentUtil.getBaseRevision(project, file) ?: return null
     return BaseRevisionContentInfo(baseContent, file.charset)
   }
 
@@ -1394,9 +1414,20 @@ private abstract class BaseRevisionStatusTrackerContentLoader : LineStatusTracke
   private class BaseRevisionContent(val text: CharSequence) : TrackerContent
 }
 
+/**
+ * Allows overriding created trackers for partucular files.
+ *
+ * Trackers are created on EDT on request (ex: when [Editor] is opened).
+ * Providers may implement [LineStatusTrackerContentLoader] to use [LineStatusTrackerManager] mechanism for loading necessary
+ * information on a pooled thread.
+ *
+ * @see LineStatusTrackerSettingListener
+ */
 interface LocalLineStatusTrackerProvider {
   fun isTrackedFile(project: Project, file: VirtualFile): Boolean
   fun isMyTracker(tracker: LocalLineStatusTracker<*>): Boolean
+
+  @RequiresEdt
   fun createTracker(project: Project, file: VirtualFile): LocalLineStatusTracker<*>?
 
   companion object {

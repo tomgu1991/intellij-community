@@ -4,6 +4,7 @@ package com.intellij;
 import com.intellij.concurrency.IdeaForkJoinWorkerThreadFactory;
 import com.intellij.idea.Bombed;
 import com.intellij.idea.RecordExecution;
+import com.intellij.nastradamus.NastradamusClient;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.text.StringUtil;
@@ -111,7 +112,7 @@ public class TestAll implements Test {
     this(rootPackage, getClassRoots());
   }
 
-  public TestAll(String rootPackage, List<Path> classesRoots) throws ClassNotFoundException {
+  public TestAll(String rootPackage, List<? extends Path> classesRoots) throws ClassNotFoundException {
     String classFilterName = "tests/testGroups.properties";
     myTestCaseLoader = new TestCaseLoader(classFilterName);
     if (shouldAddFirstAndLastTests()) {
@@ -128,6 +129,12 @@ public class TestAll implements Test {
   }
 
   public static List<Path> getClassRoots() {
+    return TeamCityLogger.block("Collecting tests from ...", () -> {
+      return doGetClassRoots();
+    });
+  }
+
+  private static List<Path> doGetClassRoots() {
     String jarsToRunTestsFrom = System.getProperty("jar.dependencies.to.tests");
     if (jarsToRunTestsFrom != null) {
       String[] jars = jarsToRunTestsFrom.split(";");
@@ -250,7 +257,7 @@ public class TestAll implements Test {
 
     // to make it easier to reproduce order-dependent failures locally
     System.out.println("------");
-    System.out.println("Running tests:");
+    System.out.println("Running tests classes:");
     for (Class<?> aClass : classes) {
       System.out.println(aClass.getName());
     }
@@ -279,6 +286,18 @@ public class TestAll implements Test {
         ((Closeable)testListener).close();
       }
       catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
+
+    if (TestCaseLoader.IS_NASTRADAMUS_TEST_DISTRIBUTOR_ENABLED) {
+      try {
+        var nastradamusClient = new NastradamusClient();
+        var testRunRequest = nastradamusClient.collectTestRunResults();
+        nastradamusClient.sendTestRunResults(testRunRequest);
+      }
+      catch (Exception e) {
+        System.err.println("Unexpected error happened during sending test results to Nastradamus");
         e.printStackTrace();
       }
     }
@@ -311,7 +330,7 @@ public class TestAll implements Test {
     if (recorderClassName != null) {
       try {
         Class<?> recorderClass = Class.forName(recorderClassName);
-        myTestRecorder = (TestRecorder) recorderClass.newInstance();
+        myTestRecorder = (TestRecorder)recorderClass.newInstance();
       }
       catch (Exception e) {
         System.out.println("Error loading test recorder class '" + recorderClassName + "': " + e);
@@ -425,7 +444,7 @@ public class TestAll implements Test {
         }
 
         @Nullable
-        private Method findTestMethod(final TestCase testCase) {
+        private static Method findTestMethod(final TestCase testCase) {
           return safeFindMethod(testCase.getClass(), testCase.getName());
         }
       };
@@ -449,7 +468,7 @@ public class TestAll implements Test {
       JUnit4TestAdapterCache cache;
       if ("junit5".equals(System.getProperty("intellij.build.test.runner"))) {
         try {
-          cache = (JUnit4TestAdapterCache)Class.forName("com.intellij.tests.JUnit5Runner")
+          cache = (JUnit4TestAdapterCache)Class.forName("com.intellij.tests.JUnit5TeamCityRunnerForTestAllSuite")
                 .getMethod("createJUnit4TestAdapterCache")
                 .invoke(null);
         }
@@ -500,5 +519,10 @@ public class TestAll implements Test {
       String description = myBombed.description().isEmpty() ? "" : " (" + myBombed.description() + ")";
       fail("Bomb created by " + myBombed.user() + description + " now explodes!");
     }
+  }
+
+  @Override
+  public String toString() {
+    return getClass().getSimpleName();
   }
 }

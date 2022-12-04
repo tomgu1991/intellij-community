@@ -6,7 +6,7 @@ import com.intellij.testFramework.TestDataPath;
 import org.jetbrains.kotlin.idea.test.JUnit3RunnerWithInners;
 import org.jetbrains.kotlin.idea.test.KotlinTestUtils;
 import org.jetbrains.kotlin.test.TestMetadata;
-import org.jetbrains.kotlin.idea.test.TestRoot;
+import org.jetbrains.kotlin.idea.base.test.TestRoot;
 import org.junit.runner.RunWith;
 
 /**
@@ -21,6 +21,11 @@ import org.junit.runner.RunWith;
 public class KotlinVariablePrintingTestGenerated extends AbstractKotlinVariablePrintingTest {
     private void runTest(String testDataFilePath) throws Exception {
         KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
+    }
+
+    @TestMetadata("extractCapturesFromSuspendLambdas.kt")
+    public void testExtractCapturesFromSuspendLambdas() throws Exception {
+        runTest("testData/variables/extractCapturesFromSuspendLambdas.kt");
     }
 
     @TestMetadata("nestedInlineFunctions.kt")

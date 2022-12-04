@@ -1,6 +1,7 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.vcs.log.data;
 
+import com.intellij.diagnostic.telemetry.TraceManager;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ApplicationNamesInfo;
@@ -21,11 +22,11 @@ import com.intellij.vcs.log.data.index.IndexDiagnosticRunner;
 import com.intellij.vcs.log.data.index.VcsLogIndex;
 import com.intellij.vcs.log.data.index.VcsLogModifiableIndex;
 import com.intellij.vcs.log.data.index.VcsLogPersistentIndex;
-import com.intellij.vcs.log.impl.VcsLogErrorHandler;
 import com.intellij.vcs.log.impl.VcsLogCachesInvalidator;
+import com.intellij.vcs.log.impl.VcsLogErrorHandler;
 import com.intellij.vcs.log.impl.VcsLogSharedSettings;
 import com.intellij.vcs.log.util.PersistentUtil;
-import com.intellij.vcs.log.util.StopWatch;
+import io.opentelemetry.api.trace.Span;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -36,6 +37,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.*;
+
+import static com.intellij.diagnostic.telemetry.TraceKt.runSpanWithScope;
 
 public class VcsLogData implements Disposable, VcsLogDataProvider {
   private static final Logger LOG = Logger.getInstance(VcsLogData.class);
@@ -152,18 +155,19 @@ public class VcsLogData implements Disposable, VcsLogDataProvider {
     synchronized (myLock) {
       if (myState.equals(State.CREATED)) {
         myState = State.INITIALIZED;
-        StopWatch stopWatch = StopWatch.start("initialize");
+        Span span = TraceManager.INSTANCE.getTracer("vcs").spanBuilder("initialize").startSpan();
         Task.Backgroundable backgroundable = new Task.Backgroundable(myProject,
                                                                      VcsLogBundle.message("vcs.log.initial.loading.process"),
                                                                      false) {
           @Override
           public void run(@NotNull ProgressIndicator indicator) {
-            indicator.setIndeterminate(true);
-            resetState();
-            readCurrentUser();
-            DataPack dataPack = myRefresher.readFirstBlock();
-            fireDataPackChangeEvent(dataPack);
-            stopWatch.report();
+            runSpanWithScope(span, () -> {
+              indicator.setIndeterminate(true);
+              resetState();
+              readCurrentUser();
+              myRefresher.readFirstBlock();
+              fireDataPackChangeEvent(myRefresher.getCurrentDataPack());
+            });
           }
 
           @Override
@@ -212,7 +216,7 @@ public class VcsLogData implements Disposable, VcsLogDataProvider {
   }
 
   private void readCurrentUser() {
-    StopWatch sw = StopWatch.start("readCurrentUser");
+    Span span = TraceManager.INSTANCE.getTracer("vcs").spanBuilder("readCurrentUser").startSpan();
     for (Map.Entry<VirtualFile, VcsLogProvider> entry : myLogProviders.entrySet()) {
       VirtualFile root = entry.getKey();
       try {
@@ -228,7 +232,7 @@ public class VcsLogData implements Disposable, VcsLogDataProvider {
         LOG.warn("Couldn't read the username from root " + root, e);
       }
     }
-    sw.report();
+    span.end();
   }
 
   private void fireDataPackChangeEvent(@NotNull final DataPack dataPack) {

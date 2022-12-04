@@ -248,6 +248,14 @@ public class ResizeableMappedFile implements Forceable, Closeable {
     myStorage.putBuffer(index, buffer);
   }
 
+  public void setLogicalSize(long logicalSize) {
+    myLogicalSize = logicalSize;
+  }
+
+  public long getLogicalSize() {
+    return myLogicalSize;
+  }
+
   public void close() throws IOException {
     List<Exception> exceptions = new SmartList<>();
     ContainerUtil.addIfNotNull(exceptions, ExceptionUtil.runAndCatch(() -> {
@@ -302,5 +310,10 @@ public class ResizeableMappedFile implements Forceable, Closeable {
 
   public void unlockWrite() {
     myStorage.unlockWrite();
+  }
+
+  @Override
+  public String toString() {
+    return "ResizeableMappedFile[" + myStorage.toString() + "]";
   }
 }

@@ -44,9 +44,9 @@ public class ProjectImportAction implements BuildAction<ProjectImportAction.AllM
   public static final String IDEA_BACKGROUND_CONVERT = "idea.background.convert";
   public static final String IDEA_MODELS_PARALLEL_FETCH = "idea.models.parallel.fetch";
 
-  private final Set<ProjectImportModelProvider> myProjectsLoadedModelProviders = new HashSet<ProjectImportModelProvider>();
-  private final Set<ProjectImportModelProvider> myBuildFinishedModelProviders = new HashSet<ProjectImportModelProvider>();
-  private final Set<Class<?>> myTargetTypes = new HashSet<Class<?>>();
+  private final Set<ProjectImportModelProvider> myProjectsLoadedModelProviders = new LinkedHashSet<ProjectImportModelProvider>();
+  private final Set<ProjectImportModelProvider> myBuildFinishedModelProviders = new LinkedHashSet<ProjectImportModelProvider>();
+  private final Set<Class<?>> myTargetTypes = new LinkedHashSet<Class<?>>();
   private final boolean myIsPreviewMode;
   private final boolean myIsCompositeBuildsSupported;
   private boolean myUseProjectsLoadedPhase;
@@ -111,12 +111,7 @@ public class ProjectImportAction implements BuildAction<ProjectImportAction.AllM
       myParallelModelsFetch = Boolean.getBoolean(IDEA_MODELS_PARALLEL_FETCH);
     }
     if (!System.getProperties().containsKey(IDEA_BACKGROUND_CONVERT) || Boolean.getBoolean(IDEA_BACKGROUND_CONVERT)) {
-      myConverterExecutor =  Executors.newSingleThreadExecutor(new ThreadFactory() {
-        @Override
-        public Thread newThread(@NotNull Runnable runnable) {
-          return new Thread(runnable, "idea-tooling-model-converter");
-        }
-      });
+      myConverterExecutor =  Executors.newSingleThreadExecutor(new SimpleThreadFactory());
     }
     configureAdditionalTypes(controller);
     final boolean isProjectsLoadedAction = myAllModels == null && myUseProjectsLoadedPhase;
@@ -149,6 +144,7 @@ public class ProjectImportAction implements BuildAction<ProjectImportAction.AllM
       fetchProjectBuildModels(wrappedController, isProjectsLoadedAction, includedBuild);
       addBuildModels(wrappedController, myAllModels, includedBuild, isProjectsLoadedAction);
     }
+    setupIncludedBuildsHierarchy(myAllModels.getIncludedBuilds(), nestedBuilds);
     if (isProjectsLoadedAction) {
       wrappedController.getModel(TurnOffDefaultTasks.class);
     }
@@ -162,6 +158,28 @@ public class ProjectImportAction implements BuildAction<ProjectImportAction.AllM
       }
     }
     return isProjectsLoadedAction && !myAllModels.hasModels() ? null : myAllModels;
+  }
+
+  private static void setupIncludedBuildsHierarchy(List<Build> builds, Set<GradleBuild> gradleBuilds) {
+    Map<File, Build> rootDirsToBuilds = new HashMap<File, Build>();
+    for (Build build : builds) {
+      rootDirsToBuilds.put(build.getBuildIdentifier().getRootDir(), build);
+    }
+
+    for (GradleBuild gradleBuild : gradleBuilds) {
+      Build build = rootDirsToBuilds.get(gradleBuild.getBuildIdentifier().getRootDir());
+      if (build == null) {
+        continue;
+      }
+
+      for (GradleBuild includedGradleBuild : gradleBuild.getIncludedBuilds()) {
+        Build buildToUpdate = rootDirsToBuilds.get(includedGradleBuild.getBuildIdentifier().getRootDir());
+        if (buildToUpdate instanceof DefaultBuild) {
+          ((DefaultBuild)buildToUpdate).setParentBuildIdentifier(
+            new DefaultBuildIdentifier(gradleBuild.getBuildIdentifier().getRootDir()));
+        }
+      }
+    }
   }
 
   @ApiStatus.Internal
@@ -443,7 +461,7 @@ public class ProjectImportAction implements BuildAction<ProjectImportAction.AllM
     }
 
     /**
-     * @deprecated use {@link #getModel(Class<IdeaProject>)}
+     * @deprecated use {@link #getModel(Class)}
      */
     @NotNull
     @Deprecated
@@ -520,6 +538,8 @@ public class ProjectImportAction implements BuildAction<ProjectImportAction.AllM
     private final DefaultBuildIdentifier myBuildIdentifier;
     private final Collection<Project> myProjects = new ArrayList<Project>(0);
 
+    private DefaultBuildIdentifier myParentBuildIdentifier = null;
+
     private DefaultBuild(String name, File rootDir) {
       myName = name;
       myBuildIdentifier = new DefaultBuildIdentifier(rootDir);
@@ -538,6 +558,15 @@ public class ProjectImportAction implements BuildAction<ProjectImportAction.AllM
     @Override
     public Collection<Project> getProjects() {
       return myProjects;
+    }
+
+    @Override
+    public BuildIdentifier getParentBuildIdentifier() {
+      return myParentBuildIdentifier;
+    }
+
+    private void setParentBuildIdentifier(DefaultBuildIdentifier parentBuildIdentifier) {
+      myParentBuildIdentifier = parentBuildIdentifier;
     }
 
     private void addProject(String name, final ProjectIdentifier projectIdentifier) {
@@ -681,6 +710,13 @@ public class ProjectImportAction implements BuildAction<ProjectImportAction.AllM
     @Override
     public Object convert(Object object) {
       return object;
+    }
+  }
+
+  private static final class SimpleThreadFactory implements ThreadFactory {
+    @Override
+    public Thread newThread(@NotNull Runnable runnable) {
+      return new Thread(runnable, "idea-tooling-model-converter");
     }
   }
 }

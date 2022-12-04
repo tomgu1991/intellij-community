@@ -60,7 +60,7 @@ public class UnqualifiedInnerClassAccessInspection extends BaseInspection implem
     }
 
     @Override
-    protected void doFix(Project project, ProblemDescriptor descriptor) {
+    protected void doFix(@NotNull Project project, @NotNull ProblemDescriptor descriptor) {
       final PsiElement element = descriptor.getPsiElement();
       if (!(element instanceof PsiJavaCodeReferenceElement)) {
         return;
@@ -129,7 +129,7 @@ public class UnqualifiedInnerClassAccessInspection extends BaseInspection implem
       final PsiClass outerClass = ClassUtils.getOutermostContainingClass(containingClass);
       ImportUtils.addImportIfNeeded(outerClass, referenceElement);
       final PsiDocumentManager documentManager = PsiDocumentManager.getInstance(project);
-      final Document document = documentManager.getDocument(containingFile);
+      final Document document = containingFile.getViewProvider().getDocument();
       if (document == null) {
         return;
       }

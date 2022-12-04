@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.j2k
 
@@ -819,6 +819,10 @@ class Converter private constructor(
         } else if (owner is PsiClass && owner.scope is PsiMethod) {
             // Local class should not have visibility modifiers
             modifiers = modifiers.without(modifiers.accessModifier())
+        }
+
+        if (settings.publicByDefault && modifiers.contains(Modifier.INTERNAL)) {
+            modifiers = modifiers.without(Modifier.INTERNAL).with(Modifier.PUBLIC)
         }
 
         return modifiers

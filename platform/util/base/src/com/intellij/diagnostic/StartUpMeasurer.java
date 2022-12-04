@@ -1,14 +1,11 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.diagnostic;
 
 import it.unimi.dsi.fastutil.objects.Object2LongMap;
 import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import org.jetbrains.annotations.*;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
@@ -26,11 +23,6 @@ public final class StartUpMeasurer {
   // It is not serves only display purposes - it is IDs. Visualizer and another tools to analyze data uses phase IDs,
   // so, any changes must be discussed across all involved and reflected in changelog (see `format-changelog.md`).
   public static final class Activities {
-    // this phase name is not fully clear - it is time from `ApplicationLoader.initApplication` to `ApplicationLoader.run`
-    public static final String INIT_APP = "app initialization";
-
-    public static final String PLACE_ON_EVENT_QUEUE = "place on event queue";
-
     // actually, now it is also registers services, not only components,but it doesn't worth to rename
     public static final String REGISTER_COMPONENTS_SUFFIX = "component registration";
     public static final String CREATE_COMPONENTS_SUFFIX = "component creation";
@@ -49,7 +41,7 @@ public final class StartUpMeasurer {
 
   private static long startTime = System.nanoTime();
 
-  private static final ConcurrentLinkedQueue<ActivityImpl> items = new ConcurrentLinkedQueue<>();
+  private static final Queue<ActivityImpl> items = new ConcurrentLinkedQueue<>();
 
   private static boolean isEnabled = true;
 
@@ -63,7 +55,10 @@ public final class StartUpMeasurer {
   }
 
   @ApiStatus.Internal
-  public static final Map<String, Object2LongOpenHashMap<String>> pluginCostMap = new ConcurrentHashMap<>();
+  public static final Map<String, Object2LongMap<String>> pluginCostMap = new ConcurrentHashMap<>();
+
+  @ApiStatus.Internal
+  public volatile static Activity appInitPreparationActivity;
 
   public static long getCurrentTime() {
     return System.nanoTime();
@@ -76,7 +71,6 @@ public final class StartUpMeasurer {
   /**
    * Since start in ms.
    */
-  @SuppressWarnings("unused")
   public static long sinceStart() {
     return TimeUnit.NANOSECONDS.toMillis(getCurrentTime() - startTime);
   }
@@ -244,7 +238,7 @@ public final class StartUpMeasurer {
   public static void doAddPluginCost(@NonNls @NotNull String pluginId,
                                      @NonNls @NotNull String phase,
                                      long time,
-                                     @NotNull Map<String, Object2LongOpenHashMap<String>> pluginCostMap) {
+                                     @NotNull Map<String, Object2LongMap<String>> pluginCostMap) {
     Object2LongMap<String> costPerPhaseMap = pluginCostMap.computeIfAbsent(pluginId, __ -> new Object2LongOpenHashMap<>());
     //noinspection SynchronizationOnLocalVariableOrMethodParameter
     synchronized (costPerPhaseMap) {

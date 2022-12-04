@@ -13,6 +13,7 @@ import com.intellij.openapi.util.ActionCallback;
 import com.intellij.openapi.util.ActiveRunnable;
 import com.intellij.openapi.util.BusyObject;
 import com.intellij.openapi.util.Disposer;
+import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.wm.IdeFocusManager;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.components.JBPanelWithEmptyText;
@@ -33,10 +34,6 @@ import java.util.List;
 import java.util.*;
 import java.util.function.Supplier;
 
-/**
- * @author Anton Katilin
- * @author Vladimir Kondratyev
- */
 public class ContentManagerImpl implements ContentManager, PropertyChangeListener, Disposable.Parent {
   private static final Logger LOG = Logger.getInstance(ContentManagerImpl.class);
 
@@ -185,7 +182,7 @@ public class ContentManagerImpl implements ContentManager, PropertyChangeListene
     if (!Content.TEMPORARY_REMOVED_KEY.get(content, false) && getContentCount() == 0 && !isEmpty()) {
       ContentManager oldManager = content.getManager();
       for (ContentManagerImpl nestedManager : myNestedManagers) {
-        if (nestedManager.getContentCount() > 0) {
+        if (!nestedManager.isEmpty()) {
           nestedManager.doAddContent(content, index);
           if (content.getManager() != oldManager) {
             return;
@@ -543,12 +540,18 @@ public class ContentManagerImpl implements ContentManager, PropertyChangeListene
     boolean focused = false;
     final Content[] selection = getSelectedContents();
     for (Content each : selection) {
-      if (UIUtil.isFocusAncestor(each.getComponent())) {
+      if (isFocusAncestorStrict(each.getComponent())) {
         focused = true;
         break;
       }
     }
     return focused;
+  }
+
+  private static boolean isFocusAncestorStrict(JComponent component) {
+    Component owner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+    if (owner == null) return false;
+    return SwingUtilities.isDescendingFrom(owner, component);
   }
 
   @Override
@@ -591,6 +594,10 @@ public class ContentManagerImpl implements ContentManager, PropertyChangeListene
 
   @Override
   public void addContentManagerListener(@NotNull ContentManagerListener l) {
+    if (Registry.is("ide.content.manager.listeners.order.fix")) {
+      myDispatcher.getListeners().add(l);
+      return;
+    }
     myDispatcher.getListeners().add(0, l);
   }
 

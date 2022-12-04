@@ -4,26 +4,41 @@ package com.intellij.openapi.application.impl
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.asContextElement
+import com.intellij.openapi.application.contextModality
 import kotlinx.coroutines.*
 import org.jetbrains.annotations.ApiStatus.Internal
-import org.jetbrains.annotations.VisibleForTesting
-import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.ContinuationInterceptor
-import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.coroutineContext
 
-internal class ModalityStateElement(
-  val modalityState: ModalityState,
-) : AbstractCoroutineContextElement(ModalityStateElement) {
-
-  companion object : CoroutineContext.Key<ModalityStateElement>
+@Internal
+suspend fun <T> onEdtInNonAnyModality(action: suspend CoroutineScope.() -> T): T = when {
+  coroutineContext.contextModality() != ModalityState.any() -> {
+    withContext(Dispatchers.EDT, action)
+  }
+  @OptIn(ExperimentalStdlibApi::class)
+  coroutineContext[CoroutineDispatcher] != Dispatchers.EDT -> {
+    withContext(Dispatchers.EDT + ModalityState.NON_MODAL.asContextElement(), action)
+  }
+  else -> {
+    withContext(ModalityState.NON_MODAL.asContextElement()) {
+      // Force re-dispatch because changing context modality without changing the dispatcher
+      // continues the execution in the current EDT event.
+      yield()
+      action()
+    }
+  }
 }
 
-@VisibleForTesting
 @Internal
-fun CoroutineContext.contextModality(): ModalityState {
-  return this[ModalityStateElement]?.modalityState
-         ?: ModalityState.any()
+fun <T> inModalContext(modalJob: JobProvider, action: (ModalityState) -> T): T {
+  val newModalityState = LaterInvocator.getCurrentModalityState().appendEntity(modalJob)
+  LaterInvocator.enterModal(modalJob, newModalityState)
+  try {
+    return action(newModalityState)
+  }
+  finally {
+    LaterInvocator.leaveModal(modalJob)
+  }
 }
 
 @Internal
@@ -33,7 +48,7 @@ suspend fun <X> withModalContext(
   val originalDispatcher = requireNotNull(coroutineContext[ContinuationInterceptor])
   val contextModality = coroutineContext.contextModality()
   if (Dispatchers.EDT === originalDispatcher) {
-    if (contextModality == ModalityState.any()) {
+    if (contextModality == null || contextModality == ModalityState.any()) {
       // Force NON_MODAL, otherwise another modality could be entered concurrently.
       withContext(ModalityState.NON_MODAL.asContextElement()) {
         yield() // Force re-dispatch in the proper modality.
@@ -45,7 +60,12 @@ suspend fun <X> withModalContext(
     }
   }
   else {
-    val enterModalModality = if (contextModality == ModalityState.any()) ModalityState.NON_MODAL else contextModality
+    val enterModalModality = if (contextModality == null || contextModality == ModalityState.any()) {
+      ModalityState.NON_MODAL
+    }
+    else {
+      contextModality
+    }
     withContext(Dispatchers.EDT + enterModalModality.asContextElement()) {
       withModalContextEDT {
         withContext(originalDispatcher, action)

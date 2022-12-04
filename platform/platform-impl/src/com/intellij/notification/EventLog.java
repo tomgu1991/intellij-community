@@ -7,6 +7,7 @@ import com.intellij.execution.impl.EditorHyperlinkSupport;
 import com.intellij.ide.DataManager;
 import com.intellij.ide.IdeBundle;
 import com.intellij.ide.impl.ProjectUtil;
+import com.intellij.notification.LogModel.StatusMessage;
 import com.intellij.notification.impl.NotificationCollector;
 import com.intellij.notification.impl.NotificationsConfigurationImpl;
 import com.intellij.notification.impl.NotificationsManagerImpl;
@@ -145,7 +146,7 @@ public final class EventLog {
     getProjectService(project).doClear();
   }
 
-  public static @Nullable Trinity<Notification, @NlsContexts.StatusBarText String, Long> getStatusMessage(@Nullable Project project) {
+  public static @Nullable StatusMessage getStatusMessage(@Nullable Project project) {
     return getLogModel(project).getStatusMessage();
   }
 
@@ -196,6 +197,9 @@ public final class EventLog {
           if (context != null) {
             project = context.getData(CommonDataKeys.PROJECT);
           }
+          if (source instanceof JComponent component) {
+            Notification.setDataProvider(notification, component);
+          }
           NotificationCollector.getInstance()
             .logNotificationActionInvoked(project, notification, action, NotificationCollector.NotificationPlace.EVENT_LOG);
           Notification.fire(notification, action, context);
@@ -217,7 +221,7 @@ public final class EventLog {
         showMore.set(true);
         continue;
       }
-      list.add(Pair.create(new TextRange(marker.getStartOffset(), marker.getEndOffset()), links.get(marker)));
+      list.add(Pair.create(marker.getTextRange(), links.get(marker)));
     }
 
     if (showMore.get()) {
@@ -252,7 +256,7 @@ public final class EventLog {
       if (!marker.isValid()) {
         continue;
       }
-      list.add(Pair.create(new TextRange(marker.getStartOffset(), marker.getEndOffset()), links.get(marker)));
+      list.add(Pair.create(marker.getTextRange(), links.get(marker)));
     }
 
     int msgStart = editor.getDocument().getTextLength();
@@ -296,7 +300,7 @@ public final class EventLog {
     return removeCallback;
   }
 
-  private static void highlightTags(List<RangeMarker> markers, @NotNull EditorEx editor, int fontType) {
+  private static void highlightTags(List<? extends RangeMarker> markers, @NotNull EditorEx editor, int fontType) {
     if (!markers.isEmpty()) {
       MarkupModelEx model = editor.getMarkupModel();
       TextAttributes attributes = new TextAttributes(null, null, null, null, fontType);
@@ -389,8 +393,8 @@ public final class EventLog {
                                           AtomicBoolean showMore,
                                           Map<RangeMarker, HyperlinkInfo> links,
                                           List<RangeMarker> lineSeparators,
-                                          List<RangeMarker> boldMarkers,
-                                          List<RangeMarker> italicMarkers) {
+                                          List<? super RangeMarker> boldMarkers,
+                                          List<? super RangeMarker> italicMarkers) {
     String content = StringUtil.convertLineSeparators(text);
 
     int initialLen = document.getTextLength();
@@ -451,7 +455,7 @@ public final class EventLog {
     return hasHtml;
   }
 
-  private static String parseTag(List<RangeMarker> markers,
+  private static String parseTag(List<? super RangeMarker> markers,
                                  Document document,
                                  String content,
                                  Matcher tagMatcher,

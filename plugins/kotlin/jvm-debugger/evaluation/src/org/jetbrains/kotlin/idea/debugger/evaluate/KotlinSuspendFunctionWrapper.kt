@@ -1,16 +1,17 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.idea.debugger.evaluate
 
 import com.intellij.debugger.engine.evaluation.EvaluateException
-import com.intellij.openapi.application.invokeAndWaitIfNeeded
+import com.intellij.openapi.application.runReadAction
 import com.intellij.psi.PsiElement
+import com.intellij.psi.util.descendantsOfType
 import com.intellij.psi.util.parentsOfType
 import org.jetbrains.kotlin.backend.common.descriptors.isSuspend
 import org.jetbrains.kotlin.builtins.isSuspendFunctionType
 import org.jetbrains.kotlin.descriptors.CallableDescriptor
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
+import org.jetbrains.kotlin.idea.debugger.base.util.evaluate.ExecutionContext
 import org.jetbrains.kotlin.idea.search.usagesSearch.descriptor
-import org.jetbrains.kotlin.idea.util.application.runReadAction
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.calls.util.getResolvedCall
@@ -19,10 +20,10 @@ import org.jetbrains.kotlin.resolve.calls.checkers.COROUTINE_CONTEXT_FQ_NAME
 import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
 
 internal class KotlinSuspendFunctionWrapper(
-    val bindingContext: BindingContext,
-    val executionContext: ExecutionContext,
-    val psiContext: PsiElement?,
-    isCoroutineScopeAvailable: Boolean
+  val bindingContext: BindingContext,
+  private val executionContext: ExecutionContext,
+  private val psiContext: PsiElement?,
+  isCoroutineScopeAvailable: Boolean
 ) : KotlinExpressionWrapper {
     private val coroutineContextKeyword =
         if (isCoroutineScopeAvailable)
@@ -58,21 +59,14 @@ internal class KotlinSuspendFunctionWrapper(
         }
 
     private fun KtExpression.containsSuspendFunctionCall(bindingContext: BindingContext): Boolean {
-        var result = false
-        invokeAndWaitIfNeeded {
-            accept(object : KtTreeVisitorVoid() {
-                override fun visitCallExpression(callExpression: KtCallExpression) {
-                    val resolvedCall = callExpression.getResolvedCall(bindingContext)
-                    if (resolvedCall != null && resolvedCall.resultingDescriptor.isSuspend &&
-                        !callExpression.parentsOfType<KtLambdaExpression>().isCoroutineContextAvailableFromLambda(bindingContext)) {
-                        result = true
-                        return
-                    }
-                    callExpression.acceptChildren(this)
-                }
-            })
+        return runReadAction {
+            descendantsOfType<KtCallExpression>().any { callExpression ->
+                val resolvedCall = callExpression.getResolvedCall(bindingContext)
+                resolvedCall != null
+                        && resolvedCall.resultingDescriptor.isSuspend
+                        && !callExpression.parentsOfType<KtLambdaExpression>().isCoroutineContextAvailableFromLambda(bindingContext)
+            }
         }
-        return result
     }
 
     private fun PsiElement?.isCoroutineContextAvailable() =

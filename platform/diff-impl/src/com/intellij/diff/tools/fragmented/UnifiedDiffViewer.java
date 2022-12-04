@@ -32,7 +32,6 @@ import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.undo.UndoManager;
 import com.intellij.openapi.diff.DiffBundle;
-import com.intellij.openapi.diff.LineTokenizer;
 import com.intellij.openapi.editor.*;
 import com.intellij.openapi.editor.actionSystem.EditorActionManager;
 import com.intellij.openapi.editor.actionSystem.ReadonlyFragmentModificationHandler;
@@ -77,8 +76,6 @@ import org.jetbrains.annotations.Nullable;
 import javax.swing.*;
 import java.util.*;
 import java.util.function.IntUnaryOperator;
-
-import static com.intellij.diff.util.DiffUtil.getLinesContent;
 
 public class UnifiedDiffViewer extends ListenerDiffViewerBase implements DifferencesLabel.DifferencesCounter {
   @NotNull protected final EditorEx myEditor;
@@ -492,8 +489,8 @@ public class UnifiedDiffViewer extends ListenerDiffViewerBase implements Differe
   }
 
   private static IntUnaryOperator mergeLineConverters(@Nullable IntUnaryOperator contentConvertor,
-                                                  @NotNull IntUnaryOperator unifiedConvertor,
-                                                  @NotNull IntUnaryOperator foldingConvertor) {
+                                                      @NotNull IntUnaryOperator unifiedConvertor,
+                                                      @NotNull IntUnaryOperator foldingConvertor) {
     return DiffUtil.mergeLineConverters(DiffUtil.mergeLineConverters(contentConvertor, unifiedConvertor), foldingConvertor);
   }
 
@@ -685,6 +682,11 @@ public class UnifiedDiffViewer extends ListenerDiffViewerBase implements Differe
     }
 
     @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
+    }
+
+    @Override
     public void update(@NotNull AnActionEvent e) {
       if (DiffUtil.isFromShortcut(e)) {
         // consume shortcut even if there are nothing to do - avoid calling some other action
@@ -858,23 +860,23 @@ public class UnifiedDiffViewer extends ListenerDiffViewerBase implements Differe
   }
 
   @NotNull
-  protected List<? extends DocumentContent> getContents() {
-    //noinspection unchecked
+  public List<? extends DocumentContent> getContents() {
+    //noinspection unchecked,rawtypes
     return (List)myRequest.getContents();
   }
 
   @NotNull
-  protected DocumentContent getContent(@NotNull Side side) {
+  public DocumentContent getContent(@NotNull Side side) {
     return side.select(getContents());
   }
 
   @NotNull
-  protected DocumentContent getContent1() {
+  public DocumentContent getContent1() {
     return getContent(Side.LEFT);
   }
 
   @NotNull
-  protected DocumentContent getContent2() {
+  public DocumentContent getContent2() {
     return getContent(Side.RIGHT);
   }
 
@@ -924,7 +926,7 @@ public class UnifiedDiffViewer extends ListenerDiffViewerBase implements Differe
     return getContent(side).getDocument();
   }
 
-  protected boolean isStateIsOutOfDate() {
+  public boolean isStateIsOutOfDate() {
     return myStateIsOutOfDate;
   }
 
@@ -1065,16 +1067,13 @@ public class UnifiedDiffViewer extends ListenerDiffViewerBase implements Differe
       myIndex++;
 
       LineFragment lineFragment = change.getLineFragment();
-
       Document document = getContent2().getDocument();
-      CharSequence insertedText = getLinesContent(document, lineFragment.getStartLine2(), lineFragment.getEndLine2());
 
-      int lineNumber = lineFragment.getStartLine2();
-
-      LineTokenizer tokenizer = new LineTokenizer(insertedText.toString());
-      for (String line : tokenizer.execute()) {
+      for (int lineNumber = lineFragment.getStartLine2(); lineNumber < lineFragment.getEndLine2(); lineNumber++) {
+        int offset1 = document.getLineStartOffset(lineNumber);
+        int offset2 = document.getLineEndOffset(lineNumber);
+        CharSequence line = document.getImmutableCharSequence().subSequence(offset1, offset2);
         addLine(lineNumber, line);
-        lineNumber++;
       }
     }
   }

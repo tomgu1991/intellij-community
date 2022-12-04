@@ -16,6 +16,7 @@ import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.fileTypes.FileTypeRegistry;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.text.HtmlChunk;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -166,8 +167,9 @@ public class CreateFilePathFix extends AbstractCreateFileFix {
   @Override
   public @NotNull IntentionPreviewInfo generatePreview(@NotNull Project project, @NotNull Editor editor, @NotNull PsiFile file) {
     String extension = StringUtil.substringAfterLast(myNewFileName, ".");
-    Map<String, Icon> icons = Map.of("folder", AllIcons.Nodes.Folder
-      , "file", extension == null ? AllIcons.FileTypes.Any_type : FileTypeRegistry.getInstance().getFileTypeByExtension(extension).getIcon());
-    return new IntentionPreviewInfo.Html(getDescription(), icons);
+    Icon icon =
+      extension == null ? AllIcons.FileTypes.Any_type : FileTypeRegistry.getInstance().getFileTypeByExtension(extension).getIcon();
+    HtmlChunk description = getDescription(icon);
+    return description == null ? IntentionPreviewInfo.EMPTY : new IntentionPreviewInfo.Html(description);
   }
 }

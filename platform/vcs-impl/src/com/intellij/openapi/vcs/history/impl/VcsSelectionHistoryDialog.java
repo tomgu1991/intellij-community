@@ -260,7 +260,7 @@ public final class VcsSelectionHistoryDialog extends FrameWrapper implements Dat
         ColumnInfo[] additionalColumns = components.getColumns();
         myListModel = new ListTableModel<>(ArrayUtil.mergeArrays(myDefaultColumns, additionalColumns, ColumnInfo[]::new));
         myListModel.setSortable(false);
-        myList.setModel(myListModel);
+        myList.setModelAndUpdateColumns(myListModel);
 
         mySelectedRevisionListener = components.getRevisionListener();
         myDetailsPanel.setContent(components.getDetailsComponent());
@@ -672,6 +672,11 @@ public final class VcsSelectionHistoryDialog extends FrameWrapper implements Dat
 
   public static class MyDiffAction implements AnActionExtensionProvider {
     @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
+    }
+
+    @Override
     public boolean isActive(@NotNull AnActionEvent e) {
       return e.getData(SELECTION_HISTORY_DIALOG_KEY) != null;
     }
@@ -713,6 +718,11 @@ public final class VcsSelectionHistoryDialog extends FrameWrapper implements Dat
   }
 
   public static class MyDiffAfterWithLocalAction implements AnActionExtensionProvider {
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
+    }
+
     @Override
     public boolean isActive(@NotNull AnActionEvent e) {
       return e.getData(SELECTION_HISTORY_DIALOG_KEY) != null;

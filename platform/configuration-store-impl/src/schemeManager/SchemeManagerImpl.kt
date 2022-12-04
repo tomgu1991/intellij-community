@@ -7,6 +7,7 @@ import com.intellij.ide.ui.UITheme
 import com.intellij.ide.ui.laf.TempUIThemeBasedLookAndFeelInfo
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.components.RoamingType
+import com.intellij.openapi.components.SettingsCategory
 import com.intellij.openapi.components.StateStorageOperation
 import com.intellij.openapi.components.impl.stores.FileStorageCoreUtil
 import com.intellij.openapi.diagnostic.debug
@@ -24,7 +25,6 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.newvfs.NewVirtualFile
 import com.intellij.util.*
 import com.intellij.util.containers.catch
-import com.intellij.util.containers.mapSmart
 import com.intellij.util.io.*
 import com.intellij.util.text.UniqueNameGenerator
 import org.jdom.Document
@@ -40,15 +40,21 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.function.Function
 import java.util.function.Predicate
 
-class SchemeManagerImpl<T: Scheme, MUTABLE_SCHEME : T>(val fileSpec: String,
-                                                       processor: SchemeProcessor<T, MUTABLE_SCHEME>,
-                                                       private val provider: StreamProvider?,
-                                                       internal val ioDirectory: Path,
-                                                       val roamingType: RoamingType = RoamingType.DEFAULT,
-                                                       val presentableName: String? = null,
-                                                       private val schemeNameToFileName: SchemeNameToFileName = CURRENT_NAME_CONVERTER,
-                                                       private val fileChangeSubscriber: FileChangeSubscriber? = null,
-                                                       private val virtualFileResolver: VirtualFileResolver? = null) : SchemeManagerBase<T, MUTABLE_SCHEME>(processor), SafeWriteRequestor, StorageManagerFileWriteRequestor {
+class SchemeManagerImpl<T: Scheme, MUTABLE_SCHEME : T>(
+  val fileSpec: String,
+  processor: SchemeProcessor<T, MUTABLE_SCHEME>,
+  private val provider: StreamProvider?,
+  internal val ioDirectory: Path,
+  val roamingType: RoamingType = RoamingType.DEFAULT,
+  val presentableName: String? = null,
+  private val schemeNameToFileName: SchemeNameToFileName = CURRENT_NAME_CONVERTER,
+  private val fileChangeSubscriber: FileChangeSubscriber? = null,
+  private val virtualFileResolver: VirtualFileResolver? = null,
+  private val settingsCategory: SettingsCategory = SettingsCategory.OTHER
+) : SchemeManagerBase<T, MUTABLE_SCHEME>(processor),
+    SafeWriteRequestor,
+    StorageManagerFileWriteRequestor {
+
   private val isUseVfs: Boolean
     get() = fileChangeSubscriber != null || virtualFileResolver != null
 
@@ -90,7 +96,7 @@ class SchemeManagerImpl<T: Scheme, MUTABLE_SCHEME : T>(val fileSpec: String,
     get() = ioDirectory.toFile()
 
   override val allSchemeNames: Collection<String>
-    get() = schemes.mapSmart { processor.getSchemeKey(it) }
+    get() = schemes.map { processor.getSchemeKey(it) }
 
   override val allSchemes: List<T>
     get() = Collections.unmodifiableList(schemes)
@@ -354,6 +360,10 @@ class SchemeManagerImpl<T: Scheme, MUTABLE_SCHEME : T>(val fileSpec: String,
     }
   }
 
+  override fun getSettingsCategory(): SettingsCategory {
+    return settingsCategory
+  }
+
   private fun removeDirectoryIfEmpty(errors: MutableList<Throwable>) {
     ioDirectory.directoryStreamIfExists {
       for (file in it) {
@@ -477,7 +487,7 @@ class SchemeManagerImpl<T: Scheme, MUTABLE_SCHEME : T>(val fileSpec: String,
       if (renamed) {
         externalInfo!!.scheduleDelete(filesToDelete, "renamed")
       }
-      provider!!.write(providerPath, byteOut.internalBuffer, byteOut.size(), roamingType)
+      provider!!.write(providerPath, byteOut.toByteArray(), roamingType)
     }
 
     if (externalInfo == null) {

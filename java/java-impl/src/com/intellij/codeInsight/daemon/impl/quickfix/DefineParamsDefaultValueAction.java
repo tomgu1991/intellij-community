@@ -15,7 +15,6 @@
  */
 package com.intellij.codeInsight.daemon.impl.quickfix;
 
-import com.intellij.codeInsight.FileModificationService;
 import com.intellij.codeInsight.daemon.QuickFixBundle;
 import com.intellij.codeInsight.generation.ClassMember;
 import com.intellij.codeInsight.generation.RecordConstructorMember;
@@ -24,6 +23,7 @@ import com.intellij.codeInsight.intention.LowPriorityAction;
 import com.intellij.codeInsight.intention.PsiElementBaseIntentionAction;
 import com.intellij.codeInsight.intention.impl.ParameterClassMember;
 import com.intellij.codeInsight.intention.preview.IntentionPreviewInfo;
+import com.intellij.codeInsight.intention.preview.IntentionPreviewUtils;
 import com.intellij.codeInsight.template.Template;
 import com.intellij.codeInsight.template.TemplateBuilderImpl;
 import com.intellij.codeInsight.template.impl.TextExpression;
@@ -44,6 +44,7 @@ import com.intellij.psi.util.JavaElementKind;
 import com.intellij.psi.util.JavaPsiRecordUtil;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.util.PsiUtil;
+import com.intellij.ui.ExperimentalUI;
 import com.intellij.util.ArrayUtil;
 import com.intellij.util.CommonJavaRefactoringUtil;
 import com.intellij.util.IncorrectOperationException;
@@ -74,7 +75,7 @@ public class DefineParamsDefaultValueAction extends PsiElementBaseIntentionActio
 
   @Override
   public Icon getIcon(int flags) {
-    return AllIcons.Actions.RefactoringBulb;
+    return ExperimentalUI.isNewUI() ? null : AllIcons.Actions.RefactoringBulb;
   }
 
   @Override
@@ -93,6 +94,10 @@ public class DefineParamsDefaultValueAction extends PsiElementBaseIntentionActio
     }
     final PsiClass containingClass = method.getContainingClass();
     if (containingClass == null || (containingClass.isInterface() && !PsiUtil.isLanguageLevel8OrHigher(method))) {
+      return false;
+    }
+    if (containingClass.isAnnotationType()) {
+      // Method with parameters in annotation is a compilation error; there's no sense to create overload
       return false;
     }
     setText(QuickFixBundle.message("generate.overloaded.method.or.constructor.with.default.parameter.values",
@@ -120,7 +125,7 @@ public class DefineParamsDefaultValueAction extends PsiElementBaseIntentionActio
       return;
     }
 
-    if (element.isPhysical() && !FileModificationService.getInstance().preparePsiElementForWrite(element)) return;
+    if (!IntentionPreviewUtils.prepareElementForWrite(element)) return;
 
     Runnable runnable = () -> {
       final PsiMethod prototype = (PsiMethod)containingClass.addBefore(methodPrototype, method);

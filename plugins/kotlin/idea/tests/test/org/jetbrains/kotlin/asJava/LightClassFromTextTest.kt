@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package org.jetbrains.kotlin.asJava
 
@@ -7,15 +7,14 @@ import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiClassType
 import com.intellij.psi.PsiType
 import com.intellij.testFramework.LightProjectDescriptor
-import org.jetbrains.kotlin.asJava.elements.KtLightMethod
 import org.jetbrains.kotlin.idea.test.KotlinLightCodeInsightFixtureTestCase
 import org.jetbrains.kotlin.idea.test.KotlinWithJdkAndRuntimeLightProjectDescriptor
+import org.jetbrains.kotlin.idea.base.test.TestRoot
 import org.jetbrains.kotlin.psi.KtClassOrObject
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtPsiFactory
 import org.jetbrains.kotlin.test.TestMetadata
-import org.jetbrains.kotlin.idea.test.TestRoot
 import org.junit.internal.runners.JUnit38ClassRunner
 import org.junit.runner.RunWith
 
@@ -24,7 +23,7 @@ import org.junit.runner.RunWith
 @TestMetadata("testData/asJava/fileLightClass")
 @RunWith(JUnit38ClassRunner::class)
 class LightClassFromTextTest8 : KotlinLightCodeInsightFixtureTestCase() {
-    override fun getProjectDescriptor(): LightProjectDescriptor = KotlinWithJdkAndRuntimeLightProjectDescriptor.INSTANCE
+    override fun getProjectDescriptor(): LightProjectDescriptor = KotlinWithJdkAndRuntimeLightProjectDescriptor.getInstance()
 
     fun testSimple() {
         myFixture.configureByText("Dummy.kt", "") as KtFile
@@ -109,27 +108,6 @@ class LightClassFromTextTest8 : KotlinLightCodeInsightFixtureTestCase() {
         assertEquals(exampleClass, (f.returnType as PsiClassType).resolve())
     }
 
-    // KT-32969
-    fun testDataClassWhichExtendsAbstractWithFinalToString() {
-        myFixture.configureByText(
-            "A.kt",
-            """
-            abstract class A {
-                final override fun toString() = "nya"
-            }
-            """.trimIndent()
-        ) as KtFile
-        val dataClass = classesFromText("data class D(val x: Int): A()").single()
-
-        for (method in dataClass.methods) {
-            if (method is KtLightMethod) {
-                // LazyLightClassMemberMatchingError$WrongMatch will be thrown
-                // if memberIndex conflict will be found
-                method.clsDelegate
-            }
-        }
-    }
-
     fun testHeaderDeclarations() {
         val contextFile = myFixture.configureByText("Header.kt", "header class Foo\n\nheader fun foo()\n") as KtFile
         val headerClass = contextFile.declarations.single { it is KtClassOrObject }
@@ -139,7 +117,7 @@ class LightClassFromTextTest8 : KotlinLightCodeInsightFixtureTestCase() {
     }
 
     private fun classesFromText(text: String, fileName: String = "A.kt"): Array<out PsiClass> {
-        val file = KtPsiFactory(project).createFileWithLightClassSupport(fileName, text, myFixture.file)
+        val file = KtPsiFactory.contextual(myFixture.file).createPhysicalFile(fileName, text)
         return file.classes
     }
 }

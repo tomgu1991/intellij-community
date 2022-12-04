@@ -2,6 +2,7 @@
 
 package org.jetbrains.kotlin.idea.quickfix
 
+import com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerImpl
 import com.intellij.codeInsight.daemon.quickFix.ActionHint
 import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.codeInsight.intention.IntentionActionDelegate
@@ -22,6 +23,7 @@ import com.intellij.util.ui.UIUtil
 import junit.framework.TestCase
 import org.jetbrains.kotlin.idea.caches.resolve.ResolveInDispatchThreadException
 import org.jetbrains.kotlin.idea.caches.resolve.forceCheckForResolveInDispatchThreadInTests
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.QuickFixActionBase
 import org.jetbrains.kotlin.idea.facet.KotlinFacet
 import org.jetbrains.kotlin.idea.test.*
 import org.jetbrains.kotlin.psi.KtFile
@@ -74,7 +76,7 @@ abstract class AbstractQuickFixTest : KotlinLightCodeInsightFixtureTestCase(), Q
     override fun getProjectDescriptor(): LightProjectDescriptor =
         if ("createfromusage" in testDataDirectory.path.toLowerCase()) {
             // TODO: WTF
-            KotlinWithJdkAndRuntimeLightProjectDescriptor.INSTANCE
+            KotlinWithJdkAndRuntimeLightProjectDescriptor.getInstance()
         } else {
             super.getProjectDescriptor()
         }
@@ -208,9 +210,11 @@ abstract class AbstractQuickFixTest : KotlinLightCodeInsightFixtureTestCase(), Q
                 UIUtil.dispatchAllInvocationEvents()
 
                 if (!shouldBeAvailableAfterExecution()) {
+                    var action = findActionWithText(actionHint.expectedText)
+                    action = if (action == null) null else IntentionActionDelegate.unwrap(action)
                     assertNull(
-                        "Action '${actionHint.expectedText}' is still available after its invocation in test " + fileName,
-                        findActionWithText(actionHint.expectedText)
+                        "Action '${actionHint.expectedText}' (${action?.javaClass}) is still available after its invocation in test " + fileName,
+                        action
                     )
                 }
             } else {
@@ -279,16 +283,20 @@ abstract class AbstractQuickFixTest : KotlinLightCodeInsightFixtureTestCase(), Q
 
         // Support warning suppression
         val caretOffset = myFixture.caretOffset
-        for (highlight in myFixture.doHighlighting()) {
+        val highlightInfos = myFixture.doHighlighting()
+        val file = myFixture.file
+        val editor = myFixture.editor
+        //DaemonCodeAnalyzerImpl.waitForUnresolvedReferencesQuickFixesUnderCaret(file, editor)
+        for (highlight in highlightInfos) {
             if (highlight.startOffset <= caretOffset && caretOffset <= highlight.endOffset) {
                 val group = highlight.problemGroup
                 if (group is SuppressableProblemGroup) {
-                    val at = myFixture.file.findElementAt(highlight.actualStartOffset) ?: continue
-                    val actions = highlight.quickFixActionRanges[0].first.getOptions(at, null)
-                    for (action in actions) {
-                        if (action.text == text) {
-                            return action
-                        }
+                    val at = file.findElementAt(highlight.actualStartOffset) ?: continue
+                    val action = highlight.findRegisteredQuickFix<IntentionAction?> { desc, range ->
+                        desc.getOptions(at, null).find { action -> action.text == text }
+                    }
+                    if (action != null) {
+                        return action
                     }
                 }
             }

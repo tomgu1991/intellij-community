@@ -1,17 +1,15 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.quickfix
 
 import com.intellij.codeInsight.intention.IntentionAction
 import org.jetbrains.kotlin.diagnostics.Diagnostic
-import org.jetbrains.kotlin.diagnostics.Errors
 import org.jetbrains.kotlin.idea.caches.resolve.analyzeAsReplacement
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.intentions.callExpression
 import org.jetbrains.kotlin.idea.intentions.canBeReplacedWithInvokeCall
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.getParentOfType
-import org.jetbrains.kotlin.psi.psiUtil.getQualifiedExpressionForReceiver
 import org.jetbrains.kotlin.psi.psiUtil.getStrictParentOfType
 import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.calls.util.getResolvedCall
@@ -27,8 +25,8 @@ object ReplaceWithSafeCallFixFactory : KotlinSingleIntentionActionFactory() {
             val call = qualifiedExpression.callExpression
             if (call != null) {
                 val context = qualifiedExpression.analyze(BodyResolveMode.PARTIAL)
-                val ktPsiFactory = KtPsiFactory(psiElement)
-                val safeQualifiedExpression = ktPsiFactory.createExpressionByPattern(
+                val psiFactory = KtPsiFactory(psiElement.project)
+                val safeQualifiedExpression = psiFactory.createExpressionByPattern(
                     "$0?.$1", qualifiedExpression.receiverExpression, call,
                     reformat = false
                 )

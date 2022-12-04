@@ -1,1 +1,1 @@
-FirLightSimpleMethodForSymbol: foo
+KtNamedFunction: foo

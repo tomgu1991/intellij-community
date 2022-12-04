@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.inspections.conventionNameCalls
 
@@ -9,14 +9,14 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.tree.IElementType
 import org.jetbrains.kotlin.cfg.containingDeclarationForPseudocode
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.base.projectStructure.languageVersionSettings
 import org.jetbrains.kotlin.idea.caches.resolve.analyzeAsReplacement
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.caches.resolve.getResolutionFacade
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToCall
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToDescriptorIfAny
-import org.jetbrains.kotlin.idea.inspections.AbstractApplicabilityBasedInspection
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.inspections.AbstractApplicabilityBasedInspection
 import org.jetbrains.kotlin.idea.inspections.KotlinEqualsBetweenInconvertibleTypesInspection
 import org.jetbrains.kotlin.idea.intentions.callExpression
 import org.jetbrains.kotlin.idea.intentions.conventionNameCalls.isAnyEquals
@@ -121,20 +121,20 @@ class ReplaceCallWithBinaryOperatorInspection : AbstractApplicabilityBasedInspec
         val argument = callExpression.valueArguments.single().getArgumentExpression() ?: return null
         val receiver = element.receiverExpression
 
-        val factory = KtPsiFactory(element)
+        val psiFactory = KtPsiFactory(element.project)
         return when (operation) {
             KtTokens.EXCLEQ -> {
                 val prefixExpression = element.getWrappingPrefixExpressionIfAny() ?: return null
-                val newExpression = factory.createExpressionByPattern("$0 != $1", receiver, argument, reformat = false)
+                val newExpression = psiFactory.createExpressionByPattern("$0 != $1", receiver, argument, reformat = false)
                 prefixExpression to newExpression
             }
             in OperatorConventions.COMPARISON_OPERATIONS -> {
                 val binaryParent = element.parent as? KtBinaryExpression ?: return null
-                val newExpression = factory.createExpressionByPattern("$0 ${operation.value} $1", receiver, argument, reformat = false)
+                val newExpression = psiFactory.createExpressionByPattern("$0 ${operation.value} $1", receiver, argument, reformat = false)
                 binaryParent to newExpression
             }
             else -> {
-                val newExpression = factory.createExpressionByPattern("$0 ${operation.value} $1", receiver, argument, reformat = false)
+                val newExpression = psiFactory.createExpressionByPattern("$0 ${operation.value} $1", receiver, argument, reformat = false)
                 element to newExpression
             }
         }

@@ -3,6 +3,7 @@
 package org.jetbrains.kotlin.idea.debugger.coroutine.view
 
 import com.intellij.codeInsight.highlighting.HighlightManager
+import com.intellij.debugger.actions.ThreadDumpAction
 import com.intellij.execution.ui.ConsoleView
 import com.intellij.icons.AllIcons
 import com.intellij.ide.DataManager
@@ -224,6 +225,8 @@ class CoroutineDumpPanel(
             }
             updateCoroutinesList()
         }
+
+        override fun getActionUpdateThread() = ActionUpdateThread.BGT
     }
 
     private inner class MergeStackTracesAction : ToggleAction(
@@ -240,6 +243,8 @@ class CoroutineDumpPanel(
             UISettings.getInstance().state.mergeEqualStackTraces = state
             updateCoroutinesList()
         }
+
+        override fun getActionUpdateThread() = ActionUpdateThread.BGT
     }
 
     private class CopyToClipboardAction(private val myCoroutinesDump: List<CompleteCoroutineInfoData>, private val myProject: Project) :
@@ -288,7 +293,9 @@ private fun stringStackTrace(info: CompleteCoroutineInfoData) =
     buildString {
         appendLine("\"${info.descriptor.name}\", state: ${info.descriptor.state}")
         info.stackTrace.forEach {
-            appendLine("\t$it")
+            append("\t")
+            append(ThreadDumpAction.renderLocation(it.location))
+            append("\n")
         }
     }
 

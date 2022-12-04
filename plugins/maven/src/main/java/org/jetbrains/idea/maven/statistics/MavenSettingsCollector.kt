@@ -10,6 +10,7 @@ import com.intellij.openapi.externalSystem.statistics.ExternalSystemUsagesCollec
 import com.intellij.openapi.project.ExternalStorageConfigurationManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Version
+import com.intellij.project.isDirectoryBased
 import org.jetbrains.idea.maven.execution.MavenExecutionOptions
 import org.jetbrains.idea.maven.execution.MavenExternalParameters.resolveMavenHome
 import org.jetbrains.idea.maven.execution.MavenRunner
@@ -66,15 +67,16 @@ class MavenSettingsCollector : ProjectUsagesCollector() {
     val importingSettings = manager.importingSettings
     usages.add(LOOK_FOR_NESTED.metric(importingSettings.isLookForNested))
 
+    usages.add(USE_WORKSPACE_IMPORT.metric(importingSettings.isWorkspaceImportEnabled))
     usages.add(DEDICATED_MODULE_DIR.metric(importingSettings.dedicatedModuleDir.isNotBlank()))
     usages.add(STORE_PROJECT_FILES_EXTERNALLY.metric(ExternalStorageConfigurationManager.getInstance(project).isEnabled))
+    usages.add(IS_DIRECTORY_BASED_PROJECT.metric(project.isDirectoryBased))
     usages.add(AUTO_DETECT_COMPILER.metric(importingSettings.isAutoDetectCompiler))
     usages.add(CREATE_MODULES_FOR_AGGREGATORS.metric(importingSettings.isCreateModulesForAggregators))
     usages.add(CREATE_MODULE_GROUPS.metric(importingSettings.isCreateModuleGroups))
     usages.add(KEEP_SOURCE_FOLDERS.metric(importingSettings.isKeepSourceFolders))
     usages.add(EXCLUDE_TARGET_FOLDER.metric(importingSettings.isExcludeTargetFolder))
     usages.add(USE_MAVEN_OUTPUT.metric(importingSettings.isUseMavenOutput))
-    usages.add(CREATE_SEPARATE_MODULES_FOR_MAIN_AND_TEST.metric(importingSettings.isImportToTreeStructure))
 
     usages.add(GENERATED_SOURCES_FOLDER.metric(importingSettings.generatedSourcesFolder))
     usages.add(UPDATE_FOLDERS_ON_IMPORT_PHASE.metric(importingSettings.updateFoldersOnImportPhase))
@@ -113,7 +115,7 @@ class MavenSettingsCollector : ProjectUsagesCollector() {
   }
 
   companion object {
-    private val GROUP = EventLogGroup("build.maven.state", 3)
+    private val GROUP = EventLogGroup("build.maven.state", 7)
     private val HAS_MAVEN_PROJECT = GROUP.registerEvent("hasMavenProject", EventFields.Enabled)
     private val ALWAYS_UPDATE_SNAPSHOTS = GROUP.registerEvent("alwaysUpdateSnapshots", EventFields.Enabled)
     private val NON_RECURSIVE = GROUP.registerEvent("nonRecursive", EventFields.Enabled)
@@ -123,15 +125,16 @@ class MavenSettingsCollector : ProjectUsagesCollector() {
     private val LOCAL_REPOSITORY = GROUP.registerEvent("localRepository", EventFields.Enabled)
     private val USER_SETTINGS_FILE = GROUP.registerEvent("userSettingsFile", EventFields.Enabled)
     private val LOOK_FOR_NESTED = GROUP.registerEvent("lookForNested", EventFields.Enabled)
+    private val USE_WORKSPACE_IMPORT = GROUP.registerEvent("useWorkspaceImport", EventFields.Enabled)
     private val DEDICATED_MODULE_DIR = GROUP.registerEvent("dedicatedModuleDir", EventFields.Enabled)
     private val STORE_PROJECT_FILES_EXTERNALLY = GROUP.registerEvent("storeProjectFilesExternally", EventFields.Enabled)
+    private val IS_DIRECTORY_BASED_PROJECT = GROUP.registerEvent("useDirectoryBasedProject", EventFields.Enabled)
     private val AUTO_DETECT_COMPILER = GROUP.registerEvent("autoDetectCompiler", EventFields.Enabled)
     private val CREATE_MODULES_FOR_AGGREGATORS = GROUP.registerEvent("createModulesForAggregators", EventFields.Enabled)
     private val CREATE_MODULE_GROUPS = GROUP.registerEvent("createModuleGroups", EventFields.Enabled)
     private val KEEP_SOURCE_FOLDERS = GROUP.registerEvent("keepSourceFolders", EventFields.Enabled)
     private val EXCLUDE_TARGET_FOLDER = GROUP.registerEvent("excludeTargetFolder", EventFields.Enabled)
     private val USE_MAVEN_OUTPUT = GROUP.registerEvent("useMavenOutput", EventFields.Enabled)
-    private val CREATE_SEPARATE_MODULES_FOR_MAIN_AND_TEST = GROUP.registerEvent("createSeparateModulesForMainAndTest", EventFields.Enabled)
     private val DOWNLOAD_DOCS_AUTOMATICALLY = GROUP.registerEvent("downloadDocsAutomatically", EventFields.Enabled)
     private val DOWNLOAD_SOURCES_AUTOMATICALLY = GROUP.registerEvent("downloadSourcesAutomatically", EventFields.Enabled)
     private val CUSTOM_DEPENDENCY_TYPES = GROUP.registerEvent("customDependencyTypes", EventFields.Enabled)

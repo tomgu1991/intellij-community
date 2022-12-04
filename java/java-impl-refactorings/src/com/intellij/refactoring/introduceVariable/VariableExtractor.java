@@ -5,6 +5,7 @@ import com.intellij.codeInsight.BlockUtils;
 import com.intellij.codeInsight.NullabilityAnnotationInfo;
 import com.intellij.codeInsight.NullableNotNullManager;
 import com.intellij.codeInsight.daemon.impl.analysis.HighlightingFeature;
+import com.intellij.codeInsight.intention.preview.IntentionPreviewUtils;
 import com.intellij.codeInspection.dataFlow.DfaPsiUtil;
 import com.intellij.core.JavaPsiBundle;
 import com.intellij.openapi.application.ApplicationManager;
@@ -59,12 +60,12 @@ final class VariableExtractor {
   private final @NotNull FieldConflictsResolver myFieldConflictsResolver;
   private final @Nullable LogicalPosition myPosition;
 
-  private VariableExtractor(final @NotNull Project project,
-                            final @NotNull PsiExpression expression,
-                            final @Nullable Editor editor,
-                            final @NotNull PsiElement anchorStatement,
-                            final PsiExpression @NotNull [] occurrences,
-                            final @NotNull IntroduceVariableSettings settings) {
+  VariableExtractor(final @NotNull Project project,
+                    final @NotNull PsiExpression expression,
+                    final @Nullable Editor editor,
+                    final @NotNull PsiElement anchorStatement,
+                    final PsiExpression @NotNull [] occurrences,
+                    final @NotNull IntroduceVariableSettings settings) {
     myProject = project;
     myExpression = expression;
     myEditor = editor;
@@ -79,9 +80,10 @@ final class VariableExtractor {
     myPosition = editor != null ? editor.getCaretModel().getLogicalPosition() : null;
   }
 
-  @NotNull
-  private SmartPsiElementPointer<PsiVariable> extractVariable() {
-    ApplicationManager.getApplication().assertWriteAccessAllowed();
+  @NotNull SmartPsiElementPointer<PsiVariable> extractVariable() {
+    if (!IntentionPreviewUtils.isPreviewElement(myExpression)) {
+      ApplicationManager.getApplication().assertWriteAccessAllowed();
+    }
     final PsiExpression newExpr = myFieldConflictsResolver.fixInitializer(myExpression);
     if (myAnchor == myExpression) {
       myAnchor = newExpr;

@@ -1,15 +1,16 @@
 // Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package git4idea.repo;
 
+import com.intellij.diagnostic.telemetry.TraceManager;
 import com.intellij.dvcs.repo.RepositoryImpl;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.vcs.log.util.StopWatch;
 import git4idea.GitDisposable;
 import git4idea.GitLocalBranch;
 import git4idea.GitUtil;
@@ -27,6 +28,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 
+import static com.intellij.diagnostic.telemetry.TraceKt.computeWithSpan;
 import static com.intellij.dvcs.DvcsUtil.getShortRepositoryName;
 import static com.intellij.util.ObjectUtils.notNull;
 
@@ -111,6 +113,7 @@ public final class GitRepositoryImpl extends RepositoryImpl implements GitReposi
                                       @NotNull VirtualFile gitDir,
                                       @NotNull Project project,
                                       @NotNull Disposable parentDisposable) {
+    ProgressManager.checkCanceled();
     GitRepositoryImpl repository = new GitRepositoryImpl(root, gitDir, project, parentDisposable);
     repository.setupUpdater();
     GitRepositoryManager.getInstance(project).notifyListenersAsync(repository);
@@ -246,23 +249,25 @@ public final class GitRepositoryImpl extends RepositoryImpl implements GitReposi
 
   @NotNull
   private GitRepoInfo readRepoInfo() {
-    StopWatch sw = StopWatch.start("Reading Git repo info in " + getShortRepositoryName(this));
-    File configFile = myRepositoryFiles.getConfigFile();
-    GitConfig config = GitConfig.read(configFile);
-    myRepositoryFiles.updateCustomPaths(config.parseCore());
+    return computeWithSpan(TraceManager.INSTANCE.getTracer("vcs"), "reading Git repo info", span -> {
+      span.setAttribute("repository", getShortRepositoryName(this));
 
-    Collection<GitRemote> remotes = config.parseRemotes();
-    GitBranchState state = myReader.readState(remotes);
-    boolean isShallow = myReader.hasShallowCommits();
-    Collection<GitBranchTrackInfo> trackInfos =
-      config.parseTrackInfos(state.getLocalBranches().keySet(), state.getRemoteBranches().keySet());
-    GitHooksInfo hooksInfo = myReader.readHooksInfo();
-    Collection<GitSubmoduleInfo> submodules = new GitModulesFileReader().read(getSubmoduleFile());
-    sw.report(LOG);
-    return new GitRepoInfo(state.getCurrentBranch(), state.getCurrentRevision(), state.getState(), new LinkedHashSet<>(remotes),
-                           new HashMap<>(state.getLocalBranches()), new HashMap<>(state.getRemoteBranches()),
-                           new LinkedHashSet<>(trackInfos),
-                           submodules, hooksInfo, isShallow);
+      File configFile = myRepositoryFiles.getConfigFile();
+      GitConfig config = GitConfig.read(configFile);
+      myRepositoryFiles.updateCustomPaths(config.parseCore());
+
+      Collection<GitRemote> remotes = config.parseRemotes();
+      GitBranchState state = myReader.readState(remotes);
+      boolean isShallow = myReader.hasShallowCommits();
+      Collection<GitBranchTrackInfo> trackInfos =
+        config.parseTrackInfos(state.getLocalBranches().keySet(), state.getRemoteBranches().keySet());
+      GitHooksInfo hooksInfo = myReader.readHooksInfo();
+      Collection<GitSubmoduleInfo> submodules = new GitModulesFileReader().read(getSubmoduleFile());
+      return new GitRepoInfo(state.getCurrentBranch(), state.getCurrentRevision(), state.getState(), new LinkedHashSet<>(remotes),
+                             new HashMap<>(state.getLocalBranches()), new HashMap<>(state.getRemoteBranches()),
+                             new LinkedHashSet<>(trackInfos),
+                             submodules, hooksInfo, isShallow);
+    });
   }
 
   @NotNull

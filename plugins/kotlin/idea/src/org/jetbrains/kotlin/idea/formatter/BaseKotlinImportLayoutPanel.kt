@@ -1,7 +1,8 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package org.jetbrains.kotlin.idea.formatter
 
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonShortcuts
 import com.intellij.openapi.actionSystem.ShortcutSet
@@ -12,7 +13,7 @@ import com.intellij.ui.table.JBTable
 import com.intellij.util.IconUtil
 import com.intellij.util.ui.JBInsets
 import org.jetbrains.annotations.Nls
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.core.formatter.KotlinPackageEntry
 import org.jetbrains.kotlin.idea.core.formatter.KotlinPackageEntryTable
 import org.jetbrains.kotlin.idea.highlighter.KotlinHighlightingColors
@@ -195,6 +196,8 @@ class KotlinImportOrderLayoutPanel : BaseKotlinImportLayoutPanel(KotlinBundle.me
                     override fun getShortcut(): ShortcutSet {
                         return CommonShortcuts.getNewForDialogs()
                     }
+
+                    override fun getActionUpdateThread() = ActionUpdateThread.BGT
                 }
             )
             .setRemoveAction { removePackage() }

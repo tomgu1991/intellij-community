@@ -123,7 +123,7 @@ public final class VcsDirtyScopeManagerImpl extends VcsDirtyScopeManager impleme
     }
 
     if (wasReady) {
-      ChangeListManager.getInstance(myProject).scheduleUpdate();
+      ChangeListManagerImpl.getInstanceImpl(myProject).scheduleUpdateImpl();
       if (ongoingRefresh != null) ongoingRefresh.setRejected();
     }
   }
@@ -186,7 +186,7 @@ public final class VcsDirtyScopeManagerImpl extends VcsDirtyScopeManager impleme
     }
 
     if (hasSomethingDirty) {
-      ChangeListManager.getInstance(myProject).scheduleUpdate();
+      ChangeListManagerImpl.getInstanceImpl(myProject).scheduleUpdateImpl();
     }
   }
 
@@ -248,6 +248,15 @@ public final class VcsDirtyScopeManagerImpl extends VcsDirtyScopeManager impleme
       myRefreshInProgress = callback;
     }
     return calculateInvalidated(dirtBuilder, callback);
+  }
+
+  public boolean hasDirtyScopes() {
+    synchronized (LOCK) {
+      if (!myReady) return false;
+      LOG.assertTrue(myDirtInProgress == null);
+
+      return !myDirtBuilder.isEmpty();
+    }
   }
 
   public void changesProcessed() {

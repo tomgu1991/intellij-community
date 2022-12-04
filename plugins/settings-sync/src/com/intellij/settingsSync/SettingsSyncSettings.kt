@@ -3,21 +3,31 @@ package com.intellij.settingsSync
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.*
 import com.intellij.settingsSync.SettingsSyncSettings.Companion.FILE_SPEC
+import org.jetbrains.annotations.ApiStatus
+import org.jetbrains.annotations.TestOnly
 import java.util.*
 
-internal interface SettingsSyncEnabledStateListener : EventListener {
+internal fun interface SettingsSyncEnabledStateListener : EventListener {
   fun enabledStateChanged(syncEnabled: Boolean)
 }
 
 @State(name = "SettingsSyncSettings", storages = [Storage(FILE_SPEC)])
-internal class SettingsSyncSettings : SimplePersistentStateComponent<SettingsSyncSettings.SettingsSyncSettingsState>(
-  SettingsSyncSettingsState()) {
+@ApiStatus.Internal
+class SettingsSyncSettings :
+  SimplePersistentStateComponent<SettingsSyncSettings.SettingsSyncSettingsState>(SettingsSyncSettingsState())
+{
 
   companion object {
     fun getInstance() = ApplicationManager.getApplication().getService(SettingsSyncSettings::class.java)
 
     const val FILE_SPEC = "settingsSync.xml"
   }
+
+  var migrationFromOldStorageChecked: Boolean
+    get() = state.migrationFromOldStorageChecked
+    set(value) {
+      state.migrationFromOldStorageChecked = value
+    }
 
   var syncEnabled
     get() = state.syncEnabled
@@ -79,5 +89,15 @@ internal class SettingsSyncSettings : SimplePersistentStateComponent<SettingsSyn
 
     var disabledCategories by list<SettingsCategory>()
     var disabledSubcategories by map<SettingsCategory, ArrayList<String>>()
+
+    var migrationFromOldStorageChecked by property(false)
+
+    @TestOnly
+    internal fun reset() {
+      syncEnabled = false
+      disabledCategories = mutableListOf()
+      disabledSubcategories = mutableMapOf()
+      migrationFromOldStorageChecked = false
+    }
   }
 }

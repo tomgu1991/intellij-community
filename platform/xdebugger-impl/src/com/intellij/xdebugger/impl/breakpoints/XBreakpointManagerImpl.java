@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.xdebugger.impl.breakpoints;
 
 import com.intellij.configurationStore.XmlSerializer;
@@ -292,12 +292,13 @@ public final class XBreakpointManagerImpl implements XBreakpointManager {
     sendBreakpointEvent(type, listener -> listener.breakpointRemoved(breakpoint));
   }
 
-  private void sendBreakpointEvent(XBreakpointType type, Consumer<XBreakpointListener<XBreakpoint<?>>> event) {
+  private void sendBreakpointEvent(XBreakpointType type, Consumer<? super XBreakpointListener<XBreakpoint<?>>> event) {
     if (myFirstLoadDone) {
       EventDispatcher<XBreakpointListener> dispatcher = myDispatchers.get(type);
       if (dispatcher != null) {
         //noinspection unchecked
-        event.consume(dispatcher.getMulticaster());
+        XBreakpointListener<XBreakpoint<?>> multicaster = dispatcher.getMulticaster();
+        event.consume(multicaster);
       }
       event.consume(getBreakpointDispatcherMulticaster());
     }
@@ -397,8 +398,7 @@ public final class XBreakpointManagerImpl implements XBreakpointManager {
 
   @Override
   public boolean isDefaultBreakpoint(@NotNull XBreakpoint<?> breakpoint) {
-    //noinspection SuspiciousMethodCalls
-    return myDefaultBreakpoints.values().stream().anyMatch(s -> s.contains(breakpoint));
+    return ContainerUtil.exists(myDefaultBreakpoints.values(), s -> s.contains(breakpoint));
   }
 
   private <T extends XBreakpointProperties> EventDispatcher<XBreakpointListener> getOrCreateDispatcher(final XBreakpointType<?,T> type) {

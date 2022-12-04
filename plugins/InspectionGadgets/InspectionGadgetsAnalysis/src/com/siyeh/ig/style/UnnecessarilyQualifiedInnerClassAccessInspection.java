@@ -60,7 +60,7 @@ public class UnnecessarilyQualifiedInnerClassAccessInspection extends BaseInspec
     }
 
     @Override
-    protected void doFix(Project project, ProblemDescriptor descriptor) {
+    protected void doFix(@NotNull Project project, @NotNull ProblemDescriptor descriptor) {
       final PsiElement element = descriptor.getPsiElement();
       final PsiElement parent = element.getParent();
       if (!(parent instanceof PsiJavaCodeReferenceElement)) {
@@ -96,7 +96,7 @@ public class UnnecessarilyQualifiedInnerClassAccessInspection extends BaseInspec
       return false;
     }
     final JavaResolveResult result = results[0];
-    return result.isAccessible() && target.equals(result.getElement());
+    return result.isAccessible() && target.isEquivalentTo(result.getElement());
   }
 
   private class UnnecessarilyQualifiedInnerClassAccessVisitor extends BaseInspectionVisitor {

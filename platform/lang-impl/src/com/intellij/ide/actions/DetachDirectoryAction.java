@@ -2,6 +2,7 @@
 package com.intellij.ide.actions;
 
 import com.intellij.ide.IdeBundle;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.project.DumbAwareAction;
@@ -35,6 +36,11 @@ public class DetachDirectoryAction extends DumbAwareAction {
   }
 
   @Override
+  public @NotNull ActionUpdateThread getActionUpdateThread() {
+    return ActionUpdateThread.BGT;
+  }
+
+  @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
     Project project = e.getProject();
     if (project == null) return;
@@ -60,7 +66,7 @@ public class DetachDirectoryAction extends DumbAwareAction {
     return IdeBundle.message("detach.directory.dialog.title.detach");
   }
 
-  public static void detachDirectoriesWithUndo(@NotNull Project project, @NotNull List<VirtualFile> files) {
+  public static void detachDirectoriesWithUndo(@NotNull Project project, @NotNull List<? extends VirtualFile> files) {
     AttachDirectoryUtils.addRemoveEntriesWithUndo(project, null, files, false);
   }
 }

@@ -15,13 +15,12 @@ PASSWORD=$4
 set -x
 
 CODESIGN_STRING=$5
-JDK_ARCHIVE="$6"
-NOTARIZE=$7
-BUNDLE_ID=$8
-COMPRESS_INPUT=${9:-false}
-JETSIGN_CLIENT=${10:-null}
+NOTARIZE=$6
+BUNDLE_ID=$7
+COMPRESS_INPUT=${8:-false}
+JETSIGN_CLIENT=${9:-null}
 
-if [ "$CODESIGN_STRING" == "" ]; then
+if [ "$JETSIGN_CLIENT" != "null" ] && [ "$CODESIGN_STRING" == "" ]; then
   echo "CertificateID is not specified"
   exit 1
 fi
@@ -72,16 +71,6 @@ BUILD_NAME="$(ls "$EXPLODED")"
 log "$SIT_FILE unzipped and removed"
 
 APPLICATION_PATH="$EXPLODED/$BUILD_NAME"
-
-if [ "$JDK_ARCHIVE" != "no-jdk" ] && [ -f "$JDK_ARCHIVE" ]; then
-  RUNTIME_DIR="$APPLICATION_PATH/Contents/jbr"
-  log "Copying JDK: $JDK_ARCHIVE to $RUNTIME_DIR"
-  mkdir -p "$RUNTIME_DIR"
-  tar xvf "$JDK_ARCHIVE" --strip 1 -C "$RUNTIME_DIR"
-  find "$RUNTIME_DIR" -mindepth 1 -maxdepth 1 -exec chmod -R u+w '{}' \;
-  log "JDK has been copied"
-  rm -f "$JDK_ARCHIVE"
-fi
 
 find "$APPLICATION_PATH/Contents/bin" \
   -maxdepth 1 -type f -name '*.jnilib' -print0 |
@@ -161,7 +150,17 @@ if [ "$COMPRESS_INPUT" != "false" ]; then
   log "Zipping $BUILD_NAME to $SIT_FILE ..."
   (
     cd "$EXPLODED"
-    ditto -c -k --zlibCompressionLevel=-1 --sequesterRsrc --keepParent "$BUILD_NAME" "../$SIT_FILE"
+    if [[ -n ${SOURCE_DATE_EPOCH+x} ]]; then
+      format=+%Y%m%d%H%m
+      # macOS command || Linux command
+      timestamp=$(date -r "$SOURCE_DATE_EPOCH" $format 2>/dev/null || date --date="@$SOURCE_DATE_EPOCH" $format)
+      log "Updating access and modification times for files and symbolic links in $SIT_FILE to $timestamp"
+      find "$BUILD_NAME" -exec touch -amht "$timestamp" '{}' \;
+    fi
+    if ! ditto -c -k --zlibCompressionLevel=-1 --sequesterRsrc --keepParent "$BUILD_NAME" "../$SIT_FILE"; then
+      # for running this script on Linux
+      zip -q -r -o -1 "../$SIT_FILE" "$BUILD_NAME"
+    fi
     log "Finished zipping"
   )
 fi

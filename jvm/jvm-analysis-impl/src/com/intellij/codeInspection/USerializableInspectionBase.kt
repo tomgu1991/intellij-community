@@ -16,11 +16,13 @@ import javax.swing.JComponent
 import javax.swing.JPanel
 
 abstract class USerializableInspectionBase(vararg hint: Class<out UElement>) : AbstractBaseUastLocalInspectionTool(*hint) {
+  @JvmField
   var ignoreAnonymousInnerClasses = false
 
+  @JvmField
   var superClassString: @NonNls String = "java.awt.Component"
 
-  protected val superClassList: MutableList<String> = mutableListOf()
+  private val superClassList: MutableList<String> = mutableListOf()
 
   override fun readSettings(node: Element) {
     super.readSettings(node)
@@ -49,7 +51,7 @@ abstract class USerializableInspectionBase(vararg hint: Class<out UElement>) : A
       addCheckbox(InspectionGadgetsBundle.message("ignore.anonymous.inner.classes"), "ignoreAnonymousInnerClasses")
     }
 
-  protected fun createAdditionalOptions(): Array<JComponent> = emptyArray()
+  private fun createAdditionalOptions(): Array<JComponent> = emptyArray()
 
   protected fun isIgnoredSubclass(aClass: PsiClass): Boolean {
     if (SerializationUtils.isDirectlySerializable(aClass)) return false

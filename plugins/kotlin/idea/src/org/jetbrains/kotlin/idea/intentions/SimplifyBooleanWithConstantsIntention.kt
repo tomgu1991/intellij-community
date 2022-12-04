@@ -2,15 +2,15 @@
 
 package org.jetbrains.kotlin.idea.intentions
 
-import com.intellij.codeInspection.CleanupLocalInspectionTool
 import com.intellij.openapi.editor.Editor
 import com.intellij.psi.tree.IElementType
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.base.psi.copied
 import org.jetbrains.kotlin.idea.base.psi.replaced
 import org.jetbrains.kotlin.idea.caches.resolve.safeAnalyzeNonSourceRootCode
-import org.jetbrains.kotlin.idea.inspections.IntentionBasedInspection
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.intentions.SelfTargetingOffsetIndependentIntention
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.inspections.IntentionBasedInspection
 import org.jetbrains.kotlin.idea.intentions.loopToCallChain.isTrueConstant
 import org.jetbrains.kotlin.lexer.KtTokens.*
 import org.jetbrains.kotlin.psi.*
@@ -26,8 +26,7 @@ import org.jetbrains.kotlin.types.TypeUtils
 import org.jetbrains.kotlin.types.isFlexible
 
 @Suppress("DEPRECATION")
-class SimplifyBooleanWithConstantsInspection : IntentionBasedInspection<KtBinaryExpression>(SimplifyBooleanWithConstantsIntention::class),
-                                               CleanupLocalInspectionTool {
+class SimplifyBooleanWithConstantsInspection : IntentionBasedInspection<KtBinaryExpression>(SimplifyBooleanWithConstantsIntention::class) {
     override fun inspectionProblemText(element: KtBinaryExpression): String {
         return KotlinBundle.message("inspection.simplify.boolean.with.constants.display.name")
     }
@@ -104,7 +103,7 @@ class SimplifyBooleanWithConstantsIntention : SelfTargetingOffsetIndependentInte
     }
 
     private fun toSimplifiedExpression(expression: KtExpression): KtExpression {
-        val psiFactory = KtPsiFactory(expression)
+        val psiFactory = KtPsiFactory(expression.project)
 
         when {
             expression.canBeReducedToTrue() -> {
@@ -163,17 +162,17 @@ class SimplifyBooleanWithConstantsIntention : SelfTargetingOffsetIndependentInte
         otherOperand: KtExpression,
         operation: IElementType
     ): KtExpression {
-        val factory = KtPsiFactory(otherOperand)
+        val psiFactory = KtPsiFactory(otherOperand.project)
         when (operation) {
             OROR -> {
-                if (constantOperand) return factory.createExpression("true")
+                if (constantOperand) return psiFactory.createExpression("true")
             }
             ANDAND -> {
-                if (!constantOperand) return factory.createExpression("false")
+                if (!constantOperand) return psiFactory.createExpression("false")
             }
             EQEQ, EXCLEQ -> toSimplifiedExpression(otherOperand).let {
                 return if (constantOperand == (operation == EQEQ)) it
-                else factory.createExpressionByPattern("!$0", it)
+                else psiFactory.createExpressionByPattern("!$0", it)
             }
         }
 

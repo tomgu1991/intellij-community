@@ -13,9 +13,6 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * Should be registered via {@link #EP_FILE_EDITOR_PROVIDER}.
- *
- * @author Anton Katilin
- * @author Vladimir Kondratyev
  * @see DumbAware
  */
 public interface FileEditorProvider {
@@ -71,6 +68,8 @@ public interface FileEditorProvider {
   /**
    * @return editor type ID for the editors created with this FileEditorProvider. Each FileEditorProvider should have
    * a unique nonnull ID. The ID is used for saving/loading of EditorStates.
+   *
+   * Please consider setting extension id in registration also for performance reasons.
    */
   @NotNull
   @NonNls
@@ -80,6 +79,7 @@ public interface FileEditorProvider {
    * @return a policy that specifies how an editor created via this provider should be opened.
    * @see FileEditorPolicy#NONE
    * @see FileEditorPolicy#HIDE_DEFAULT_EDITOR
+   * @see FileEditorPolicy#HIDE_OTHER_EDITORS
    * @see FileEditorPolicy#PLACE_BEFORE_DEFAULT_EDITOR
    * @see FileEditorPolicy#PLACE_AFTER_DEFAULT_EDITOR
    */

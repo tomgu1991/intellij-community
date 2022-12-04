@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.plugins.gradle.service.project;
 
 import com.intellij.build.events.MessageEvent;
@@ -737,7 +737,7 @@ public final class GradleProjectResolverUtil {
         }
 
         LibraryLevel level = StringUtil.isNotEmpty(libraryName) ? LibraryLevel.PROJECT : LibraryLevel.MODULE;
-        if (StringUtil.isEmpty(libraryName) || !linkProjectLibrary(resolverCtx, ideProject, library)) {
+        if (StringUtil.isEmpty(libraryName) || !linkProjectLibrary(ideProject, library)) {
           level = LibraryLevel.MODULE;
         }
 
@@ -800,7 +800,7 @@ public final class GradleProjectResolverUtil {
           libraryName, failureMessage, resolverCtx.getProjectPath(), isOfflineWork, ownerModule.getId());
         resolverCtx.report(MessageEvent.Kind.ERROR, buildIssue);
 
-        LibraryLevel level = linkProjectLibrary(resolverCtx, ideProject, library) ? LibraryLevel.PROJECT : LibraryLevel.MODULE;
+        LibraryLevel level = linkProjectLibrary(ideProject, library) ? LibraryLevel.PROJECT : LibraryLevel.MODULE;
         LibraryDependencyData libraryDependencyData = new LibraryDependencyData(ownerModule, library, level);
         libraryDependencyData.setScope(dependencyScope);
         libraryDependencyData.setOrder(mergedDependency.getClasspathOrder() + classpathOrderShift);
@@ -830,9 +830,19 @@ public final class GradleProjectResolverUtil {
   private static final Key<Map<String, DataNode<LibraryData>>> LIBRARIES_BY_NAME_CACHE =
     Key.create("GradleProjectResolverUtil.FOUND_LIBRARIES");
 
+  /**
+   * @deprecated use {@link GradleProjectResolverUtil#linkProjectLibrary(DataNode, LibraryData)} instead
+   */
+  @Deprecated
   public static boolean linkProjectLibrary(/*@NotNull*/ ProjectResolverContext context,
                                                         @Nullable DataNode<ProjectData> ideProject,
                                                         @NotNull final LibraryData library) {
+    return linkProjectLibrary(ideProject, library);
+  }
+
+  public static boolean linkProjectLibrary(
+    @Nullable DataNode<ProjectData> ideProject,
+    @NotNull final LibraryData library) {
     if (ideProject == null) return false;
 
     Map<String, DataNode<LibraryData>> cache = ideProject.getUserData(LIBRARIES_BY_NAME_CACHE);
@@ -876,7 +886,7 @@ public final class GradleProjectResolverUtil {
 
   @ApiStatus.Internal
   public static Stream<GradleProjectResolverExtension> createProjectResolvers(@Nullable ProjectResolverContext projectResolverContext) {
-    return GradleProjectResolverExtension.EP_NAME.extensions().map(extension -> {
+    return GradleProjectResolverExtension.EP_NAME.getExtensionList().stream().map(extension -> {
       try {
         Constructor<? extends GradleProjectResolverExtension> constructor = extension.getClass().getDeclaredConstructor();
         constructor.setAccessible(true);

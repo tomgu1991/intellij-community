@@ -1,7 +1,12 @@
 // Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.vcs.commit
 
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.DataContext
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.invokeLater
+import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vcs.FilePath
@@ -13,7 +18,6 @@ import com.intellij.openapi.vcs.changes.ui.ChangesBrowserNode.UNVERSIONED_FILES_
 import com.intellij.openapi.vcs.changes.ui.ChangesViewContentManager.Companion.LOCAL_CHANGES
 import com.intellij.openapi.vcs.changes.ui.ChangesViewContentManager.Companion.getToolWindowFor
 import com.intellij.openapi.vcs.changes.ui.VcsTreeModelData.*
-import com.intellij.openapi.wm.IdeFocusManager
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.ui.EditorTextComponent
 import com.intellij.ui.IdeBorderFactory.createBorder
@@ -21,18 +25,20 @@ import com.intellij.ui.JBColor
 import com.intellij.ui.SideBorder
 import com.intellij.util.ui.JBUI.Borders.*
 import com.intellij.util.ui.JBUI.Panels.simplePanel
+import com.intellij.util.ui.UIUtil
 import com.intellij.util.ui.tree.TreeUtil.*
 import com.intellij.vcsUtil.VcsUtil.getFilePath
+import org.jetbrains.concurrency.Promise
 import javax.swing.JComponent
 import javax.swing.SwingConstants
 import kotlin.properties.Delegates.observable
 
 internal fun ChangesBrowserNode<*>.subtreeRootObject(): Any? = (path.getOrNull(1) as? ChangesBrowserNode<*>)?.userObject
 
-class ChangesViewCommitPanel(private val changesViewHost: ChangesViewPanel, private val rootComponent: JComponent) :
-  NonModalCommitPanel(changesViewHost.changesView.project), ChangesViewCommitWorkflowUi {
+class ChangesViewCommitPanel(project: Project, private val changesViewHost: ChangesViewPanel)
+  : NonModalCommitPanel(project), ChangesViewCommitWorkflowUi {
 
-  val changesView get() = changesViewHost.changesView
+  private val changesView get() = changesViewHost.changesView
 
   private val toolbarPanel = simplePanel().apply {
     isOpaque = false
@@ -48,39 +54,42 @@ class ChangesViewCommitPanel(private val changesViewHost: ChangesViewPanel, priv
     }
   }
 
+  private val commitActions = commitActionsPanel.createActions()
+  private var rootComponent: JComponent? = null
+
   init {
     Disposer.register(this, commitMessage)
 
-    bottomPanel = {
-      add(progressPanel.apply { border = empty(6) })
-      add(commitAuthorComponent.apply { border = empty(0, 5, 4, 0) })
-      add(commitActionsPanel)
-    }
-    buildLayout()
+    bottomPanel.add(progressPanel.component)
+    bottomPanel.add(commitAuthorComponent.apply { border = empty(0, 5, 4, 0) })
+    bottomPanel.add(commitActionsPanel)
+
     addToolbar(isToolbarHorizontal)
 
     for (support in EditChangelistSupport.EP_NAME.getExtensions(project)) {
       support.installSearch(commitMessage.editorField, commitMessage.editorField)
     }
 
-    with(changesView) {
-      setInclusionListener { fireInclusionChanged() }
-      isShowCheckboxes = true
-    }
+    changesView.setInclusionListener { fireInclusionChanged() }
+    changesView.isShowCheckboxes = true
     changesViewHost.statusComponent =
       CommitStatusPanel(this).apply {
         border = emptyRight(6)
-        background = changesView.background
 
         addToLeft(toolbarPanel)
       }
-    ChangesViewCommitTabTitleUpdater(this).start()
+    ChangesViewCommitTabTitleUpdater(changesView, this, this).start()
 
-    commitActionsPanel.setupShortcuts(rootComponent, this)
     commitActionsPanel.isCommitButtonDefault = {
       !progressPanel.isDumbMode &&
-      IdeFocusManager.getInstance(project).getFocusedDescendantFor(rootComponent) != null
+      UIUtil.isFocusAncestor(rootComponent ?: this)
     }
+  }
+
+  fun registerRootComponent(newRootComponent: JComponent) {
+    logger<ChangesViewCommitPanel>().assertTrue(rootComponent == null)
+    rootComponent = newRootComponent
+    commitActions.forEach { it.registerCustomShortcutSet(newRootComponent, this) }
   }
 
   private fun addToolbar(isHorizontal: Boolean) {
@@ -101,8 +110,11 @@ class ChangesViewCommitPanel(private val changesViewHost: ChangesViewPanel, priv
   }
 
   override var editedCommit by observable<EditedCommitDetails?>(null) { _, _, newValue ->
-    refreshData()
-    newValue?.let { expand(it) }
+    refreshData().then {
+      invokeLater(ModalityState.NON_MODAL) {
+        newValue?.let { expand(it) }
+      }
+    }
   }
 
   override val isActive: Boolean get() = isVisible
@@ -116,6 +128,8 @@ class ChangesViewCommitPanel(private val changesViewHost: ChangesViewPanel, priv
     isVisible = true
     commitActionsPanel.isActive = true
 
+    toolbar.updateActionsImmediately()
+
     contentManager.selectContent(LOCAL_CHANGES)
     toolWindow.activate({ commitMessage.requestFocusInMessage() }, false)
     return true
@@ -127,6 +141,8 @@ class ChangesViewCommitPanel(private val changesViewHost: ChangesViewPanel, priv
     changesView.isShowCheckboxes = false
     isVisible = false
     commitActionsPanel.isActive = false
+
+    toolbar.updateActionsImmediately()
   }
 
   private fun saveToolWindowState() {
@@ -172,7 +188,7 @@ class ChangesViewCommitPanel(private val changesViewHost: ChangesViewPanel, priv
     commitMessage.setChangesSupplier(ChangeListChangesSupplier(changeLists))
   }
 
-  override fun refreshData() = ChangesViewManager.getInstanceEx(project).refreshImmediately()
+  override fun refreshData(): Promise<*> = ChangesViewManager.getInstanceEx(project).promiseRefresh()
 
   override fun getDisplayedChanges(): List<Change> = all(changesView).userObjects(Change::class.java)
   override fun getIncludedChanges(): List<Change> = included(changesView).userObjects(Change::class.java)
@@ -189,8 +205,6 @@ class ChangesViewCommitPanel(private val changesViewHost: ChangesViewPanel, priv
       changesView.setInclusionModel(value)
     }
 
-  override fun includeIntoCommit(items: Collection<*>) = changesView.includeChanges(items)
-
   override val commitProgressUi: CommitProgressUi get() = progressPanel
 
   override fun endExecution() = closeEditorPreviewIfEmpty()
@@ -199,16 +213,17 @@ class ChangesViewCommitPanel(private val changesViewHost: ChangesViewPanel, priv
     val changesViewManager = ChangesViewManager.getInstance(project) as? ChangesViewManager ?: return
     if (!ChangesViewManager.isEditorPreview(project)) return
 
-    refreshData()
-    changesViewManager.closeEditorPreview(true)
+    refreshData().then {
+      invokeLater(ModalityState.NON_MODAL) {
+        changesViewManager.closeEditorPreview(true)
+      }
+    }
   }
 
   override fun dispose() {
     changesViewHost.statusComponent = null
-    with(changesView) {
-      isShowCheckboxes = false
-      setInclusionListener(null)
-    }
+    changesView.isShowCheckboxes = false
+    changesView.setInclusionListener(null)
   }
 }
 
@@ -220,7 +235,7 @@ private class ChangesViewCommitProgressPanel(
   private var oldInclusion: Set<Any> = emptySet()
 
   init {
-    setup(commitWorkflowUi, commitMessage)
+    setup(commitWorkflowUi, commitMessage, empty(6))
   }
 
   override fun inclusionChanged() {
@@ -231,17 +246,15 @@ private class ChangesViewCommitProgressPanel(
   }
 }
 
-private class ChangesViewCommitTabTitleUpdater(private val commitPanel: ChangesViewCommitPanel) :
-  CommitTabTitleUpdater(commitPanel.changesView, LOCAL_CHANGES, { message("local.changes.tab") }),
-  ChangesViewContentManagerListener {
-
+private class ChangesViewCommitTabTitleUpdater(tree: ChangesTree, workflowUi: CommitWorkflowUi, disposable: Disposable)
+  : CommitTabTitleUpdater(tree, LOCAL_CHANGES, { message("local.changes.tab") },
+                          pathsProvider = {
+                            val singleRoot = ProjectLevelVcsManager.getInstance(tree.project).allVersionedRoots.singleOrNull()
+                            if (singleRoot != null) listOf(getFilePath(singleRoot)) else workflowUi.getDisplayedPaths()
+                          }),
+    ChangesViewContentManagerListener {
   init {
-    Disposer.register(commitPanel, this)
-
-    pathsProvider = {
-      val singleRoot = ProjectLevelVcsManager.getInstance(project).allVersionedRoots.singleOrNull()
-      if (singleRoot != null) listOf(getFilePath(singleRoot)) else commitPanel.getDisplayedPaths()
-    }
+    Disposer.register(disposable, this)
   }
 
   override fun start() {

@@ -36,28 +36,31 @@ public class SetTodoFilterAction extends ActionGroup implements DumbAware {
 
   @Override
   public AnAction @NotNull [] getChildren(@Nullable AnActionEvent e) {
-    return createPopupActionGroup(myProject, myToDoSettings, myTodoFilterConsumer).getChildren(e);
+    return createPopupActionGroup(myProject, myToDoSettings, false, myTodoFilterConsumer).getChildren(e);
   }
 
   public static DefaultActionGroup createPopupActionGroup(@NotNull Project project,
                                                           @NotNull TodoPanelSettings settings,
+                                                          boolean skipShowAllWithoutFilters,
                                                           @NotNull Consumer<? super TodoFilter> todoFilterConsumer) {
     TodoFilter[] filters = TodoConfiguration.getInstance().getTodoFilters();
     DefaultActionGroup group = new DefaultActionGroup();
-    group.add(new TodoFilterApplier(IdeBundle.message("action.todo.show.all"),
-                                    IdeBundle.message("action.description.todo.show.all"), null, settings, todoFilterConsumer));
+    if (!skipShowAllWithoutFilters || filters.length != 0) {
+      group.add(new TodoFilterApplier(IdeBundle.message("action.todo.show.all"),
+                                      IdeBundle.message("action.description.todo.show.all"), null, settings, todoFilterConsumer));
+    }
     for (TodoFilter filter : filters) {
       group.add(new TodoFilterApplier(filter.getName(), null, filter, settings, todoFilterConsumer));
     }
     group.addSeparator();
     group.add(new DumbAwareAction(IdeBundle.messagePointer("action.todo.edit.filters"),
                                   IdeBundle.messagePointer("action.todo.edit.filters.description"), AllIcons.General.Settings) {
-        @Override
-        public void actionPerformed(@NotNull AnActionEvent e) {
-          final ShowSettingsUtil util = ShowSettingsUtil.getInstance();
-          util.editConfigurable(project, ConfigurableFactory.Companion.getInstance().getTodoConfigurable(project));
-        }
-      }
+                @Override
+                public void actionPerformed(@NotNull AnActionEvent e) {
+                  final ShowSettingsUtil util = ShowSettingsUtil.getInstance();
+                  util.editConfigurable(project, ConfigurableFactory.Companion.getInstance().getTodoConfigurable(project));
+                }
+              }
     );
     return group;
   }
@@ -71,8 +74,6 @@ public class SetTodoFilterAction extends ActionGroup implements DumbAware {
      * @param text        action's text.
      * @param description action's description.
      * @param filter      filter to be applied. {@code null} value means "empty" filter.
-     * @param settings
-     * @param todoFilterConsumer
      */
     TodoFilterApplier(@NlsActions.ActionText String text,
                       @NlsActions.ActionDescription String description,
@@ -92,6 +93,11 @@ public class SetTodoFilterAction extends ActionGroup implements DumbAware {
       if (myFilter != null) {
         e.getPresentation().setEnabled(!myFilter.isEmpty());
       }
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
     }
 
     @Override

@@ -6,7 +6,7 @@ import com.intellij.testFramework.TestDataPath;
 import org.jetbrains.kotlin.idea.test.JUnit3RunnerWithInners;
 import org.jetbrains.kotlin.idea.test.KotlinTestUtils;
 import org.jetbrains.kotlin.test.TestMetadata;
-import org.jetbrains.kotlin.idea.test.TestRoot;
+import org.jetbrains.kotlin.idea.base.test.TestRoot;
 import org.junit.runner.RunWith;
 
 /**
@@ -70,6 +70,11 @@ public abstract class PositionManagerTestGenerated extends AbstractPositionManag
             runTest("testData/positionManager/innerClass.kt");
         }
 
+        @TestMetadata("interface.kt")
+        public void testInterface() throws Exception {
+            runTest("testData/positionManager/interface.kt");
+        }
+
         @TestMetadata("JvmNameAnnotation.kt")
         public void testJvmNameAnnotation() throws Exception {
             runTest("testData/positionManager/JvmNameAnnotation.kt");
@@ -108,11 +113,6 @@ public abstract class PositionManagerTestGenerated extends AbstractPositionManag
         @TestMetadata("topLevelPropertyInitializer.kt")
         public void testTopLevelPropertyInitializer() throws Exception {
             runTest("testData/positionManager/topLevelPropertyInitializer.kt");
-        }
-
-        @TestMetadata("trait.kt")
-        public void testTrait() throws Exception {
-            runTest("testData/positionManager/trait.kt");
         }
 
         @TestMetadata("twoClasses.kt")

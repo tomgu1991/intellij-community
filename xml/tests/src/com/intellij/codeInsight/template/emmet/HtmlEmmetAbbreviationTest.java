@@ -8,6 +8,7 @@ import com.intellij.codeInsight.template.HtmlTextContextType;
 import com.intellij.codeInsight.template.Template;
 import com.intellij.codeInsight.template.TemplateContextType;
 import com.intellij.codeInsight.template.TemplateManager;
+import com.intellij.codeInsight.template.impl.TemplateContextTypes;
 import com.intellij.codeInsight.template.impl.TemplateImpl;
 import com.intellij.codeInsight.template.impl.TemplateManagerImpl;
 import com.intellij.codeInspection.htmlInspections.HtmlUnknownBooleanAttributeInspection;
@@ -15,7 +16,6 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.testFramework.fixtures.CodeInsightTestUtil;
-import com.intellij.util.containers.ContainerUtil;
 import com.intellij.xml.util.HtmlUtil;
 import junit.framework.Test;
 import org.jetbrains.annotations.NotNull;
@@ -57,7 +57,7 @@ public class HtmlEmmetAbbreviationTest extends EmmetAbbreviationTestSuite {
   protected void setUp(@NotNull Project project) throws Exception {
     super.setUp(project);    
     final TemplateManagerImpl templateManager = (TemplateManagerImpl)TemplateManager.getInstance(project);
-    TemplateContextType contextType = ContainerUtil.findInstance(TemplateContextType.EP_NAME.getExtensions(), HtmlTextContextType.class);
+    TemplateContextType contextType = TemplateContextTypes.getByClass(HtmlTextContextType.class);
 
     final Template al = templateManager.createTemplate("al", "testing", "<a !href=\"http://|\"></a>");
     ((TemplateImpl)al).getTemplateContext().setEnabled(contextType, true);
@@ -80,23 +80,28 @@ public class HtmlEmmetAbbreviationTest extends EmmetAbbreviationTestSuite {
   }
 
   private void addMultiCaretTests() {
-    addTest("div<caret>\n" +
-            "div<caret>\n" +
-            "div<caret>", "<div><caret></div>\n" +
-                          "<div><caret></div>\n" +
-                          "<div><caret></div>");
+    addTest("""
+              div<caret>
+              div<caret>
+              div<caret>""", """
+              <div><caret></div>
+              <div><caret></div>
+              <div><caret></div>""");
     //should place caret at first variable
-    addTest("a<caret>\n" +
-            "a<caret>\n" +
-            "a<caret>", "<a href=\"<caret>\"></a>\n" +
-                        "<a href=\"<caret>\"></a>\n" +
-                        "<a href=\"<caret>\"></a>");
+    addTest("""
+              a<caret>
+              a<caret>
+              a<caret>""", """
+              <a href="<caret>"></a>
+              <a href="<caret>"></a>
+              <a href="<caret>"></a>""");
   }
 
   private void addRegressionTests() {
-    addTest("ul>li[@click=\"method\" :title=\"task.title\"]", "<ul>\n" +
-                                                              "    <li @click=\"method\" :title=\"task.title\"></li>\n" +
-                                                              "</ul>");
+    addTest("ul>li[@click=\"method\" :title=\"task.title\"]", """
+      <ul>
+          <li @click="method" :title="task.title"></li>
+      </ul>""");
     addTest("t[type=application/atom+xml]", "<t type=\"application/atom+xml\"></t>");
     addTest("basefont[href]/", "<basefont href=\"\">");
     addTest("use[xlink:href]", "<use xlink:href=\"\"></use>", "xml");
@@ -107,13 +112,15 @@ public class HtmlEmmetAbbreviationTest extends EmmetAbbreviationTestSuite {
     addTest("div{&nbsp;}", "<div>&nbsp;</div>");
     addTest("div[data-object=]", "<div data-object=\"\"></div>");
     addTest("div[data-object={id:2}]", "<div data-object=\"{id:2}\"></div>");
-    addTest("ul>li(a)*2", "<ul>\n" +
-                          "    <li><a href=\"\"></a></li>\n" +
-                          "    <li><a href=\"\"></a></li>\n" +
-                          "</ul>");
-    addTest("ul>li(a)", "<ul>\n" +
-                        "    <li><a href=\"\"></a></li>\n" +
-                        "</ul>");
+    addTest("ul>li(a)*2", """
+      <ul>
+          <li><a href=""></a></li>
+          <li><a href=""></a></li>
+      </ul>""");
+    addTest("ul>li(a)", """
+      <ul>
+          <li><a href=""></a></li>
+      </ul>""");
 
     addTest("(>span)", "<span></span>");
     addTest("div(span)", "<div><span></span></div>");
@@ -121,19 +128,21 @@ public class HtmlEmmetAbbreviationTest extends EmmetAbbreviationTestSuite {
                              "<div></div>");
     addTest("div(>span)+div", "<div><span></span></div>\n" +
                               "<div></div>");
-    addTest("div.recording>h2.recording__title(>span)+div.recording__image(>p.recording__meta)", "<div class=\"recording\">\n" +
-                                                                                                 "    <h2 class=\"recording__title\"><span></span></h2>\n" +
-                                                                                                 "    <div class=\"recording__image\">\n" +
-                                                                                                 "        <p class=\"recording__meta\"></p>\n" +
-                                                                                                 "    </div>\n" +
-                                                                                                 "</div>");
-    addTest("div.recording>h2.recording__title>(span)+div.recording__image(>p.recording__meta)", "<div class=\"recording\">\n" +
-                                                                                                 "    <h2 class=\"recording__title\"><span></span>\n" +
-                                                                                                 "        <div class=\"recording__image\">\n" +
-                                                                                                 "            <p class=\"recording__meta\"></p>\n" +
-                                                                                                 "        </div>\n" +
-                                                                                                 "    </h2>\n" +
-                                                                                                 "</div>");
+    addTest("div.recording>h2.recording__title(>span)+div.recording__image(>p.recording__meta)", """
+      <div class="recording">
+          <h2 class="recording__title"><span></span></h2>
+          <div class="recording__image">
+              <p class="recording__meta"></p>
+          </div>
+      </div>""");
+    addTest("div.recording>h2.recording__title>(span)+div.recording__image(>p.recording__meta)", """
+      <div class="recording">
+          <h2 class="recording__title"><span></span>
+              <div class="recording__image">
+                  <p class="recording__meta"></p>
+              </div>
+          </h2>
+      </div>""");
   }
 
   private void addPlusOperatorTests() {
@@ -221,16 +230,18 @@ public class HtmlEmmetAbbreviationTest extends EmmetAbbreviationTestSuite {
   }
 
   private void addEndVariableTests() {
-    addTestWithPositionCheck("tr>td+td+td", "<tr>\n" +
-                                            "    <td>|</td>\n" +
-                                            "    <td>|</td>\n" +
-                                            "    <td>|</td>\n" +
-                                            "</tr>", withAddEndEditPoint(false));
-    addTestWithPositionCheck("tr>td+td+td", "<tr>\n" +
-                                            "    <td>|</td>\n" +
-                                            "    <td>|</td>\n" +
-                                            "    <td>|</td>\n" +
-                                            "</tr>|", withAddEndEditPoint(true));
+    addTestWithPositionCheck("tr>td+td+td", """
+      <tr>
+          <td>|</td>
+          <td>|</td>
+          <td>|</td>
+      </tr>""", withAddEndEditPoint(false));
+    addTestWithPositionCheck("tr>td+td+td", """
+      <tr>
+          <td>|</td>
+          <td>|</td>
+          <td>|</td>
+      </tr>|""", withAddEndEditPoint(true));
   }
 
   @NotNull
@@ -301,13 +312,14 @@ public class HtmlEmmetAbbreviationTest extends EmmetAbbreviationTestSuite {
 
   private void addOtherTests() {
     // variables on empty attributes
-    addTestWithPositionCheck("ul[a]>li[b=]>div[b=\"\"]+div[a=\"a\"]+div.", "<ul a=\"|\">\n" +
-                                                                           "    <li b=\"|\">\n" +
-                                                                           "        <div b=\"|\">|</div>\n" +
-                                                                           "        <div a=\"a\">|</div>\n" +
-                                                                           "        <div class=\"|\">|</div>\n" +
-                                                                           "    </li>\n" +
-                                                                           "</ul>");
+    addTestWithPositionCheck("ul[a]>li[b=]>div[b=\"\"]+div[a=\"a\"]+div.", """
+      <ul a="|">
+          <li b="|">
+              <div b="|">|</div>
+              <div a="a">|</div>
+              <div class="|">|</div>
+          </li>
+      </ul>""");
     addTest("some:elem", "<some:elem></some:elem>");
     addTest("li#id$.class$*3",
             "<li id=\"id1\" class=\"class1\"></li><li id=\"id2\" class=\"class2\"></li><li id=\"id3\" class=\"class3\"></li>");
@@ -344,11 +356,21 @@ public class HtmlEmmetAbbreviationTest extends EmmetAbbreviationTestSuite {
     addTest("ul>.item", "<ul><li class=\"item\"></li></ul>");
     addTest("ol>.", "<ol><li class=\"\"></li></ol>");
     addTest("em>.", "<em><span class=\"\"></span></em>");
-    addTest("table>#row$*4>[colspan=2]", "<table>\n\t<tr id=\"row1\">\n\t\t<td colspan=\"2\"></td>\n" +
-                                         "\t</tr>\n\t<tr id=\"row2\">\n\t\t<td colspan=\"2\"></td>\n" +
-                                         "\t</tr>\n\t<tr id=\"row3\">\n\t\t<td colspan=\"2\"></td>\n" +
-                                         "\t</tr>\n\t<tr id=\"row4\">\n\t\t<td colspan=\"2\"></td>\n" +
-                                         "\t</tr>\n</table>");
+    addTest("table>#row$*4>[colspan=2]", """
+      <table>
+      \t<tr id="row1">
+      \t\t<td colspan="2"></td>
+      \t</tr>
+      \t<tr id="row2">
+      \t\t<td colspan="2"></td>
+      \t</tr>
+      \t<tr id="row3">
+      \t\t<td colspan="2"></td>
+      \t</tr>
+      \t<tr id="row4">
+      \t\t<td colspan="2"></td>
+      \t</tr>
+      </table>""");
     addTest("<ul>.cls<caret></ul>", "<ul><li class=\"cls\"></li></ul>");
     addTest("<ul>.cls>.cls^.cls<caret></ul>", "<ul><li class=\"cls\"><div class=\"cls\"></div></li><li class=\"cls\"></li></ul>");
     addTest("<ul>.cls>.cls^^.cls<caret></ul>", "<ul><li class=\"cls\"><div class=\"cls\"></div></li><li class=\"cls\"></li></ul>");

@@ -21,12 +21,10 @@ import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.observable.properties.AtomicBooleanProperty
 import com.intellij.openapi.options.advanced.AdvancedSettings
 import com.intellij.openapi.progress.ProgressIndicator
-import com.intellij.openapi.progress.util.ProgressIndicatorBase
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.startup.StartupActivity
+import com.intellij.openapi.startup.ProjectPostStartupActivity
 import com.intellij.openapi.util.Key
-import com.intellij.openapi.wm.ex.ProgressIndicatorEx
 import com.intellij.psi.SmartPointerManager
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.reference.SoftReference
@@ -45,6 +43,7 @@ internal class TextSearchContributor(
   val event: AnActionEvent
 ) : WeightedSearchEverywhereContributor<SearchEverywhereItem>,
     SearchFieldActionsContributor,
+    PossibleSlowContributor,
     DumbAware, ScopeSupporting, Disposable {
 
   private val project = event.getRequiredData(CommonDataKeys.PROJECT)
@@ -91,13 +90,12 @@ internal class TextSearchContributor(
     FindModel.initStringToFind(model, pattern)
 
     val presentation = FindInProjectUtil.setupProcessPresentation(project, UsageViewPresentation())
-    val progressIndicator = indicator as? ProgressIndicatorEx ?: ProgressIndicatorBase()
 
     val scope = GlobalSearchScope.projectScope(project) // TODO use scope from model ?
     val recentItemRef = ThreadLocal<Reference<SearchEverywhereItem>>()
-    FindInProjectUtil.findUsages(model, project, progressIndicator, presentation, emptySet()) {
+    FindInProjectUtil.findUsages(model, project, indicator, presentation, emptySet()) {
       val usage = UsageInfo2UsageAdapter.CONVERTER.`fun`(it) as UsageInfo2UsageAdapter
-      progressIndicator.checkCanceled()
+      indicator.checkCanceled()
 
       val recentItem = SoftReference.dereference(recentItemRef.get())
       val newItem = if (recentItem != null && recentItem.usage.merge(usage)) {
@@ -106,7 +104,7 @@ internal class TextSearchContributor(
       }
       else {
         SearchEverywhereItem(usage, usagePresentation(project, scope, usage)).also {
-          consumer.process(FoundItemDescriptor(it, 0))
+         if (!consumer.process(FoundItemDescriptor(it, 0))) return@findUsages false
         }
       }
       recentItemRef.set(WeakReference(newItem))
@@ -138,7 +136,13 @@ internal class TextSearchContributor(
     return listOf(CaseSensitiveAction(case, onChanged), WordAction(word, onChanged), RegexpAction(regexp, onChanged))
   }
 
-  override fun getDataForItem(element: SearchEverywhereItem, dataId: String): Any? = null
+  override fun getDataForItem(element: SearchEverywhereItem, dataId: String): Any? {
+    if (CommonDataKeys.PSI_ELEMENT.`is`(dataId)) {
+      return element.usage.element
+    }
+
+    return null
+  }
 
   private fun getInitialSelectedScope(scopeDescriptors: List<ScopeDescriptor>): ScopeDescriptor {
     val scope = SE_TEXT_SELECTED_SCOPE.get(project) ?: return ScopeDescriptor(projectScope)
@@ -219,8 +223,8 @@ internal class TextSearchContributor(
       }
     }
 
-    class TextSearchActivity : StartupActivity.DumbAware {
-      override fun runActivity(project: Project) {
+    internal class TextSearchActivity : ProjectPostStartupActivity {
+      override suspend fun execute(project: Project) {
         RunOnceUtil.runOnceForApp(ADVANCED_OPTION_ID) {
           AdvancedSettings.setBoolean(ADVANCED_OPTION_ID, PlatformUtils.isRider())
         }

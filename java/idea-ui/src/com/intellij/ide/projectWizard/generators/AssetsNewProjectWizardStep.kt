@@ -9,16 +9,18 @@ import com.intellij.ide.starters.local.GeneratorTemplateFile
 import com.intellij.ide.starters.local.generator.AssetsProcessor
 import com.intellij.ide.wizard.AbstractNewProjectWizardStep
 import com.intellij.ide.wizard.NewProjectWizardStep
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.WriteAction
-import com.intellij.openapi.diagnostic.logger
+import com.intellij.ide.wizard.setupProjectSafe
+import com.intellij.ide.wizard.whenProjectCreated
+import com.intellij.openapi.application.invokeAndWaitIfNeeded
+import com.intellij.openapi.application.runWriteAction
+import com.intellij.openapi.file.CanonicalPathUtil.toNioPath
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.startup.StartupManager
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.fileSystem.LocalFileSystemUtil
 import com.intellij.psi.PsiManager
+import com.intellij.ui.UIBundle
 import org.jetbrains.annotations.ApiStatus
-import java.io.IOException
 import java.util.StringJoiner
 
 @ApiStatus.Experimental
@@ -39,51 +41,41 @@ abstract class AssetsNewProjectWizardStep(parent: NewProjectWizardStep) : Abstra
   fun addTemplateProperties(vararg properties: Pair<String, Any>) =
     addTemplateProperties(properties.toMap())
 
-  fun addTemplateProperties(properties: Map<String, Any>) {
+  private fun addTemplateProperties(properties: Map<String, Any>) {
     templateProperties.putAll(properties)
   }
 
   fun addFilesToOpen(vararg relativeCanonicalPaths: String) =
     addFilesToOpen(relativeCanonicalPaths.toList())
 
-  fun addFilesToOpen(relativeCanonicalPaths: Iterable<String>) {
+  private fun addFilesToOpen(relativeCanonicalPaths: Iterable<String>) {
     filesToOpen.addAll(relativeCanonicalPaths.map { "$outputDirectory/$it" })
   }
 
   abstract fun setupAssets(project: Project)
 
   override fun setupProject(project: Project) {
-    setupAssets(project)
+    setupProjectSafe(project, UIBundle.message("error.project.wizard.new.project.sample.code", context.isCreatingNewProjectInt)) {
+      setupAssets(project)
 
-    WriteAction.runAndWait<Throwable> {
-      try {
-        val generatedFiles = AssetsProcessor().generateSources(outputDirectory, assets, templateProperties)
-        runWhenCreated(project) { //IDEA-244863
-          reformatCode(project, generatedFiles)
-          openFilesInEditor(project, generatedFiles.filter { it.path in filesToOpen })
+      val generatedFiles = invokeAndWaitIfNeeded {
+        runWriteAction {
+          AssetsProcessor.getInstance().generateSources(outputDirectory.toNioPath(), assets, templateProperties)
         }
       }
-      catch (e: IOException) {
-        logger<NewProjectWizardStep>().error("Unable generating sources", e)
-      }
-    }
-  }
 
-  private fun runWhenCreated(project: Project, action: () -> Unit) {
-    if (ApplicationManager.getApplication().isUnitTestMode) {
-      action()
-    }
-    else {
-      StartupManager.getInstance(project).runAfterOpened {
-        ApplicationManager.getApplication().invokeLater(action, project.disposed)
+      whenProjectCreated(project) { //IDEA-244863
+        reformatCode(project, generatedFiles.mapNotNull { LocalFileSystemUtil.findFile(it) })
+        openFilesInEditor(project, filesToOpen.mapNotNull { LocalFileSystemUtil.findFile(it) })
       }
     }
   }
 
   private fun reformatCode(project: Project, files: List<VirtualFile>) {
     val psiManager = PsiManager.getInstance(project)
-    val generatedPsiFiles = files.mapNotNull { psiManager.findFile(it) }
-    ReformatCodeProcessor(project, generatedPsiFiles.toTypedArray(), null, false).run()
+    val psiFiles = files.mapNotNull { psiManager.findFile(it) }
+
+    ReformatCodeProcessor(project, psiFiles.toTypedArray(), null, false).run()
   }
 
   private fun openFilesInEditor(project: Project, files: List<VirtualFile>) {

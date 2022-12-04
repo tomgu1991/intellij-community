@@ -1,12 +1,19 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.progress
 
+import com.intellij.concurrency.TestElement
+import com.intellij.concurrency.TestElementKey
+import com.intellij.concurrency.currentThreadContext
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.readActionBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
+import kotlin.coroutines.ContinuationInterceptor
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 
 class ContextSwitchTest : CancellationTest() {
 
@@ -93,7 +100,7 @@ class ContextSwitchTest : CancellationTest() {
   }
 
   private suspend fun testRunUnderIndicator(blockingTest: () -> Unit) {
-    runUnderIndicator {
+    coroutineToIndicator {
       assertNull(Cancellation.currentJob())
       assertNotNull(ProgressManager.getGlobalProgressIndicator())
       blockingTest()
@@ -113,6 +120,35 @@ class ContextSwitchTest : CancellationTest() {
       assertNotNull(Cancellation.currentJob())
       assertNull(ProgressManager.getGlobalProgressIndicator())
       blockingTest()
+    }
+  }
+
+  @Test
+  fun `blockingContext into runBlockingCancellable`(): Unit = timeoutRunBlocking {
+    val testElement: CoroutineContext = TestElement("xx")
+
+    fun assertThreadContext() {
+      val tc = currentThreadContext()
+      assertSame(tc[TestElementKey], testElement)
+      assertNull(tc[ContinuationInterceptor.Key])
+    }
+
+    withContext(testElement) {
+      assertSame(currentThreadContext(), EmptyCoroutineContext)
+      blockingContext {
+        assertThreadContext()
+        runBlockingCancellable {
+          assertSame(currentThreadContext(), EmptyCoroutineContext)
+          withContext(Dispatchers.Default) {
+            blockingContext {
+              assertThreadContext()
+            }
+          }
+          assertSame(currentThreadContext(), EmptyCoroutineContext)
+        }
+        assertThreadContext()
+      }
+      assertSame(currentThreadContext(), EmptyCoroutineContext)
     }
   }
 }

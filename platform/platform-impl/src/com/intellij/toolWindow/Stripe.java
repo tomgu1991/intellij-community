@@ -6,13 +6,11 @@ import com.intellij.ide.ui.UISettingsListener;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.wm.ToolWindowAnchor;
 import com.intellij.openapi.wm.impl.AbstractDroppableStripe;
-import com.intellij.openapi.wm.impl.ToolWindowImpl;
 import com.intellij.ui.ClientProperty;
 import com.intellij.ui.ColorUtil;
 import com.intellij.ui.Gray;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.paint.LinePainter2D;
-import com.intellij.util.ui.JBSwingUtilities;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.StartupUiUtil;
 import com.intellij.util.ui.UIUtil;
@@ -34,8 +32,9 @@ final class Stripe extends AbstractDroppableStripe implements UISettingsListener
   @MagicConstant(intValues = {SwingConstants.CENTER, SwingConstants.TOP, SwingConstants.LEFT, SwingConstants.BOTTOM, SwingConstants.RIGHT})
   private final int anchor;
 
-  Stripe(@MagicConstant(intValues = {SwingConstants.CENTER, SwingConstants.TOP, SwingConstants.LEFT, SwingConstants.BOTTOM, SwingConstants.RIGHT}) int anchor) {
-    super(new GridBagLayout());
+  Stripe(@NotNull String paneId,
+         @MagicConstant(intValues = {SwingConstants.CENTER, SwingConstants.TOP, SwingConstants.LEFT, SwingConstants.BOTTOM, SwingConstants.RIGHT}) int anchor) {
+    super(paneId, new GridBagLayout());
 
     setOpaque(true);
     this.anchor = anchor;
@@ -56,8 +55,14 @@ final class Stripe extends AbstractDroppableStripe implements UISettingsListener
   }
 
   @Override
-  protected ToolWindowImpl getToolWindowFor(@NotNull JComponent component) {
-    return ((StripeButton)component).getToolWindow$intellij_platform_ide_impl();
+  public void doLayout() {
+    Dimension size = getSize();
+    // Provide some indication of size if the stripe is hidden
+    if (size.width == 0 && size.height == 0) {
+      final Rectangle virtualBounds = (Rectangle) getClientProperty(VIRTUAL_BOUNDS);
+      size = virtualBounds.getSize();
+    }
+    doLayout(size);
   }
 
   @Override
@@ -196,23 +201,19 @@ final class Stripe extends AbstractDroppableStripe implements UISettingsListener
     Point[] points = {new Point(0, 0), new Point(width, 0), new Point(width, height), new Point(0, height)};
     switch (anchor) {
       //Top area should be is empty due to IDEA-271100
-      case SwingConstants.TOP: {
+      case SwingConstants.TOP -> {
         updateLocation(points, 1, 2, 0, 0, areaSize);
         updateLocation(points, 0, 3, 0, 0, areaSize);
-        break;
       }
-      case SwingConstants.LEFT: {
+      case SwingConstants.LEFT -> {
         updateLocation(points, 0, 1, 1, 0, areaSize);
         updateLocation(points, 3, 2, 1, -1, areaSize);
-        break;
       }
-      case SwingConstants.BOTTOM: {
+      case SwingConstants.BOTTOM -> {
         updateLocation(points, 3, 0, 1, -1, areaSize);
         updateLocation(points, 2, 1, -1, -1, areaSize);
-        break;
       }
-
-      case SwingConstants.RIGHT: {
+      case SwingConstants.RIGHT -> {
         updateLocation(points, 1, 0, -1, 0, areaSize);
         updateLocation(points, 2, 3, -1, 1, areaSize);
       }
@@ -227,27 +228,14 @@ final class Stripe extends AbstractDroppableStripe implements UISettingsListener
 
   @Override
   public String toString() {
-    @NonNls String anchor = null;
-    switch (this.anchor) {
-      case SwingConstants.TOP:
-        anchor = "TOP";
-        break;
-      case SwingConstants.BOTTOM:
-        anchor = "BOTTOM";
-        break;
-      case SwingConstants.LEFT:
-        anchor = "LEFT";
-        break;
-      case SwingConstants.RIGHT:
-        anchor = "RIGHT";
-        break;
-    }
+    @NonNls String anchor = switch (this.anchor) {
+      case SwingConstants.TOP -> "TOP";
+      case SwingConstants.BOTTOM -> "BOTTOM";
+      case SwingConstants.LEFT -> "LEFT";
+      case SwingConstants.RIGHT -> "RIGHT";
+      default -> null;
+    };
     return getClass().getName() + " " + anchor;
-  }
-
-  @Override
-  protected Graphics getComponentGraphics(Graphics g) {
-    return JBSwingUtilities.runGlobalCGTransform(this, super.getComponentGraphics(g));
   }
 
   @Override

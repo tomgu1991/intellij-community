@@ -10,6 +10,9 @@ import com.intellij.openapi.editor.Document
 import com.intellij.openapi.util.NlsSafe
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
+import com.intellij.psi.util.CachedValueProvider
+import com.intellij.psi.util.CachedValuesManager
+import com.intellij.psi.util.PsiModificationTracker
 import com.intellij.psi.util.siblings
 import com.intellij.refactoring.suggested.endOffset
 import com.intellij.refactoring.suggested.startOffset
@@ -31,7 +34,7 @@ internal class GenerateTableOfContentsAction: AnAction() {
   override fun actionPerformed(event: AnActionEvent) {
     val file = event.getRequiredData(CommonDataKeys.PSI_FILE) as MarkdownFile
     val editor = event.getRequiredData(CommonDataKeys.EDITOR)
-    val content = buildToc(file)
+    val content = obtainToc(file)
     val caretOffset = editor.caretModel.primaryCaret.offset
     val project = event.getData(CommonDataKeys.PROJECT)
     val existingRanges = findExistingTocs(file).toList()
@@ -70,7 +73,7 @@ internal class GenerateTableOfContentsAction: AnAction() {
       replaceString(range.startOffset, range.endOffset, replacement)
     }
 
-    private fun findExistingTocs(file: MarkdownFile): Sequence<TextRange> {
+    fun findExistingTocs(file: MarkdownFile): Sequence<TextRange> {
       val elements = collectTopLevelElements(file)
       val blockElements = elements.filter(this::isTocBlock).windowed(size = 2, step = 2)
       return blockElements.map { (begin, end) -> TextRange(begin.startOffset, end.endOffset) }
@@ -96,8 +99,14 @@ internal class GenerateTableOfContentsAction: AnAction() {
       }
     }
 
+    fun obtainToc(file: MarkdownFile): String {
+      return CachedValuesManager.getCachedValue(file) {
+        CachedValueProvider.Result.create(buildToc(file), PsiModificationTracker.MODIFICATION_COUNT)
+      }
+    }
+
     private fun collectTopLevelElements(file: MarkdownFile): Sequence<PsiElement> {
-      val elements = file.firstChild?.firstChild?.siblings(forward = true, withSelf = true)
+      val elements = file.firstChild?.siblings(forward = true, withSelf = true)
       return elements.orEmpty()
     }
 

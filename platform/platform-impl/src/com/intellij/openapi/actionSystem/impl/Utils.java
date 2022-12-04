@@ -3,9 +3,12 @@ package com.intellij.openapi.actionSystem.impl;
 
 import com.intellij.CommonBundle;
 import com.intellij.concurrency.SensitiveProgressWrapper;
+import com.intellij.diagnostic.PluginException;
+import com.intellij.diagnostic.telemetry.TraceManager;
 import com.intellij.icons.AllIcons;
 import com.intellij.ide.IdeEventQueue;
 import com.intellij.ide.ProhibitAWTEvents;
+import com.intellij.internal.statistic.collectors.fus.actions.persistence.ActionsCollectorImpl;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.application.AccessToken;
 import com.intellij.openapi.application.ApplicationManager;
@@ -14,6 +17,7 @@ import com.intellij.openapi.application.ex.ApplicationManagerEx;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.ex.EditorGutterComponentEx;
 import com.intellij.openapi.keymap.impl.ActionProcessor;
+import com.intellij.openapi.keymap.impl.IdeKeyEventDispatcher;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressIndicatorProvider;
@@ -27,6 +31,7 @@ import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.wm.impl.IdeMenuBar;
 import com.intellij.ui.AnimatedIcon;
+import com.intellij.ui.ClientProperty;
 import com.intellij.ui.awt.RelativePoint;
 import com.intellij.ui.mac.screenmenu.Menu;
 import com.intellij.util.*;
@@ -35,6 +40,13 @@ import com.intellij.util.concurrency.annotations.RequiresEdt;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.ui.StartupUiUtil;
 import com.intellij.util.ui.UIUtil;
+import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.ContextKey;
+import io.opentelemetry.context.Scope;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -61,11 +73,20 @@ import java.util.function.Supplier;
 
 @ApiStatus.Internal
 public final class Utils {
+  private static final Key<Boolean> IS_MODAL_CONTEXT = Key.create("Component.isModalContext");
   private static final Logger LOG = Logger.getInstance(Utils.class);
 
   public static final AnAction EMPTY_MENU_FILLER = new EmptyAction();
   static {
     EMPTY_MENU_FILLER.getTemplatePresentation().setText(CommonBundle.messagePointer("empty.menu.filler"));
+  }
+
+  static final AttributeKey<String> OT_OP_KEY = AttributeKey.stringKey("op");
+  private static final ContextKey<Boolean> OT_ENABLE_SPANS = ContextKey.named("OT_ENABLE_SPANS");
+
+  static @NotNull Tracer getTracer(boolean checkNoop) {
+    return checkNoop && !Boolean.TRUE.equals(Context.current().get(OT_ENABLE_SPANS)) ?
+           OpenTelemetry.noop().getTracer("") : TraceManager.INSTANCE.getTracer("actionSystem", true);
   }
 
   public static @NotNull DataContext wrapToAsyncDataContext(@NotNull DataContext dataContext) {
@@ -80,10 +101,10 @@ public final class Utils {
       CustomizedDataContext context = (CustomizedDataContext)dataContext;
       DataContext delegate = wrapToAsyncDataContext(context.getParent());
       if (delegate == DataContext.EMPTY_CONTEXT) {
-        return new PreCachedDataContext(null).prependProvider(context::getRawCustomData);
+        return new PreCachedDataContext(null).prependProvider(context.getCustomDataProvider());
       }
       else if (delegate instanceof PreCachedDataContext) {
-        return ((PreCachedDataContext)delegate).prependProvider(context::getRawCustomData);
+        return ((PreCachedDataContext)delegate).prependProvider(context.getCustomDataProvider());
       }
     }
     else if (!ApplicationManager.getApplication().isUnitTestMode()) { // see `HeadlessContext`
@@ -138,7 +159,7 @@ public final class Utils {
                                                                           @NotNull String place,
                                                                           boolean isToolbarAction,
                                                                           boolean skipFastTrack) {
-    LOG.assertTrue(isAsyncDataContext(context), "Async data context required in '" + place + "': " + context.getClass().getName());
+    LOG.assertTrue(isAsyncDataContext(context), "Async data context required in '" + place + "': " + dumpDataContextClass(context));
     ActionUpdater updater = new ActionUpdater(presentationFactory, context, place, ActionPlaces.isPopupPlace(place), isToolbarAction);
     List<AnAction> actions = skipFastTrack ? null : expandActionGroupFastTrack(updater, group, group instanceof CompactActionGroup, null);
     if (actions != null) {
@@ -176,10 +197,22 @@ public final class Utils {
     RelativePoint point = PlatformCoreDataKeys.CONTEXT_COMPONENT.getData(context) == null ? null :
                           JBPopupFactory.getInstance().guessBestPopupLocation(context);
     Runnable removeIcon = addLoadingIcon(point, place);
-    return computeWithRetries(
-      () -> expandActionGroupImpl(group, presentationFactory,
-                                  context, place, ActionPlaces.isPopupPlace(place), removeIcon, null),
-      null, removeIcon);
+    List<AnAction> result = null;
+    Span span = getTracer(false).spanBuilder("expandActionGroup").setAttribute("place", place).startSpan();
+    long start = System.nanoTime();
+    try (Scope ignore = Context.current().with(span).with(OT_ENABLE_SPANS, true).makeCurrent()) {
+      return result = computeWithRetries(
+        () -> expandActionGroupImpl(group, presentationFactory, context, place, ActionPlaces.isPopupPlace(place), removeIcon, null),
+        null, removeIcon);
+    }
+    finally {
+      long elapsed = TimeoutUtil.getDurationMillis(start);
+      span.end();
+      if (elapsed > 1000) {
+        LOG.warn(elapsed + " ms to expandActionGroup@" + place);
+      }
+      ActionsCollectorImpl.recordActionGroupExpanded(group, context, place, false, elapsed, result);
+    }
   }
 
   private static int ourExpandActionGroupImplEDTLoopLevel;
@@ -191,15 +224,14 @@ public final class Utils {
                                                                boolean isContextMenu,
                                                                @Nullable Runnable onProcessed,
                                                                @Nullable JComponent menuItem) {
-    boolean async = isAsyncDataContext(context);
-    boolean asyncUI = async && Registry.is("actionSystem.update.actions.async.ui");
-    BlockingQueue<Runnable> queue0 = async && !asyncUI ? new LinkedBlockingQueue<>() : null;
-    ActionUpdater updater = new ActionUpdater(
-      presentationFactory, context, place, isContextMenu, false, null, queue0 != null ? queue0::offer : null);
+    boolean isUnitTestMode = ApplicationManager.getApplication().isUnitTestMode();
+    DataContext wrapped = wrapDataContext(context);
+    Project project = CommonDataKeys.PROJECT.getData(wrapped);
+    Component contextComponent = PlatformCoreDataKeys.CONTEXT_COMPONENT.getData(wrapped);
+    ActionUpdater updater = new ActionUpdater(presentationFactory, wrapped, place, isContextMenu, false, null, null);
     ActionGroupExpander expander = ActionGroupExpander.getInstance();
-    Project project = CommonDataKeys.PROJECT.getData(context);
     List<AnAction> list;
-    if (async) {
+    if (isAsyncDataContext(wrapped) && !isUnitTestMode) {
       if (isContextMenu) {
         ActionUpdater.cancelAllUpdates("context menu requested");
       }
@@ -226,17 +258,11 @@ public final class Utils {
           if (!canRetryOnThisException(ex)) onProcessed.run();
         });
       }
-      try (AccessToken ignore = cancelOnUserActivityInside(promise, PlatformDataKeys.CONTEXT_COMPONENT.getData(context), menuItem)) {
+      try (AccessToken ignore = cancelOnUserActivityInside(promise, contextComponent, menuItem)) {
         ourExpandActionGroupImplEDTLoopLevel++;
         list = runLoopAndWaitForFuture(promise, Collections.emptyList(), true, () -> {
-          if (queue0 != null) {
-            Runnable runnable = queue0.poll(1, TimeUnit.MILLISECONDS);
-            if (runnable != null) runnable.run();
-          }
-          else {
-            AWTEvent event = queue.getNextEvent();
-            queue.dispatchEvent(event);
-          }
+          AWTEvent event = queue.getNextEvent();
+          queue.dispatchEvent(event);
         });
       }
       finally {
@@ -249,8 +275,8 @@ public final class Utils {
       }
     }
     else {
-      if (Registry.is("actionSystem.update.actions.async") && !ApplicationManager.getApplication().isUnitTestMode()) {
-        LOG.error("Async data context required in '" + place + "': " + context.getClass().getName());
+      if (Registry.is("actionSystem.update.actions.async") && !isUnitTestMode) {
+        LOG.error("Async data context required in '" + place + "': " + dumpDataContextClass(wrapped));
       }
       try {
         list = DO_FULL_EXPAND ?
@@ -316,13 +342,30 @@ public final class Utils {
     if (ApplicationManagerEx.getApplicationEx().isWriteActionInProgress()) {
       throw new ProcessCanceledException();
     }
-    Runnable removeIcon = addLoadingIcon(progressPoint, place);
-    List<AnAction> list = computeWithRetries(
-      () -> expandActionGroupImpl(group, presentationFactory, context, place, true, removeIcon, component),
-      expire, removeIcon);
-    boolean checked = group instanceof CheckedActionGroup;
-    boolean multiChoice = isMultiChoiceGroup(group);
-    fillMenuInner(component, list, checked, multiChoice, enableMnemonics, presentationFactory, context, place, isWindowMenu, useDarkIcons);
+    if (Thread.holdsLock(component.getTreeLock())) {
+      throw new ProcessCanceledException();
+    }
+    List<AnAction> result = null;
+    Span span = getTracer(false).spanBuilder("fillMenu").setAttribute("place", place).startSpan();
+    long start = System.nanoTime();
+    try (Scope ignore = Context.current().with(span).with(OT_ENABLE_SPANS, true).makeCurrent()) {
+      Runnable removeIcon = addLoadingIcon(progressPoint, place);
+      result = computeWithRetries(
+        () -> expandActionGroupImpl(group, presentationFactory, context, place, true, removeIcon, component),
+        expire, removeIcon);
+      boolean checked = group instanceof CheckedActionGroup;
+      boolean multiChoice = isMultiChoiceGroup(group);
+      fillMenuInner(component, result, checked, multiChoice, enableMnemonics, presentationFactory, context, place, isWindowMenu, useDarkIcons);
+    }
+    finally {
+      long elapsed = TimeoutUtil.getDurationMillis(start);
+      span.end();
+      if (elapsed > 1000) {
+        LOG.warn(elapsed + " ms to fillMenu@" + place);
+      }
+      boolean submenu = component instanceof ActionMenu && component.getParent() != null;
+      ActionsCollectorImpl.recordActionGroupExpanded(group, context, place, submenu, elapsed, result);
+    }
   }
 
   private static @NotNull Runnable addLoadingIcon(@Nullable RelativePoint point, @NotNull String place) {
@@ -380,17 +423,11 @@ public final class Utils {
       AnAction action = list.get(i);
       Presentation presentation = presentationFactory.getPresentation(action);
       if (!presentation.isVisible()) {
-        String operationName = operationName(action, null);
-        LOG.error("Invisible menu item for " + operationName + " in '" + place + "'");
+        reportInvisibleMenuItem(action, place);
         continue;
       }
       else if (!(action instanceof Separator) && StringUtil.isEmpty(presentation.getText())) {
-        String operationName = operationName(action, null);
-        String message = "Empty menu item text for " + operationName + " in '" + place + "'";
-        if (StringUtil.isEmpty(action.getTemplatePresentation().getText())) {
-          message += ". The default action text must be specified in plugin.xml or its class constructor";
-        }
-        LOG.error(message);
+        reportEmptyTextMenuItem(action, place);
         continue;
       }
       if (multiChoice && action instanceof Toggleable) {
@@ -456,13 +493,44 @@ public final class Utils {
     }
   }
 
-  public static @NotNull String operationName(@NotNull AnAction action, @Nullable String op) {
-    Class<?> c = action.getClass();
-    StringBuilder wrappers = new StringBuilder(0);
-    for (Object x = action; x instanceof ActionWithDelegate; x = ((ActionWithDelegate<?>)x).getDelegate(), c = x.getClass()) {
-      wrappers.append(c.getSimpleName()).append("/");
+  private static void reportInvisibleMenuItem(@NotNull AnAction action, @NotNull String place) {
+    String operationName = operationName(action, null, place);
+    LOG.error("Invisible menu item for " + operationName);
+  }
+
+  private static void reportEmptyTextMenuItem(@NotNull AnAction action, @NotNull String place) {
+    String operationName = operationName(action, null, place);
+    String message = "Empty menu item text for " + operationName;
+    if (StringUtil.isEmpty(action.getTemplatePresentation().getText())) {
+      message += ". The default action text must be specified in plugin.xml or its class constructor";
     }
-    return c.getSimpleName() + (StringUtil.isEmpty(op) ? "" : "#" + op) + " (" + wrappers + c.getName() + ")";
+    LOG.error(PluginException.createByClass(message, null, action.getClass()));
+  }
+
+  public static @NotNull String operationName(@NotNull Object action, @Nullable String op, @Nullable String place) {
+    Class<?> c = action.getClass();
+    StringBuilder sb = new StringBuilder(200);
+    if (StringUtil.isNotEmpty(op)) sb.append("#").append(op);
+    if (StringUtil.isNotEmpty(place)) sb.append("@").append(place);
+    sb.append(" (");
+    for (Object x = action; x instanceof ActionWithDelegate; x = ((ActionWithDelegate<?>)x).getDelegate(), c = x.getClass()) {
+      sb.append(StringUtil.getShortName(c.getName())).append("/");
+    }
+    sb.append(c.getName()).append(")");
+    sb.insert(0, StringUtil.getShortName(c.getName()));
+    return sb.toString();
+  }
+
+  private static @NotNull String dumpDataContextClass(@NotNull DataContext context) {
+    Class<?> c = context.getClass();
+    StringBuilder sb = new StringBuilder(200);
+    int i = 0;
+    for (Object x = context; x instanceof CustomizedDataContext; x = ((CustomizedDataContext)x).getParent(), i++, c = x.getClass()) {
+      sb.append(StringUtil.getShortName(c.getName())).append("(");
+    }
+    sb.append(c.getName());
+    StringUtil.repeatSymbol(sb, ')', i);
+    return sb.toString();
   }
 
   public static boolean isMultiChoiceGroup(@NotNull ActionGroup actionGroup) {
@@ -484,10 +552,10 @@ public final class Utils {
     return false;
   }
 
-  static <T> void updateMenuItems(@NotNull JPopupMenu popupMenu,
-                                  @NotNull DataContext dataContext,
-                                  @NotNull String place,
-                                  @NotNull PresentationFactory presentationFactory) {
+  static void updateMenuItems(@NotNull JPopupMenu popupMenu,
+                              @NotNull DataContext dataContext,
+                              @NotNull String place,
+                              @NotNull PresentationFactory presentationFactory) {
     List<ActionMenuItem> items = ContainerUtil.filterIsInstance(popupMenu.getComponents(), ActionMenuItem.class);
     updateComponentActions(
       popupMenu, ContainerUtil.map(items, ActionMenuItem::getAnAction), dataContext, place, presentationFactory,
@@ -499,12 +567,12 @@ public final class Utils {
   }
 
   @ApiStatus.Internal
-  public static <T> void updateComponentActions(@NotNull JComponent component,
-                                                @NotNull Iterable<? extends AnAction> actions,
-                                                @NotNull DataContext dataContext,
-                                                @NotNull String place,
-                                                @NotNull PresentationFactory presentationFactory,
-                                                @NotNull Runnable onUpdate) {
+  public static void updateComponentActions(@NotNull JComponent component,
+                                            @NotNull Iterable<? extends AnAction> actions,
+                                            @NotNull DataContext dataContext,
+                                            @NotNull String place,
+                                            @NotNull PresentationFactory presentationFactory,
+                                            @NotNull Runnable onUpdate) {
     DefaultActionGroup actionGroup = new DefaultActionGroup();
     for (AnAction action : actions) {
       actionGroup.add(action);
@@ -594,21 +662,61 @@ public final class Utils {
     return icon != null && icon != ActionMenuItem.EMPTY_ICON;
   }
 
+  /**
+   * Check if the {@code component} represents a modal context in a general sense,
+   * i.e., whether any of its parents is either a modal {@link Window}
+   * or explicitly marked to be treated like a modal context.
+   * @see Utils#markAsModalContext(JComponent, Boolean)
+   */
+  @ApiStatus.Internal
+  public static boolean isModalContext(@NotNull Component component) {
+    Boolean implicitValue = IdeKeyEventDispatcher.isModalContextOrNull(component);
+    if (implicitValue != null) {
+      return implicitValue;
+    }
+    do {
+      Boolean explicitValue = ClientProperty.get(component, IS_MODAL_CONTEXT);
+      if (explicitValue != null) {
+        return explicitValue;
+      }
+      component = component.getParent();
+    } while (component != null);
+    return true;
+  }
+
+  /**
+   * Mark the {@code component} to be treated like a modal context (or not) when it cannot be deduced implicitly from UI hierarchy.
+   * @param isModalContext {@code null} to clear a mark, to set a new one otherwise.
+   * @see Utils#isModalContext(Component)
+   */
+  @ApiStatus.Internal
+  public static void markAsModalContext(@NotNull JComponent component, @Nullable Boolean isModalContext) {
+    ClientProperty.put(component, IS_MODAL_CONTEXT, isModalContext);
+  }
+
+  /** @deprecated Use {@link AnActionEvent#getUpdateSession()} */
+  @Deprecated(forRemoval = true)
   public static @NotNull UpdateSession getOrCreateUpdateSession(@NotNull AnActionEvent e) {
+    initUpdateSession(e);
+    return e.getUpdateSession();
+  }
+
+  @ApiStatus.Internal
+  public static void initUpdateSession(@NotNull AnActionEvent e) {
     UpdateSession updater = e.getUpdateSession();
-    if (updater == null) {
+    if (updater == UpdateSession.EMPTY) {
       ActionUpdater actionUpdater = new ActionUpdater(
         new PresentationFactory(), e.getDataContext(),
         e.getPlace(), e.isFromContextMenu(), e.isFromActionToolbar());
       updater = actionUpdater.asUpdateSession();
+      e.setUpdateSession(updater);
     }
-    return updater;
   }
 
   private static boolean ourInUpdateSessionForInputEventEDTLoop;
 
   @ApiStatus.Internal
-  public static @Nullable <T> T runUpdateSessionForInputEvent(@NotNull List<AnAction> actions,
+  public static @Nullable <T> T runUpdateSessionForInputEvent(@NotNull List<? extends AnAction> actions,
                                                               @NotNull InputEvent inputEvent,
                                                               @NotNull DataContext dataContext,
                                                               @NotNull String place,
@@ -652,26 +760,9 @@ public final class Utils {
             List<AnAction> adjusted = new ArrayList<>(actions);
             actionUpdater.tryRunReadActionAndCancelBeforeWrite(promise, () -> rearrangeByPromoters(adjusted, dataContext));
             if (promise.isDone()) return null;
-            boolean oldEdtMode = ContainerUtil.find(adjusted, o -> o.getActionUpdateThread() == ActionUpdateThread.OLD_EDT) != null;
-            Set<String> missedKeys = !oldEdtMode || Registry.is("actionSystem.update.actions.suppress.dataRules.on.edt") ? null : ContainerUtil.newConcurrentSet();
-            // fast-track
-            if (missedKeys != null) {
-              UpdateSession fastSession = actionUpdater.asFastUpdateSession(missedKeys::add, null);
-              ActionUpdater fastUpdater = ActionUpdater.getActionUpdater(fastSession);
-              fastUpdater.tryRunReadActionAndCancelBeforeWrite(promise, () -> ref.set(function.apply(fastSession, adjusted)));
-              if (!ref.isNull()) queue.offer(fastUpdater::applyPresentationChanges);
-              if (!ref.isNull() || promise.isDone()) return null;
-            }
-            // ordinary-track
-            boolean[] missedKeyPresent = {false};
-            if (missedKeys == null ||
-                actionUpdater.tryRunReadActionAndCancelBeforeWrite(promise, () ->
-                  missedKeyPresent[0] = ContainerUtil.exists(missedKeys, o -> dataContext.getData(o) != null)) &&
-                missedKeyPresent[0]) {
-              UpdateSession session = actionUpdater.asUpdateSession();
-              actionUpdater.tryRunReadActionAndCancelBeforeWrite(promise, () -> ref.set(function.apply(session, adjusted)));
-              queue.offer(actionUpdater::applyPresentationChanges);
-            }
+            UpdateSession session = actionUpdater.asUpdateSession();
+            actionUpdater.tryRunReadActionAndCancelBeforeWrite(promise, () -> ref.set(function.apply(session, adjusted)));
+            queue.offer(actionUpdater::applyPresentationChanges);
             return null;
           };
           ProgressIndicator indicator = parentIndicator == null ? new ProgressIndicatorBase() : new SensitiveProgressWrapper(parentIndicator);
@@ -699,24 +790,25 @@ public final class Utils {
     }
     else {
       List<AnAction> adjusted = new ArrayList<>(actions);
-      rearrangeByPromoters(adjusted, freezeDataContext(dataContext, null));
+      rearrangeByPromoters(adjusted, dataContext);
       result = function.apply(actionUpdater.asUpdateSession(), adjusted);
       actionUpdater.applyPresentationChanges();
     }
     long elapsed = TimeoutUtil.getDurationMillis(start);
     if (elapsed > 1000) {
-      LOG.warn(elapsed + " ms to update actions for " + place);
+      LOG.warn(elapsed + " ms to runUpdateSessionForInputEvent@" + place);
     }
     return result;
   }
 
-  private static void rearrangeByPromoters(@NotNull List<AnAction> actions, @NotNull DataContext dataContext) {
+  @ApiStatus.Internal
+  public static void rearrangeByPromoters(@NotNull List<AnAction> actions, @NotNull DataContext dataContext) {
     DataContext frozenContext = freezeDataContext(dataContext, null);
     List<AnAction> readOnlyActions = Collections.unmodifiableList(actions);
     List<ActionPromoter> promoters = ContainerUtil.concat(
       ActionPromoter.EP_NAME.getExtensionList(), ContainerUtil.filterIsInstance(actions, ActionPromoter.class));
     for (ActionPromoter promoter : promoters) {
-      try (AccessToken ignore = SlowOperations.allowSlowOperations(SlowOperations.FAST_TRACK)) {
+      try (AccessToken ignore = SlowOperations.allowSlowOperations(SlowOperations.FORCE_ASSERT)) {
         List<AnAction> promoted = promoter.promote(readOnlyActions, frozenContext);
         if (promoted != null && !promoted.isEmpty()) {
           actions.removeAll(promoted);

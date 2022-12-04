@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.asJava
 
@@ -188,9 +188,16 @@ class PsiClassRenderer private constructor(
     }
 
     private fun PsiEnumConstant.renderEnumConstant(): String {
-        val initializingClass = initializingClass ?: return name
+        val annotations = this@renderEnumConstant.annotations
+            .map { it.renderAnnotation() }
+            .filter { it.isNotBlank() }
+            .joinToString(separator = " ", postfix = " ")
+            .takeIf { it.isNotBlank() }
+            ?: ""
+        val initializingClass = initializingClass ?: return "$annotations$name"
 
         return buildString {
+            append(annotations)
             appendLine("$name {")
             append(initializingClass.renderMembers())
             append("}")

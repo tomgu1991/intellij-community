@@ -34,7 +34,6 @@ import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.roots.libraries.Library;
 import com.intellij.openapi.util.Condition;
 import com.intellij.openapi.util.Conditions;
-import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.*;
@@ -297,8 +296,7 @@ public final class FindInProjectUtil {
 
       SearchScope customScope = findModel.getCustomScope();
       if (customScope instanceof LocalSearchScope) {
-        TextRange range = new TextRange(result.getStartOffset(), result.getEndOffset());
-        if (!((LocalSearchScope)customScope).containsRange(psiFile, range)) continue;
+        if (!((LocalSearchScope)customScope).containsRange(psiFile, result)) continue;
       }
       UsageInfo info = new FindResultUsageInfo(findManager, psiFile, prevOffset, findModel, result);
       if (!consumer.process(info)) {
@@ -549,9 +547,15 @@ public final class FindInProjectUtil {
       return ActionManager.getInstance().getKeyboardShortcut("FindInPath");
     }
 
-    @Nullable
     @Override
-    public Object getData(@NotNull String dataId) {
+    public @Nullable Object getData(@NotNull String dataId) {
+      if (PlatformCoreDataKeys.BGT_DATA_PROVIDER.is(dataId)) {
+        return (DataProvider)slowId -> getSlowData(slowId);
+      }
+      return null;
+    }
+
+    private @Nullable Object getSlowData(@NotNull String dataId) {
       if (UsageView.USAGE_SCOPE.is(dataId)) {
         return getScopeFromModel(myProject, myFindModel);
       }
@@ -650,27 +654,14 @@ public final class FindInProjectUtil {
   }
 
   public static @Nls(capitalization = Title) @NotNull String getPresentableName(@NotNull FindModel.SearchContext searchContext) {
-    @PropertyKey(resourceBundle = "messages.FindBundle") String messageKey = null;
-    switch (searchContext) {
-      case ANY:
-        messageKey = "find.context.anywhere.scope.label";
-        break;
-      case EXCEPT_COMMENTS:
-        messageKey = "find.context.except.comments.scope.label";
-        break;
-      case EXCEPT_STRING_LITERALS:
-        messageKey = "find.context.except.literals.scope.label";
-        break;
-      case EXCEPT_COMMENTS_AND_STRING_LITERALS:
-        messageKey = "find.context.except.comments.and.literals.scope.label";
-        break;
-      case IN_COMMENTS:
-        messageKey = "find.context.in.comments.scope.label";
-        break;
-      case IN_STRING_LITERALS:
-        messageKey = "find.context.in.literals.scope.label";
-        break;
-    }
+    @PropertyKey(resourceBundle = "messages.FindBundle") String messageKey = switch (searchContext) {
+      case ANY -> "find.context.anywhere.scope.label";
+      case EXCEPT_COMMENTS -> "find.context.except.comments.scope.label";
+      case EXCEPT_STRING_LITERALS -> "find.context.except.literals.scope.label";
+      case EXCEPT_COMMENTS_AND_STRING_LITERALS -> "find.context.except.comments.and.literals.scope.label";
+      case IN_COMMENTS -> "find.context.in.comments.scope.label";
+      case IN_STRING_LITERALS -> "find.context.in.literals.scope.label";
+    };
     return FindBundle.message(messageKey);
   }
 }

@@ -20,6 +20,7 @@ import com.intellij.execution.process.ProcessOutputTypes
 import com.intellij.jarRepository.JarRepositoryManager
 import com.intellij.jarRepository.RemoteRepositoryDescription
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.roots.libraries.ui.OrderRoot
 import com.intellij.psi.PsiElement
 import com.intellij.testFramework.runInEdtAndWait
@@ -28,10 +29,10 @@ import com.intellij.xdebugger.frame.XStackFrame
 import junit.framework.AssertionFailedError
 import org.jetbrains.idea.maven.aether.ArtifactKind
 import org.jetbrains.jps.model.library.JpsMavenRepositoryLibraryDescriptor
-import org.jetbrains.kotlin.idea.core.util.CodeInsightUtils.getTopmostElementAtOffset
+import org.jetbrains.kotlin.idea.base.psi.getTopmostElementAtOffset
 import org.jetbrains.kotlin.idea.debugger.KotlinPositionManager
-import org.jetbrains.kotlin.idea.debugger.stackFrame.KotlinStackFrame
-import org.jetbrains.kotlin.idea.debugger.stepping.KotlinSteppingCommandProvider
+import org.jetbrains.kotlin.idea.debugger.core.stackFrame.KotlinStackFrame
+import org.jetbrains.kotlin.idea.debugger.core.stepping.KotlinSteppingCommandProvider
 import org.jetbrains.kotlin.idea.debugger.stepping.smartStepInto.KotlinSmartStepIntoHandler
 import org.jetbrains.kotlin.idea.debugger.stepping.smartStepInto.KotlinSmartStepTarget
 import org.jetbrains.kotlin.idea.debugger.test.util.KotlinOutputChecker
@@ -41,7 +42,6 @@ import org.jetbrains.kotlin.idea.debugger.test.util.render
 import org.jetbrains.kotlin.idea.test.ConfigLibraryUtil
 import org.jetbrains.kotlin.idea.test.InTextDirectivesUtils.isIgnoredTarget
 import org.jetbrains.kotlin.idea.test.KotlinBaseTest
-import org.jetbrains.kotlin.idea.util.application.runReadAction
 import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
 import org.jetbrains.kotlin.psi.psiUtil.getElementTextWithContext
 import org.jetbrains.kotlin.test.InTextDirectivesUtils

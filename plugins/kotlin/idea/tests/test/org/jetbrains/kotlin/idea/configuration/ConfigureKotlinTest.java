@@ -9,6 +9,7 @@ import com.intellij.openapi.externalSystem.service.project.ProjectDataManager;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.project.RootsChangeRescanningInfo;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.roots.*;
 import com.intellij.openapi.roots.ex.ProjectRootManagerEx;
@@ -29,17 +30,18 @@ import org.jetbrains.kotlin.config.KotlinFacetSettings;
 import org.jetbrains.kotlin.config.KotlinFacetSettingsProvider;
 import org.jetbrains.kotlin.config.LanguageVersion;
 import org.jetbrains.kotlin.idea.base.facet.platform.TargetPlatformDetectorUtils;
-import org.jetbrains.kotlin.idea.base.platforms.JsStdlibDetectionUtil;
+import org.jetbrains.kotlin.idea.base.indices.JavaIndicesUtils;
 import org.jetbrains.kotlin.idea.base.platforms.KotlinJavaScriptLibraryKind;
+import org.jetbrains.kotlin.idea.base.platforms.KotlinJavaScriptStdlibDetectorFacility;
 import org.jetbrains.kotlin.idea.base.platforms.LibraryEffectiveKindProvider;
 import org.jetbrains.kotlin.idea.base.projectStructure.LanguageVersionSettingsProviderUtils;
+import org.jetbrains.kotlin.idea.base.psi.JavaPsiUtils;
 import org.jetbrains.kotlin.idea.compiler.configuration.IdeKotlinVersion;
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinCommonCompilerArgumentsHolder;
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinPluginLayout;
 import org.jetbrains.kotlin.idea.facet.FacetUtilsKt;
 import org.jetbrains.kotlin.idea.facet.KotlinFacet;
 import org.jetbrains.kotlin.idea.macros.KotlinBundledUsageDetector;
-import org.jetbrains.kotlin.idea.util.Java9StructureUtilKt;
 import org.jetbrains.kotlin.platform.TargetPlatform;
 import org.jetbrains.kotlin.platform.js.JsPlatforms;
 import org.jetbrains.kotlin.platform.jvm.JvmPlatforms;
@@ -52,7 +54,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.StreamSupport;
 
-import static java.util.Collections.*;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.singletonList;
 
 @RunWith(JUnit38ClassRunner.class)
 public class ConfigureKotlinTest extends AbstractConfigureKotlinTest {
@@ -139,7 +142,7 @@ public class ConfigureKotlinTest extends AbstractConfigureKotlinTest {
 
         // Emulate project root change, as after changing Kotlin language settings in the preferences
         WriteAction.runAndWait(() -> {
-            ProjectRootManagerEx.getInstanceEx(myProject).makeRootsChange(EmptyRunnable.INSTANCE, false, true);
+            ProjectRootManagerEx.getInstanceEx(myProject).makeRootsChange(EmptyRunnable.INSTANCE, RootsChangeRescanningInfo.NO_RESCAN_NEEDED);
         });
 
         assertEquals(LanguageVersion.KOTLIN_1_6, LanguageVersionSettingsProviderUtils.getLanguageVersionSettings(getModule()).getLanguageVersion());
@@ -166,13 +169,13 @@ public class ConfigureKotlinTest extends AbstractConfigureKotlinTest {
 
     public void testJsLibraryVersion11() {
         Library jsRuntime = getFirstLibrary(myProject);
-        IdeKotlinVersion version = JsStdlibDetectionUtil.INSTANCE.getJavaScriptLibraryStdVersion(jsRuntime, myProject);
+        IdeKotlinVersion version = KotlinJavaScriptStdlibDetectorFacility.INSTANCE.getStdlibVersion(myProject, jsRuntime);
         assertEquals(new KotlinVersion(1, 1, 0), version.getKotlinVersion());
     }
 
     public void testJsLibraryVersion106() {
         Library jsRuntime = getFirstLibrary(myProject);
-        IdeKotlinVersion version = JsStdlibDetectionUtil.INSTANCE.getJavaScriptLibraryStdVersion(jsRuntime, myProject);
+        IdeKotlinVersion version = KotlinJavaScriptStdlibDetectorFacility.INSTANCE.getStdlibVersion(myProject, jsRuntime);
         assertEquals(new KotlinVersion(1, 0, 6), version.getKotlinVersion());
     }
 
@@ -186,7 +189,7 @@ public class ConfigureKotlinTest extends AbstractConfigureKotlinTest {
             return true;
         });
 
-        LibraryEffectiveKindProvider effectiveKindProvider = LibraryEffectiveKindProvider.getInstance(myProject);
+        LibraryEffectiveKindProvider effectiveKindProvider = myProject.getService(LibraryEffectiveKindProvider.class);
 
         assertEquals(RepositoryLibraryType.REPOSITORY_LIBRARY_KIND, jsTest.get().getKind());
         assertEquals(KotlinJavaScriptLibraryKind.INSTANCE, effectiveKindProvider.getEffectiveKind(jsTest.get()));
@@ -321,11 +324,10 @@ public class ConfigureKotlinTest extends AbstractConfigureKotlinTest {
         Sdk moduleSdk = ModuleRootManager.getInstance(getModule()).getSdk();
         assertNotNull("Module SDK is not defined", moduleSdk);
 
-        PsiJavaModule javaModule = Java9StructureUtilKt.findFirstPsiJavaModule(module);
+        PsiJavaModule javaModule = JavaIndicesUtils.findModuleInfoFile(myProject, module.getModuleScope());
         assertNotNull(javaModule);
 
-        PsiRequiresStatement stdlibDirective =
-                Java9StructureUtilKt.findRequireDirective(javaModule, JavaModuleKt.KOTLIN_STDLIB_MODULE_NAME);
+        PsiRequiresStatement stdlibDirective = JavaPsiUtils.findRequireDirective(javaModule, JavaModuleKt.KOTLIN_STDLIB_MODULE_NAME);
         assertNotNull("Require directive for " + JavaModuleKt.KOTLIN_STDLIB_MODULE_NAME + " is expected",
                       stdlibDirective);
 
@@ -341,13 +343,7 @@ public class ConfigureKotlinTest extends AbstractConfigureKotlinTest {
         try {
             KotlinFacet facet = FacetUtilsKt.getOrCreateFacet(getModule(), modelsProvider, false, null, false);
             TargetPlatform platform = JvmPlatforms.INSTANCE.jvmPlatformByTargetVersion(jvmTarget);
-            FacetUtilsKt.configureFacet(
-                    facet,
-                    IdeKotlinVersion.get("1.4.0"),
-                    platform,
-                    modelsProvider,
-                    emptySet()
-            );
+            FacetUtilsKt.configureFacet(facet, IdeKotlinVersion.get("1.4.0"), platform, modelsProvider);
             assertEquals(platform, facet.getConfiguration().getSettings().getTargetPlatform());
             assertEquals(jvmTarget.getDescription(),
                          ((K2JVMCompilerArguments) facet.getConfiguration().getSettings().getCompilerArguments()).getJvmTarget());

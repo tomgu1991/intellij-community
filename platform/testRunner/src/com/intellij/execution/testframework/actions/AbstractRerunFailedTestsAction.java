@@ -189,7 +189,7 @@ public abstract class AbstractRerunFailedTestsAction extends AnAction {
         .setMovable(false)
         .setResizable(false)
         .setRequestFocus(true)
-        .setItemChosenCallback((value) -> performAction(environmentBuilder.runner(availableRunners.get(value)).executor(value)))
+        .setItemChosenCallback(value -> performAction(environmentBuilder.runner(availableRunners.get(value)).executor(value)))
         .createPopup().showUnderneathOf(event.getComponent());
     }
   }
@@ -296,9 +296,8 @@ public abstract class AbstractRerunFailedTestsAction extends AnAction {
       return myConfiguration.getPredefinedLogFiles();
     }
 
-    @NotNull
     @Override
-    public ArrayList<LogFileOptions> getAllLogFiles() {
+    public @NotNull ArrayList<LogFileOptions> getAllLogFiles() {
       return myConfiguration.getAllLogFiles();
     }
 

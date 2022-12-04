@@ -4,14 +4,11 @@ package com.intellij.codeInsight.daemon.impl;
 import com.intellij.codeInsight.daemon.ImplicitUsageProvider;
 import com.intellij.codeInsight.daemon.impl.analysis.DaemonTooltipsUtil;
 import com.intellij.codeInsight.daemon.impl.analysis.JavaHighlightUtil;
-import com.intellij.codeInsight.daemon.impl.quickfix.QuickFixAction;
 import com.intellij.codeInsight.intention.IntentionAction;
 import com.intellij.codeInspection.ex.EntryPointsManager;
 import com.intellij.codeInspection.ex.EntryPointsManagerBase;
 import com.intellij.codeInspection.reference.UnusedDeclarationFixProvider;
 import com.intellij.find.findUsages.*;
-import com.intellij.openapi.actionSystem.IdeActions;
-import com.intellij.openapi.keymap.KeymapUtil;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
@@ -82,40 +79,37 @@ public final class UnusedSymbolUtil {
   }
 
   /**
-   * @deprecated pass inspection's shortName to provide correct inspection description
+   * @deprecated use {@link #createUnusedSymbolInfoBuilder(PsiElement, String, HighlightInfoType, String)} instead
    */
-  @Deprecated(forRemoval = true)
-  @Nullable
-  public static HighlightInfo createUnusedSymbolInfo(@NotNull PsiElement element,
-                                                     @NotNull @NlsContexts.DetailedDescription String message,
-                                                     @NotNull final HighlightInfoType highlightInfoType) {
-    return createUnusedSymbolInfo(element, message, highlightInfoType, null);
-  }
-
+  @Deprecated
   @Nullable
   public static HighlightInfo createUnusedSymbolInfo(@NotNull PsiElement element,
                                                      @NotNull @NlsContexts.DetailedDescription String message,
                                                      @NotNull final HighlightInfoType highlightInfoType,
                                                      @Nullable String shortName) {
+    return createUnusedSymbolInfoBuilder(element, message, highlightInfoType, shortName).create();
+  }
+  @NotNull
+  public static HighlightInfo.Builder createUnusedSymbolInfoBuilder(@NotNull PsiElement element,
+                                                                    @NotNull @NlsContexts.DetailedDescription String message,
+                                                                    @NotNull final HighlightInfoType highlightInfoType,
+                                                                    @Nullable String shortName) {
     String tooltip;
     if (shortName != null) {
-      tooltip = DaemonTooltipsUtil.getWrappedTooltip(message, shortName, "(" + KeymapUtil.getShortcutsText(KeymapUtil.getActiveKeymapShortcuts(IdeActions.ACTION_SHOW_ERROR_DESCRIPTION).getShortcuts()) + ")", true);
+      tooltip = DaemonTooltipsUtil.getWrappedTooltip(message, shortName, true);
     }
     else {
       tooltip = XmlStringUtil.wrapInHtml(XmlStringUtil.escapeString(message));
     }
 
-    HighlightInfo info = HighlightInfo.newHighlightInfo(highlightInfoType).range(element)
+    HighlightInfo.@NotNull Builder info = HighlightInfo.newHighlightInfo(highlightInfoType).range(element)
       .description(message).escapedToolTip(tooltip).group(
-      GeneralHighlightingPass.POST_UPDATE_ALL).create();
-    if (info == null) {
-      return null; //filtered out
-    }
+      GeneralHighlightingPass.POST_UPDATE_ALL);
 
     for (UnusedDeclarationFixProvider provider : UnusedDeclarationFixProvider.EP_NAME.getExtensionList()) {
       IntentionAction[] fixes = provider.getQuickFixes(element);
       for (IntentionAction fix : fixes) {
-        QuickFixAction.registerQuickFixAction(info, fix);
+        info.registerFix(fix, null, null, null, null);
       }
     }
     return info;

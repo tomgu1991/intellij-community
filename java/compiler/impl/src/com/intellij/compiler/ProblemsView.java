@@ -52,7 +52,13 @@ public abstract class ProblemsView {
 
   public abstract void clearOldMessages(CompileScope scope, UUID currentSessionId);
 
-  public abstract void addMessage(int type, String @NotNull [] text, @Nullable String groupName, @Nullable Navigatable navigatable, @Nullable String exportTextPrefix, @Nullable String rendererTextPrefix, @NotNull UUID sessionId);
+  public abstract void addMessage(int type,
+                                  String @NotNull [] text,
+                                  @Nullable String groupName,
+                                  @Nullable Navigatable navigatable,
+                                  @Nullable String exportTextPrefix,
+                                  @Nullable String rendererTextPrefix,
+                                  @NotNull UUID sessionId);
 
   public final void addMessage(CompilerMessage message, @NotNull UUID sessionId) {
     final VirtualFile file = message.getVirtualFile();
@@ -65,6 +71,10 @@ public abstract class ProblemsView {
     final String[] text = convertMessage(message);
     final String groupName = file != null? file.getPresentableUrl() : category.getPresentableText();
     addMessage(type, text, groupName, navigatable, message.getExportTextPrefix(), message.getRenderTextPrefix(), sessionId);
+  }
+
+  public void buildStarted(@NotNull UUID sessionId) {
+    clearProgress();
   }
 
   public abstract void setProgress(String text, float fraction);

@@ -18,7 +18,7 @@ import static com.intellij.ide.actions.searcheverywhere.SearchEverywhereFiltersS
 /**
  * @author Konstantin Bulenkov
  */
-public class SymbolSearchEverywhereContributor extends AbstractGotoSEContributor {
+public class SymbolSearchEverywhereContributor extends AbstractGotoSEContributor implements PossibleSlowContributor {
 
   private final PersistentSearchEverywhereContributorFilter<LanguageRef> myFilter;
 
@@ -41,7 +41,7 @@ public class SymbolSearchEverywhereContributor extends AbstractGotoSEContributor
   @NotNull
   @Override
   protected FilteringGotoByModel<LanguageRef> createModel(@NotNull Project project) {
-    GotoSymbolModel2 model = new GotoSymbolModel2(project);
+    GotoSymbolModel2 model = new GotoSymbolModel2(project, this);
     if (myFilter != null) {
       model.setFilterItems(myFilter.getSelectedElements());
     }

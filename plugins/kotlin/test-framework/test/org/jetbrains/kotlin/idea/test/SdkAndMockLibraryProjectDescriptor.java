@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.test;
 
@@ -13,8 +13,8 @@ import com.intellij.openapi.util.io.FileUtilRt;
 import com.intellij.testFramework.IdeaTestUtil;
 import kotlin.collections.CollectionsKt;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.kotlin.idea.base.plugin.artifacts.KotlinArtifacts;
 import org.jetbrains.kotlin.idea.base.platforms.KotlinJavaScriptLibraryKind;
+import org.jetbrains.kotlin.idea.base.plugin.artifacts.TestKotlinArtifacts;
 import org.jetbrains.kotlin.idea.framework.KotlinSdkType;
 
 import java.io.File;
@@ -76,7 +76,7 @@ public class SdkAndMockLibraryProjectDescriptor extends KotlinLightProjectDescri
         mockLibraryModel.addRoot(jarUrl, OrderRootType.CLASSES);
 
         if (withRuntime && !isJsLibrary) {
-            mockLibraryModel.addRoot(getJarUrl(KotlinArtifacts.getKotlinStdlib()), OrderRootType.CLASSES);
+            mockLibraryModel.addRoot(getJarUrl(TestKotlinArtifacts.getKotlinStdlib()), OrderRootType.CLASSES);
         }
 
         if (isJsLibrary && mockLibraryModel instanceof LibraryEx.ModifiableModelEx) {

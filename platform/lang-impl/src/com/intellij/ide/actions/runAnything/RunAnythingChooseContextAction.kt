@@ -23,7 +23,7 @@ import com.intellij.ui.popup.PopupFactoryImpl
 import com.intellij.ui.popup.list.PopupListElementRenderer
 import com.intellij.util.ui.EmptyIcon
 import com.intellij.util.ui.JBUI
-import com.intellij.util.ui.UIUtil
+import com.intellij.util.ui.NamedColorUtil
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.util.function.Supplier
@@ -60,9 +60,9 @@ abstract class RunAnythingChooseContextAction(private val containingPanel: JPane
     e.presentation.isEnabledAndVisible = true
     e.presentation.text = selectedContext!!.label
     e.presentation.icon = selectedContext!!.icon
-
-    containingPanel.revalidate()
   }
+
+  override  fun getActionUpdateThread() = ActionUpdateThread.EDT
 
   override fun actionPerformed(e: AnActionEvent) {
     val project = e.project
@@ -141,6 +141,8 @@ abstract class RunAnythingChooseContextAction(private val containingPanel: JPane
       e.presentation.icon = context.icon
     }
 
+    override  fun getActionUpdateThread() = ActionUpdateThread.BGT
+
     override fun actionPerformed(e: AnActionEvent) {
       selectedContext = context
     }
@@ -182,7 +184,7 @@ abstract class RunAnythingChooseContextAction(private val containingPanel: JPane
           }
 
           myTextLabel.text = event.presentation.text
-          myInfoLabel.foreground = if (isSelected) UIUtil.getListSelectionForeground(true) else UIUtil.getInactiveTextColor()
+          myInfoLabel.foreground = if (isSelected) NamedColorUtil.getListSelectionForeground(true) else NamedColorUtil.getInactiveTextColor()
         }
       }
   }

@@ -16,6 +16,7 @@
 package com.intellij.codeInsight.daemon.impl.quickfix;
 
 import com.intellij.codeInsight.daemon.impl.HighlightInfo;
+import com.intellij.codeInsight.intention.FileModifier;
 import com.intellij.codeInsight.intention.HighPriorityAction;
 import com.intellij.codeInsight.intention.IntentionAction;
 import com.intellij.java.analysis.JavaAnalysisBundle;
@@ -25,11 +26,14 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.*;
 import com.intellij.psi.impl.source.resolve.DefaultParameterTypeInferencePolicy;
+import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.util.PsiUtil;
 import com.intellij.psi.util.TypeConversionUtil;
 import com.intellij.util.IncorrectOperationException;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.List;
 
 public class AddTypeArgumentsConditionalFix implements IntentionAction, HighPriorityAction {
   private static final Logger LOG = Logger.getInstance(AddTypeArgumentsConditionalFix.class);
@@ -42,6 +46,11 @@ public class AddTypeArgumentsConditionalFix implements IntentionAction, HighPrio
     mySubstitutor = substitutor;
     myExpression = expression;
     myMethod = method;
+  }
+
+  @Override
+  public @Nullable FileModifier getFileModifierForPreview(@NotNull PsiFile target) {
+    return new AddTypeArgumentsConditionalFix(mySubstitutor, PsiTreeUtil.findSameElementInCopy(myExpression, target), myMethod);
   }
 
   @NotNull
@@ -100,7 +109,7 @@ public class AddTypeArgumentsConditionalFix implements IntentionAction, HighPrio
     return true;
   }
 
-  public static void register(HighlightInfo highlightInfo, @Nullable PsiExpression expression, @NotNull PsiType lType) {
+  public static void register(@NotNull HighlightInfo.Builder highlightInfo, @Nullable PsiExpression expression, @NotNull PsiType lType) {
     if (lType != PsiType.NULL && expression instanceof PsiConditionalExpression) {
       final PsiExpression thenExpression = ((PsiConditionalExpression)expression).getThenExpression();
       final PsiExpression elseExpression = ((PsiConditionalExpression)expression).getElseExpression();
@@ -121,7 +130,7 @@ public class AddTypeArgumentsConditionalFix implements IntentionAction, HighPrio
     }
   }
 
-  private static void inferTypeArgs(HighlightInfo highlightInfo, PsiType lType, PsiExpression thenExpression) {
+  private static void inferTypeArgs(@NotNull HighlightInfo.Builder highlightInfo, PsiType lType, PsiExpression thenExpression) {
     final JavaResolveResult result = ((PsiMethodCallExpression)thenExpression).resolveMethodGenerics();
     final PsiMethod method = (PsiMethod)result.getElement();
     if (method != null) {
@@ -141,9 +150,8 @@ public class AddTypeArgumentsConditionalFix implements IntentionAction, HighPrio
                               initializer, DefaultParameterTypeInferencePolicy.INSTANCE);
         PsiType substitutedType = substitutor.substitute(returnType);
         if (substitutedType != null && TypeConversionUtil.isAssignable(lType, substitutedType)) {
-          QuickFixAction.registerQuickFixAction(highlightInfo,
-                                                thenExpression.getTextRange(),
-                                                new AddTypeArgumentsConditionalFix(substitutor, (PsiMethodCallExpression)thenExpression, method));
+          highlightInfo.registerFix(new AddTypeArgumentsConditionalFix(substitutor, (PsiMethodCallExpression)thenExpression, method), null,
+                                    null, thenExpression.getTextRange(), null);
         }
       }
     }

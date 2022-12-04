@@ -16,6 +16,7 @@
 package com.siyeh.ig.memory;
 
 import com.intellij.codeInsight.AnnotationUtil;
+import com.intellij.codeInsight.intention.preview.IntentionPreviewInfo;
 import com.intellij.codeInspection.BatchQuickFix;
 import com.intellij.codeInspection.CommonProblemDescriptor;
 import com.intellij.codeInspection.ProblemDescriptor;
@@ -29,8 +30,8 @@ import com.intellij.psi.codeStyle.JavaCodeStyleManager;
 import com.intellij.psi.search.searches.ReferencesSearch;
 import com.intellij.psi.util.PsiUtil;
 import com.intellij.psi.util.PsiUtilCore;
+import com.intellij.util.ObjectUtils;
 import com.intellij.util.SmartList;
-import com.intellij.util.concurrency.annotations.RequiresWriteLock;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.containers.OrderedSet;
 import com.siyeh.InspectionGadgetsBundle;
@@ -95,8 +96,20 @@ public class InnerClassMayBeStaticInspection extends BaseInspection {
     }
 
     @Override
-    public void doFix(Project project, ProblemDescriptor descriptor) {
+    public void doFix(@NotNull Project project, @NotNull ProblemDescriptor descriptor) {
       applyFix(project, new ProblemDescriptor[] {descriptor}, List.of(), null);
+    }
+
+    @Override
+    public @NotNull IntentionPreviewInfo generatePreview(@NotNull Project project, @NotNull ProblemDescriptor previewDescriptor) {
+      PsiClass innerClass = ObjectUtils.tryCast(previewDescriptor.getStartElement().getParent(), PsiClass.class);
+      if (innerClass == null) {
+        return IntentionPreviewInfo.EMPTY;
+      }
+      Handler handler = new Handler(innerClass);
+      handler.collectLocalReferences();
+      handler.makeStatic();
+      return IntentionPreviewInfo.DIFF;
     }
 
     @Override
@@ -148,7 +161,11 @@ public class InnerClassMayBeStaticInspection extends BaseInspection {
         });
       }
 
-      @RequiresWriteLock
+      void collectLocalReferences() {
+        this.references = SyntaxTraverser.psiTraverser(innerClass.getContainingFile())
+          .filter(e -> e instanceof PsiJavaCodeReferenceElement && ((PsiJavaCodeReferenceElement)e).isReferenceTo(innerClass)).toList();
+      }
+
       void makeStatic() {
         final Project project = innerClass.getProject();
         final JavaCodeStyleManager codeStyleManager = JavaCodeStyleManager.getInstance(project);

@@ -10,12 +10,13 @@ import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.ide.plugins.cl.PluginAwareClassLoader
 import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.psi.tree.IElementType
 import com.intellij.ui.icons.IconLoadMeasurer
 import com.intellij.util.io.jackson.array
 import com.intellij.util.io.jackson.obj
 import com.intellij.util.lang.ClassPath
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap
-import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap
+import it.unimi.dsi.fastutil.objects.Object2LongMap
 import org.bouncycastle.crypto.generators.Argon2BytesGenerator
 import org.bouncycastle.crypto.params.Argon2Parameters
 import java.lang.invoke.MethodHandles
@@ -28,7 +29,7 @@ import java.util.*
 import java.util.concurrent.TimeUnit
 
 internal class IdeIdeaFormatWriter(activities: Map<String, MutableList<ActivityImpl>>,
-                                   private val pluginCostMap: MutableMap<String, Object2LongOpenHashMap<String>>,
+                                   private val pluginCostMap: MutableMap<String, Object2LongMap<String>>,
                                    threadNameManager: ThreadNameManager) : IdeaFormatWriter(activities, threadNameManager,
                                                                                             StartUpPerformanceReporter.VERSION) {
   val publicStatMetrics = Object2IntOpenHashMap<String>()
@@ -73,6 +74,10 @@ internal class IdeIdeaFormatWriter(activities: Map<String, MutableList<ActivityI
       writer.writeNumberField("time", TimeUnit.NANOSECONDS.toMillis(stats.getValue("resourceLoadingTime")))
       writer.writeNumberField("count", stats.getValue("resourceRequests"))
     }
+    writer.obj("langLoading") {
+      val allTypes = IElementType.enumerate(IElementType.TRUE)
+      writer.writeNumberField("elementTypeCount", allTypes.size)
+    }
 
     writeServiceStats(writer)
     writeIcons(writer)
@@ -115,7 +120,6 @@ internal class IdeIdeaFormatWriter(activities: Map<String, MutableList<ActivityI
       when (val itemName = item.name) {
         "splash initialization" -> {
           publicStatMetrics["splash"] = TimeUnit.NANOSECONDS.toMillis(ownOrTotalDuration).toInt()
-          publicStatMetrics["splashShown"] = TimeUnit.NANOSECONDS.toMillis(item.end - StartUpMeasurer.getStartTime()).toInt()
         }
         "bootstrap", "app initialization" -> {
           publicStatMetrics[itemName] = TimeUnit.NANOSECONDS.toMillis(ownOrTotalDuration).toInt()

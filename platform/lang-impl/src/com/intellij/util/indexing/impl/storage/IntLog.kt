@@ -122,7 +122,7 @@ class IntLog @Throws(IOException::class) constructor(private val baseStorageFile
   private fun openLog() = AppendableStorageBackedByResizableMappedFile(getDataFile(),
                                                                        4096,
                                                                        storageLockContext,
-                                                                       PagedFileStorage.MB,
+                                                                       IOUtil.MiB,
                                                                        true,
                                                                        IntPairInArrayKeyDescriptor)
 
@@ -202,7 +202,7 @@ class IntLog @Throws(IOException::class) constructor(private val baseStorageFile
     return dataFile.resolveSibling(dataFile.fileName.toString() + ".require.compaction")
   }
 
-  fun getDataFile(): Path {
+  private fun getDataFile(): Path {
     return baseStorageFile.resolveSibling(baseStorageFile.fileName.toString() + ".project")
   }
 
@@ -215,7 +215,7 @@ class IntLog @Throws(IOException::class) constructor(private val baseStorageFile
       val oldMapping = AppendableStorageBackedByResizableMappedFile(oldDataFile,
                                                                     0,
                                                                     storageLockContext,
-                                                                    PagedFileStorage.MB,
+                                                                    IOUtil.MiB,
                                                                     true,
                                                                     IntPairInArrayKeyDescriptor)
       oldMapping.lockRead()
@@ -253,7 +253,7 @@ class IntLog @Throws(IOException::class) constructor(private val baseStorageFile
       val newMapping = AppendableStorageBackedByResizableMappedFile(newDataFile,
                                                                     32 * 2 * data.size,
                                                                     storageLockContext,
-                                                                    PagedFileStorage.MB,
+                                                                    IOUtil.MiB,
                                                                     true,
                                                                     IntPairInArrayKeyDescriptor)
       newMapping.lockWrite()

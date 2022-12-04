@@ -13,9 +13,6 @@ import com.intellij.psi.util.PsiUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * @author peter
- */
 public class PsiTypeCanonicalLookupElement extends LookupElement {
   private final PsiType myType;
   private final String myPresentableText;
@@ -78,7 +75,7 @@ public class PsiTypeCanonicalLookupElement extends LookupElement {
   }
 
   @Override
-  public void renderElement(LookupElementPresentation presentation) {
+  public void renderElement(@NotNull LookupElementPresentation presentation) {
     final PsiClass psiClass = getPsiClass();
     if (psiClass != null) {
       presentation.setIcon(psiClass.getIcon(Iconable.ICON_FLAG_VISIBILITY));

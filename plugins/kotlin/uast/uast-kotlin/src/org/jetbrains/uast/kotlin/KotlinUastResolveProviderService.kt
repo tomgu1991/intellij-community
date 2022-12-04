@@ -1,8 +1,9 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.uast.kotlin
 
 import com.intellij.psi.*
+import org.jetbrains.kotlin.analysis.api.types.KtTypeNullability
 import org.jetbrains.kotlin.asJava.toLightAnnotation
 import org.jetbrains.kotlin.backend.common.descriptors.explicitParameters
 import org.jetbrains.kotlin.builtins.createFunctionType
@@ -26,6 +27,7 @@ import org.jetbrains.kotlin.resolve.descriptorUtil.builtIns
 import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameSafe
 import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameUnsafe
 import org.jetbrains.kotlin.resolve.lazy.ForceResolveUtil
+import org.jetbrains.kotlin.resolve.sam.SamConstructorDescriptor
 import org.jetbrains.kotlin.resolve.source.getPsi
 import org.jetbrains.kotlin.synthetic.SyntheticJavaPropertyDescriptor
 import org.jetbrains.kotlin.types.*
@@ -179,7 +181,7 @@ interface KotlinUastResolveProviderService : BaseKotlinUastResolveProviderServic
         return resolveToPsiMethod(ktElement)
     }
 
-    override fun resolveAccessorCall(ktSimpleNameExpression: KtSimpleNameExpression): PsiMethod? {
+    override fun resolveSyntheticJavaPropertyAccessorCall(ktSimpleNameExpression: KtSimpleNameExpression): PsiMethod? {
         val resolvedCall = ktSimpleNameExpression.getResolvedCall(ktSimpleNameExpression.analyze()) ?: return null
         val resultingDescriptor = resolvedCall.resultingDescriptor as? SyntheticJavaPropertyDescriptor ?: return null
         val access = ktSimpleNameExpression.readWriteAccess()
@@ -209,6 +211,8 @@ interface KotlinUastResolveProviderService : BaseKotlinUastResolveProviderServic
         val resolvedCall = ktCallElement.getResolvedCall(ktCallElement.analyze()) ?: return UastCallKind.METHOD_CALL
         val fqName = DescriptorUtils.getFqNameSafe(resolvedCall.candidateDescriptor)
         return when {
+            resolvedCall.resultingDescriptor is SamConstructorDescriptor ||
+            resolvedCall.resultingDescriptor.original is SamConstructorDescriptor ||
             resolvedCall.resultingDescriptor is ConstructorDescriptor -> UastCallKind.CONSTRUCTOR_CALL
             isAnnotationArgumentArrayInitializer(ktCallElement, fqName) -> UastCallKind.NESTED_ARRAY_INITIALIZER
             else -> UastCallKind.METHOD_CALL
@@ -320,7 +324,8 @@ interface KotlinUastResolveProviderService : BaseKotlinUastResolveProviderServic
             ?.toPsiType(containingLightDeclaration, ktDeclaration, ktDeclaration.typeOwnerKind, boxed = false)
     }
 
-    override fun getFunctionType(ktFunction: KtFunction, source: UElement): PsiType? {
+    override fun getFunctionType(ktFunction: KtFunction, source: UElement?): PsiType? {
+        if (ktFunction is KtConstructor<*>) return null
         val descriptor = ktFunction.analyze()[BindingContext.FUNCTION, ktFunction] ?: return null
         val returnType = descriptor.returnType ?: return null
 
@@ -339,8 +344,14 @@ interface KotlinUastResolveProviderService : BaseKotlinUastResolveProviderServic
         return uLambdaExpression.getFunctionalInterfaceType()
     }
 
-    override fun nullability(psiElement: PsiElement): TypeNullability? {
-        return getTargetType(psiElement)?.nullability()
+    override fun nullability(psiElement: PsiElement): KtTypeNullability? {
+        return getTargetType(psiElement)?.nullability()?.let {
+            when (it) {
+                TypeNullability.NOT_NULL -> KtTypeNullability.NON_NULLABLE
+                TypeNullability.NULLABLE -> KtTypeNullability.NULLABLE
+                TypeNullability.FLEXIBLE -> KtTypeNullability.UNKNOWN
+            }
+        }
     }
 
     private fun getTargetType(annotatedElement: PsiElement): KotlinType? {

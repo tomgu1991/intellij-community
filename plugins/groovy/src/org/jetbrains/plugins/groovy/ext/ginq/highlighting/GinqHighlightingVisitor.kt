@@ -5,7 +5,7 @@ import com.intellij.psi.CommonClassNames
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiType
 import com.intellij.psi.util.parentOfType
-import com.intellij.util.castSafelyTo
+import com.intellij.util.asSafely
 import org.jetbrains.plugins.groovy.GroovyBundle
 import org.jetbrains.plugins.groovy.ext.ginq.ast.*
 import org.jetbrains.plugins.groovy.ext.ginq.types.inferDataSourceComponentType
@@ -23,11 +23,11 @@ class GinqHighlightingVisitor : GroovyRecursiveElementVisitor() {
     val ginq = element.getStoredGinq()
     if (ginq != null) {
       keywords.addAll(ginq.getQueryFragments().map { it.keyword })
-      keywords.addAll(ginq.select.projections.flatMap { projection ->
+      keywords.addAll(ginq.select?.projections?.flatMap { projection ->
         projection.windows.flatMap { listOfNotNull(it.overKw, it.rowsOrRangeKw, it.partitionKw, it.orderBy?.keyword) }
-      })
+      } ?: emptyList())
       warnings.addAll(getTypecheckingWarnings(ginq))
-      val orderBys = ginq.select.projections.flatMap { it.windows.mapNotNull(GinqWindowFragment::orderBy) } + listOfNotNull(ginq.orderBy)
+      val orderBys = (ginq.select?.projections?.flatMap { it.windows.mapNotNull(GinqWindowFragment::orderBy) } ?: emptyList()) + listOfNotNull(ginq.orderBy)
       softKeywords.addAll(orderBys.flatMap { it.getSoftKeywords() })
     }
     super.visitElement(element)
@@ -42,7 +42,7 @@ class GinqHighlightingVisitor : GroovyRecursiveElementVisitor() {
     val filteringFragments = ginq.getFilterFragments()
     val filterResults = filteringFragments.mapNotNull { fragment ->
       val type = fragment.filter.type
-      val parentCall = fragment.filter.parentOfType<GrMethodCall>()?.parentOfType<GrMethodCall>()?.invokedExpression?.castSafelyTo<GrReferenceExpression>()?.takeIf { it.referenceName == "exists" }
+      val parentCall = fragment.filter.parentOfType<GrMethodCall>()?.parentOfType<GrMethodCall>()?.invokedExpression?.asSafely<GrReferenceExpression>()?.takeIf { it.referenceName == "exists" }
       if (type != PsiType.BOOLEAN && type?.equalsToText(CommonClassNames.JAVA_LANG_BOOLEAN) != true && parentCall == null) {
         fragment.filter to GroovyBundle.message("ginq.error.message.boolean.condition.expected")
       }

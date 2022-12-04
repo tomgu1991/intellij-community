@@ -6,19 +6,20 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-abstract class ReviewListSearchPanelViewModelBase<S : ReviewListSearchValue>(
+abstract class ReviewListSearchPanelViewModelBase<S : ReviewListSearchValue, Q: ReviewListQuickFilter<S>>(
   private val scope: CoroutineScope,
   private val historyModel: ReviewListSearchHistoryModel<S>,
-  private val defaultSearch: S
-) : ReviewListSearchPanelViewModel<S> {
+  final override val emptySearch: S,
+  final override val defaultQuickFilter: Q
+) : ReviewListSearchPanelViewModel<S, Q> {
 
-  final override val searchState = MutableStateFlow(historyModel.getHistory().lastOrNull() ?: defaultSearch)
+  final override val searchState = MutableStateFlow(historyModel.lastFilter ?: defaultQuickFilter.filter)
 
   final override val queryState = searchState.partialState(ReviewListSearchValue::searchQuery) {
     withQuery(it)
   }
 
-  override fun getSearchHistory(): List<S> = historyModel.getHistory()
+  final override fun getSearchHistory(): List<S> = historyModel.getHistory()
 
   init {
     updateHistoryOnSearchChanges()
@@ -27,12 +28,14 @@ abstract class ReviewListSearchPanelViewModelBase<S : ReviewListSearchValue>(
   private fun updateHistoryOnSearchChanges() {
     scope.launch {
       searchState.collectLatestWithPrevious { old, new ->
+        historyModel.lastFilter = new
+
         // don't persist first value
         if (old == null) {
           return@collectLatestWithPrevious
         }
 
-        if (new.isEmpty || new == defaultSearch) {
+        if (new.filterCount == 0 || new == defaultQuickFilter.filter) {
           return@collectLatestWithPrevious
         }
 
@@ -46,8 +49,8 @@ abstract class ReviewListSearchPanelViewModelBase<S : ReviewListSearchValue>(
 
   protected abstract fun S.withQuery(query: String?): S
 
-  protected fun <T> MutableStateFlow<S>.partialState(getter: (S) -> T, updater: S.(T?) -> S): MutableStateFlow<T?> {
-    val partialState = MutableStateFlow<T?>(null)
+  protected fun <T> MutableStateFlow<S>.partialState(getter: (S) -> T, updater: S.(T) -> S): MutableStateFlow<T> {
+    val partialState = MutableStateFlow(getter(value))
     scope.launch {
       collectLatest { value ->
         partialState.update { getter(value) }

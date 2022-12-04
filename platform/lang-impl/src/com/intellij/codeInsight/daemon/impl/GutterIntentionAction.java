@@ -15,6 +15,7 @@ import com.intellij.openapi.util.Iconable;
 import com.intellij.psi.PsiFile;
 import com.intellij.ui.awt.RelativePoint;
 import com.intellij.util.IncorrectOperationException;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -43,9 +44,10 @@ public class GutterIntentionAction extends AbstractIntentionAction implements Co
     AnActionEvent event = AnActionEvent.createFromInputEvent(
       relativePoint.toMouseEvent(), ActionPlaces.INTENTION_MENU, null, EditorUtil.getEditorDataContext(editor));
     if (!ActionUtil.lastUpdateAndCheckDumb(myAction, event, false)) return;
-    ActionUtil.doPerformActionOrShowPopup(myAction, event, popup -> {
-      popup.showInBestPositionFor(editor);
-    });
+    ActionUtil.performDumbAwareWithCallbacks(myAction, event, () ->
+      ActionUtil.doPerformActionOrShowPopup(myAction, event, popup -> {
+        popup.showInBestPositionFor(editor);
+      }));
   }
 
   @NotNull
@@ -66,6 +68,12 @@ public class GutterIntentionAction extends AbstractIntentionAction implements Co
       return myOrder - ((GutterIntentionAction)o).myOrder;
     }
     return 0;
+  }
+
+  @ApiStatus.Experimental
+  @ApiStatus.Internal
+  public @NotNull AnAction getAction() {
+    return myAction;
   }
 
   @Override

@@ -2,8 +2,7 @@
 package com.intellij.workspaceModel.storage.entities.model.api
 
 import com.intellij.workspaceModel.storage.WorkspaceEntity
-import com.intellij.workspaceModel.storage.bridgeEntities.api.ModuleDependencyItem
-import com.intellij.workspaceModel.storage.referrersx
+import com.intellij.workspaceModel.storage.bridgeEntities.ModuleDependencyItem
 import org.jetbrains.deft.annotations.Child
 
 
@@ -20,4 +19,4 @@ interface AnotherTest: WorkspaceEntity {
 }
 
 val TestEntity.anotherTest: @Child AnotherTest?
-  get() = referrersx(AnotherTest::testField).singleOrNull()
+    by WorkspaceEntity.extension()

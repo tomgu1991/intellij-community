@@ -8,10 +8,9 @@ import com.intellij.openapi.module.ModuleUtilCore
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.RootsChangeRescanningInfo
 import com.intellij.openapi.roots.ModuleRootManager
-import com.intellij.openapi.util.NlsContexts
 import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.idea.base.util.invalidateProjectRoots
-import org.jetbrains.kotlin.cli.common.arguments.CliArgumentStringBuilder.replaceLanguageFeature
+import org.jetbrains.kotlin.idea.base.codeInsight.CliArgumentStringBuilder.replaceLanguageFeature
 import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.diagnostics.Diagnostic
 import org.jetbrains.kotlin.idea.KotlinJvmBundle
@@ -20,7 +19,9 @@ import org.jetbrains.kotlin.idea.configuration.findApplicableConfigurator
 import org.jetbrains.kotlin.idea.facet.getRuntimeLibraryVersion
 import org.jetbrains.kotlin.idea.base.util.module
 import org.jetbrains.kotlin.config.TestSourceKotlinRootType
+import org.jetbrains.kotlin.diagnostics.Errors
 import org.jetbrains.kotlin.idea.base.projectStructure.getKotlinSourceRootType
+import org.jetbrains.kotlin.idea.projectConfiguration.checkUpdateRuntime
 import org.jetbrains.kotlin.psi.KtFile
 
 sealed class ChangeGeneralLanguageFeatureSupportFix(
@@ -53,9 +54,7 @@ sealed class ChangeGeneralLanguageFeatureSupportFix(
         override fun getText() = KotlinJvmBundle.message("fix.0.in.the.project", super.getText())
 
         override fun invoke(project: Project, editor: Editor?, file: KtFile) {
-            if (featureSupportEnabled) {
-                if (!checkUpdateRuntime(project, feature.sinceApiVersion)) return
-            }
+            if (featureSupportEnabled && !checkUpdateRuntime(project, feature.sinceApiVersion)) return
             KotlinCompilerSettings.getInstance(project).update {
                 additionalArguments = additionalArguments.replaceLanguageFeature(
                     feature,
@@ -70,21 +69,17 @@ sealed class ChangeGeneralLanguageFeatureSupportFix(
 
     }
 
-    companion object : FeatureSupportIntentionActionsFactory() {
-        private val supportedFeatures = listOf(LanguageFeature.InlineClasses)
+    companion object : KotlinIntentionActionsFactory(), FeatureSupportIntentionActionsFactory {
+        private val supportedFeature = LanguageFeature.InlineClasses
 
-        @NlsContexts.DialogTitle
-        fun getFixText(feature: LanguageFeature, state: LanguageFeature.State) = getFixText(state, feature.presentableName)
-
-        override fun doCreateActions(diagnostic: Diagnostic): List<IntentionAction> {
-            val module = ModuleUtilCore.findModuleForPsiElement(diagnostic.psiElement) ?: return emptyList()
-
-            return supportedFeatures.flatMap { feature ->
-                doCreateActions(
-                    diagnostic, feature, allowWarningAndErrorMode = false,
-                    quickFixConstructor = if (shouldConfigureInProject(module)) ::InProject else ::InModule
-                )
+        override fun doCreateActions(diagnostic: Diagnostic): List<IntentionAction> =
+            diagnostic.takeIf {
+                it.factory == Errors.EXPERIMENTAL_FEATURE_WARNING &&
+                        Errors.EXPERIMENTAL_FEATURE_WARNING.cast(it).a.first == supportedFeature
             }
-        }
+                ?.let { ModuleUtilCore.findModuleForPsiElement(it.psiElement) }
+                ?.let { if (shouldConfigureInProject(it)) ::InProject else ::InModule }
+                ?.let { listOf(it(diagnostic.psiElement, supportedFeature, LanguageFeature.State.ENABLED)) }
+                ?: emptyList()
     }
 }

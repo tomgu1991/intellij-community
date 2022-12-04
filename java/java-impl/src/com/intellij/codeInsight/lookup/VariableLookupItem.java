@@ -32,9 +32,6 @@ import java.awt.*;
 import java.util.HashMap;
 import java.util.Objects;
 
-/**
-* @author peter
-*/
 public class VariableLookupItem extends LookupItem<PsiVariable> implements TypedLookupItem, StaticallyImportable {
   private static final String EQ = " = ";
   @Nullable private final MemberLookupHelper myHelper;
@@ -158,7 +155,7 @@ public class VariableLookupItem extends LookupItem<PsiVariable> implements Typed
   }
 
   @Override
-  public void renderElement(LookupElementPresentation presentation) {
+  public void renderElement(@NotNull LookupElementPresentation presentation) {
     boolean qualify = myHelper != null && !myHelper.willBeImported() || myForcedQualifier != null;
 
     PsiVariable variable = getObject();
@@ -295,7 +292,7 @@ public class VariableLookupItem extends LookupItem<PsiVariable> implements Typed
       return;
     }
 
-    if (HighlightControlFlowUtil.getInnerClassVariableReferencedFrom(variable, place) != null &&
+    if (HighlightControlFlowUtil.getElementVariableReferencedFrom(variable, place) != null &&
         !HighlightControlFlowUtil.isReassigned(variable, new HashMap<>())) {
       PsiUtil.setModifierProperty(variable, PsiModifier.FINAL, true);
     }

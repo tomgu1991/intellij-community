@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring.changeSignature.ui
 
@@ -22,7 +22,7 @@ import com.intellij.ui.layout.*
 import com.intellij.util.Alarm
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.DescriptorVisibility
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.KotlinFileType
 import org.jetbrains.kotlin.idea.intentions.AddFullQualifierIntention
 import org.jetbrains.kotlin.idea.refactoring.changeSignature.*
@@ -133,7 +133,7 @@ class KotlinChangePropertySignatureDialog(
 
     private fun calculateSignature(): String = buildString {
         methodDescriptor.baseDeclaration.safeAs<KtValVarKeywordOwner>()?.valOrVarKeyword?.let {
-            val visibility = visibilityCombo.selectedItem
+            val visibility = if (methodDescriptor.canChangeVisibility()) visibilityCombo.selectedItem else methodDescriptor.visibility
             if (visibility != DescriptorVisibilities.DEFAULT_VISIBILITY) {
                 append("$visibility ")
             }
@@ -238,7 +238,7 @@ class KotlinChangePropertySignatureDialog(
             originalDescriptor,
             name,
             returnTypeCodeFragment.getTypeInfo(isCovariant = false, forPreview = false),
-            visibilityCombo.selectedItem as DescriptorVisibility,
+            if (methodDescriptor.canChangeVisibility()) visibilityCombo.selectedItem as DescriptorVisibility else methodDescriptor.visibility,
             emptyList(),
             receiver,
             originalDescriptor.method,

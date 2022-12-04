@@ -10,7 +10,11 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.util.containers.addIfNotNull
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.CleanupFix
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.KotlinPsiOnlyQuickFixAction
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.PsiElementSuitabilityCheckers
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.QuickFixesPsiBasedFactory
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
 
@@ -42,7 +46,7 @@ class CommaInWhenConditionWithoutArgumentFix(element: KtWhenExpression) : Kotlin
                     val conditionsData = getConditionsDataOrNull(whenEntry) ?: return
                     // Leave branch untouched if there are no valid conditions
                     if (conditionsData.conditions.isEmpty()) continue
-                    val replacement = KtPsiFactory(whenEntry).buildExpression {
+                    val replacement = KtPsiFactory(whenEntry.project).buildExpression {
                         appendExpressions(conditionsData.conditions, separator = "||")
                     }
                     whenEntry.deleteChildRange(conditionsData.first, conditionsData.last)

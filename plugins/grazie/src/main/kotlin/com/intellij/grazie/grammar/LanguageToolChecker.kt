@@ -86,7 +86,7 @@ open class LanguageToolChecker : TextChecker() {
     return TextRange(start, end)
   }
 
-  class Problem(val match: RuleMatch, lang: Lang, text: TextContent, val testDescription: Boolean)
+  class Problem(val match: RuleMatch, lang: Lang, text: TextContent, private val testDescription: Boolean)
     : TextProblem(LanguageToolRule(lang, match.rule), text, TextRange(match.fromPos, match.toPos)) {
 
     override fun getShortMessage(): String =
@@ -130,7 +130,8 @@ open class LanguageToolChecker : TextChecker() {
     private val logger = LoggerFactory.getLogger(LanguageToolChecker::class.java)
     private val interner = Interner.createWeakInterner<String>()
     private val sentenceSeparationRules = setOf("LC_AFTER_PERIOD", "PUNT_GEEN_HL", "KLEIN_NACH_PUNKT")
-    private val openClosedRegexp = Regex("[\\[(].+(\\.\\.|:|,).+[])]")
+    private val openClosedRangeStart = Regex("[\\[(].+?(\\.\\.|:|,).+[])]")
+    private val openClosedRangeEnd = Regex(".*" + openClosedRangeStart.pattern)
 
     internal fun grammarRules(tool: JLanguageTool, lang: Lang): List<LanguageToolRule> {
       return tool.allRules.asSequence()
@@ -152,9 +153,16 @@ open class LanguageToolChecker : TextChecker() {
     }
 
     private fun isKnownLTBug(match: RuleMatch, text: TextContent): Boolean {
-      if (match.rule is GenericUnpairedBracketsRule && match.fromPos > 0) {
-        if (text.startsWith("\")", match.fromPos - 1) || text.subSequence(0, match.fromPos).contains("(\"")) {
+      if (match.rule is GenericUnpairedBracketsRule) {
+        if (match.fromPos > 0 &&
+            (text.startsWith("\")", match.fromPos - 1) || text.subSequence(0, match.fromPos).contains("(\""))) {
           return true //https://github.com/languagetool-org/languagetool/issues/5269
+        }
+        if (text.startsWith("'", match.fromPos) && text.subSequence(match.fromPos + 1, text.length).contains("'")) {
+          return true // https://github.com/languagetool-org/languagetool/issues/7249
+        }
+        if (text.substring(match.fromPos, match.toPos) == "\"" && text.subSequence(0, match.fromPos).contains("\"")) {
+          return true // e.g. commented raise ValueError(f"a very long text so that the vicinity of the error doesn't seem like code")
         }
         if (couldBeOpenClosedRange(text, match.fromPos)) {
           return true
@@ -176,8 +184,8 @@ open class LanguageToolChecker : TextChecker() {
     // https://github.com/languagetool-org/languagetool/issues/6566
     private fun couldBeOpenClosedRange(text: TextContent, index: Int): Boolean {
       val unpaired = text[index]
-      return "([".contains(unpaired) && openClosedRegexp.find(text, index)?.range?.start == index ||
-             ")]".contains(unpaired) && openClosedRegexp.findAll(text.subSequence(0, index + 1)).any { it.range.last == index }
+      return "([".contains(unpaired) && openClosedRangeStart.matchesAt(text, index) ||
+             ")]".contains(unpaired) && openClosedRangeEnd.matches(text.subSequence(0, index + 1))
     }
 
     // https://github.com/languagetool-org/languagetool/issues/5230

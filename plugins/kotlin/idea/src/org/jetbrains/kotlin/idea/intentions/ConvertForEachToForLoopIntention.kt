@@ -1,10 +1,11 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.intentions
 
 import com.intellij.openapi.editor.Editor
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.intentions.SelfTargetingOffsetIndependentIntention
 import org.jetbrains.kotlin.idea.util.CommentSaver
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.allChildren
@@ -74,20 +75,20 @@ class ConvertForEachToForLoopIntention : SelfTargetingOffsetIndependentIntention
     }
 
     private fun generateLoop(functionLiteral: KtLambdaExpression, receiver: KtExpression, context: BindingContext): KtExpression {
-        val factory = KtPsiFactory(functionLiteral)
+        val psiFactory = KtPsiFactory(functionLiteral.project)
 
         val body = functionLiteral.bodyExpression!!
         val function = functionLiteral.functionLiteral
 
         body.forEachDescendantOfType<KtReturnExpression> {
             if (it.getTargetFunction(context) == function) {
-                it.replace(factory.createExpression("continue"))
+                it.replace(psiFactory.createExpression("continue"))
             }
         }
 
         val loopRange = KtPsiUtil.safeDeparenthesize(receiver)
         val parameter = functionLiteral.valueParameters.singleOrNull()
 
-        return factory.createExpressionByPattern("for($0 in $1){ $2 }", parameter ?: "it", loopRange, body.allChildren)
+        return psiFactory.createExpressionByPattern("for($0 in $1){ $2 }", parameter ?: "it", loopRange, body.allChildren)
     }
 }

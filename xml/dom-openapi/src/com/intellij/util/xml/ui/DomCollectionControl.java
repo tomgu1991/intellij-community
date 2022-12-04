@@ -37,9 +37,6 @@ import java.lang.reflect.Type;
 import java.util.List;
 import java.util.*;
 
-/**
- * @author peter
- */
 public class DomCollectionControl<T extends DomElement> extends DomUIControl implements Highlightable, DataProvider {
   private static final DataKey<DomCollectionControl> DOM_COLLECTION_CONTROL = DataKey.create("DomCollectionControl");
 
@@ -437,6 +434,11 @@ public class DomCollectionControl<T extends DomElement> extends DomUIControl imp
       e.getPresentation().setVisible(visible);
       e.getPresentation().setEnabled(visible && control.getComponent().getTable().getSelectedRowCount() == 1);
     }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
+    }
   }
 
   public static class RemoveAction extends AnAction {
@@ -464,6 +466,11 @@ public class DomCollectionControl<T extends DomElement> extends DomUIControl imp
         enabled = false;
       }
       e.getPresentation().setEnabled(enabled);
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
     }
   }
 }

@@ -110,15 +110,17 @@ public class ChooseActionsDialog extends DialogWrapper {
   private JPanel createToolbarPanel() {
     final JPanel panel = new JPanel(new BorderLayout());
     DefaultActionGroup group = new DefaultActionGroup();
-    final JComponent toolbar = ActionManager.getInstance().createActionToolbar("ChooseActionsDialog", group, true).getComponent();
+    final ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar("ChooseActionsDialog", group, true);
+    toolbar.setTargetComponent(myActionsTree.getTree());
     final CommonActionsManager commonActionsManager = CommonActionsManager.getInstance();
     final TreeExpander treeExpander = KeymapPanel.createTreeExpander(myActionsTree);
     group.add(commonActionsManager.createExpandAllAction(treeExpander, myActionsTree.getTree()));
     group.add(commonActionsManager.createCollapseAllAction(treeExpander, myActionsTree.getTree()));
 
-    panel.add(toolbar, BorderLayout.WEST);
+    panel.add(toolbar.getComponent(), BorderLayout.WEST);
     group = new DefaultActionGroup();
     ActionToolbar actionToolbar = ActionManager.getInstance().createActionToolbar("ChooseActionsDialog", group, true);
+    actionToolbar.setTargetComponent(myActionsTree.getTree());
     actionToolbar.setReservePlaceAutoPopupIcon(false);
     final JComponent searchToolbar = actionToolbar.getComponent();
     final Alarm alarm = new Alarm();
@@ -163,6 +165,11 @@ public class ChooseActionsDialog extends DialogWrapper {
         Presentation presentation = event.getPresentation();
         presentation.setEnabled(enabled);
         presentation.setIcon(enabled ? AllIcons.Actions.Cancel : EmptyIcon.ICON_16);
+      }
+
+      @Override
+      public @NotNull ActionUpdateThread getActionUpdateThread() {
+        return ActionUpdateThread.BGT;
       }
 
       @Override

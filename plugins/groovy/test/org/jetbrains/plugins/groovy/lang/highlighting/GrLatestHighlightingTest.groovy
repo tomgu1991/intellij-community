@@ -726,4 +726,35 @@ def test() {
 properties[""] += sourceSets
 ''', false
   }
+
+  void 'test dispatch to consumer'() {
+    doTestHighlighting """
+interface MyRunnable { void run() }
+interface MyConsumer { void consume(int x) }
+
+void foo(MyConsumer consumer) {}
+void foo(MyRunnable runnable) {}
+
+foo({ name -> println 2 })
+""", GroovyAssignabilityCheckInspection
+  }
+
+  void 'test dispatch to consumer 2'() {
+    doTestHighlighting """
+interface MyRunnable { void run() }
+interface MyConsumer { void consume(int x) }
+
+void foo(MyConsumer consumer) {}
+void foo(MyRunnable runnable) {}
+
+foo<warning>({ println 2 })</warning>
+""", GroovyAssignabilityCheckInspection
+  }
+
+  void 'test no constant value warning'() {
+    myFixture.addFileToProject("A.groovy", "class A { public static final String CONST = \"1\" }")
+    myFixture.addClass("@Deprecated(since = A.CONST) public class Main {}")
+    myFixture.configureByText("Main.java", "@Deprecated(since = A.CONST) public class Main {}")
+    myFixture.checkHighlighting()
+  }
 }

@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.idea.highlighter
 
 import com.intellij.codeInsight.intention.AbstractEmptyIntentionAction
@@ -9,6 +9,7 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Iconable
 import com.intellij.psi.PsiFile
+import com.intellij.ui.ExperimentalUI
 import org.jetbrains.kotlin.idea.base.fe10.highlighting.KotlinBaseFe10HighlightingBundle
 import javax.swing.Icon
 
@@ -28,5 +29,5 @@ class CompilerWarningIntentionAction(private val name: @IntentionFamilyName Stri
 
     override fun hashCode(): Int = name.hashCode()
 
-    override fun getIcon(@Iconable.IconFlags flags: Int): Icon = AllIcons.Actions.RealIntentionBulb
+    override fun getIcon(@Iconable.IconFlags flags: Int): Icon? = if (ExperimentalUI.isNewUI()) null else AllIcons.Actions.RealIntentionBulb
 }

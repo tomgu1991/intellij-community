@@ -321,11 +321,14 @@ fun createSpacingBuilder(settings: CodeStyleSettings, builderUtil: KotlinSpacing
             before(ELVIS).spaces(1)
             after(ELVIS).spacesNoLineBreak(1)
             around(RANGE).spaceIf(kotlinCustomSettings.SPACE_AROUND_RANGE)
+            around(RANGE_UNTIL).spaceIf(kotlinCustomSettings.SPACE_AROUND_RANGE)
 
             after(MODIFIER_LIST).spaces(1)
 
             beforeInside(IDENTIFIER, CLASS).spaces(1)
             beforeInside(IDENTIFIER, OBJECT_DECLARATION).spaces(1)
+
+            after(TYPE_ALIAS_KEYWORD).spaces(1)
 
             after(VAL_KEYWORD).spaces(1)
             after(VAR_KEYWORD).spaces(1)

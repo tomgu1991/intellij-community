@@ -1,15 +1,16 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring.rename
 
 import com.intellij.openapi.actionSystem.DataContext
+import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import org.jetbrains.kotlin.descriptors.ValueParameterDescriptor
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.caches.resolve.safeAnalyzeNonSourceRootCode
 import org.jetbrains.kotlin.idea.references.mainReference
@@ -54,12 +55,15 @@ class RenameKotlinImplicitLambdaParameter : KotlinVariableInplaceRenameHandler()
             val target = itExpression.mainReference.resolveToDescriptors(itExpression.analyze()).single()
             val containingDescriptor = target.containingDeclaration ?: return null
             val functionLiteral = DescriptorToSourceUtils.descriptorToDeclaration(containingDescriptor) as? KtFunctionLiteral ?: return null
-            val newExpr = KtPsiFactory(itExpression).createExpression("{ it -> }") as KtLambdaExpression
-            functionLiteral.addRangeAfter(
-                newExpr.functionLiteral.valueParameterList,
-                newExpr.functionLiteral.arrow ?: return null,
-                functionLiteral.lBrace,
-            )
+            val newExpr = KtPsiFactory(itExpression.project).createExpression("{ it -> }") as KtLambdaExpression
+            val arrow = newExpr.functionLiteral.arrow ?: return null
+            runWriteAction {
+                functionLiteral.addRangeAfter(
+                    newExpr.functionLiteral.valueParameterList,
+                    arrow,
+                    functionLiteral.lBrace,
+                )
+            }
 
             PsiDocumentManager.getInstance(itExpression.project).doPostponedOperationsAndUnblockDocument(editor.document)
 

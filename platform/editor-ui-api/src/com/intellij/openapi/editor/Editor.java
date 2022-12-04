@@ -13,6 +13,7 @@ import com.intellij.openapi.editor.markup.MarkupModel;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.UserDataHolder;
+import com.intellij.openapi.vfs.VirtualFile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -203,7 +204,8 @@ public interface Editor extends UserDataHolder {
    * It's assumed that original position is associated with character immediately preceding given offset, so target logical position will
    * have {@link LogicalPosition#leansForward leansForward} value set to {@code false}.
    *
-   * @param offset the offset in the document.
+   * @param offset the offset in the document. Negative values are clamped to zero; values bigger than text length are clamped
+   *               to the text length
    * @return the corresponding logical position.
    */
   @NotNull LogicalPosition offsetToLogicalPosition(int offset);
@@ -380,6 +382,15 @@ public interface Editor extends UserDataHolder {
    * @return the project instance, or {@code null} if the editor is not related to any project.
    */
   @Nullable Project getProject();
+
+  /**
+   * Returns the file being edited.
+   *
+   * @return file or {@code null} if the editor has not underlying virtual file.
+   */
+  default VirtualFile getVirtualFile() {
+    return null;
+  }
 
   /**
    * Returns the insert/overwrite mode for the editor.

@@ -3,7 +3,6 @@ package git4idea.checkout;
 
 import com.intellij.dvcs.DvcsUtil;
 import com.intellij.dvcs.ui.DvcsBundle;
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
@@ -32,6 +31,7 @@ import git4idea.commands.Git;
 import git4idea.commands.GitCommandResult;
 import git4idea.commands.GitLineHandlerListener;
 import git4idea.commands.GitStandardProgressAnalyzer;
+import git4idea.i18n.GitBundle;
 import git4idea.ui.GitCloneDialogComponent;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
@@ -53,8 +53,8 @@ public final class GitCheckoutProvider extends CheckoutProviderEx {
   private static final List<@NonNls String> NON_ERROR_LINE_PREFIXES = Arrays.asList("Cloning into", "remote:", "submodule");
 
   @Override
-  public String getVcsName() {
-    return "_Git";
+  public @NotNull String getVcsName() {
+    return GitBundle.message("git4idea.vcs.name.with.mnemonic");
   }
 
   @Override
@@ -112,9 +112,7 @@ public final class GitCheckoutProvider extends CheckoutProviderEx {
           File directory = new File(parentDirectory, directoryName);
           LOG.debug(String.format("Cloned into %s with success=%s", directory, result));
 
-          ApplicationManager.getApplication().invokeLater(() -> {
-            DvcsUtil.addMappingIfSubRoot(project, directory.getPath(), GitVcs.NAME);
-          });
+          DvcsUtil.addMappingIfSubRoot(project, directory.getPath(), GitVcs.NAME);
           destinationParent.refresh(true, true);
 
           listener.directoryCheckedOut(directory, GitVcs.getKey());
@@ -179,7 +177,9 @@ public final class GitCheckoutProvider extends CheckoutProviderEx {
 
   @NotNull
   @Override
-  public VcsCloneComponent buildVcsCloneComponent(@NotNull Project project, @NotNull ModalityState modalityState, @NotNull VcsCloneDialogComponentStateListener dialogStateListener) {
+  public VcsCloneComponent buildVcsCloneComponent(@NotNull Project project,
+                                                  @NotNull ModalityState modalityState,
+                                                  @NotNull VcsCloneDialogComponentStateListener dialogStateListener) {
     return new GitCloneDialogComponent(project, modalityState, dialogStateListener);
   }
 }

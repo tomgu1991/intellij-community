@@ -54,6 +54,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.io.IOException;
 import java.io.Writer;
+import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.util.Collections;
 import java.util.Comparator;
@@ -91,7 +92,7 @@ public final class RunIdeConsoleAction extends DumbAwareAction {
   }
 
   static void chooseScriptEngineAndRun(@NotNull AnActionEvent e,
-                                       @NotNull List<IdeScriptEngineManager.EngineInfo> infos,
+                                       @NotNull List<? extends IdeScriptEngineManager.EngineInfo> infos,
                                        @NotNull Consumer<? super IdeScriptEngineManager.EngineInfo> onChosen) {
     if (infos.size() == 1) {
       onChosen.consume(infos.iterator().next());
@@ -309,6 +310,10 @@ public final class RunIdeConsoleAction extends DumbAwareAction {
     }
 
     @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.BGT;
+    }
+    @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
       Project project = e.getProject();
       Editor editor = e.getData(CommonDataKeys.EDITOR);
@@ -357,11 +362,11 @@ public final class RunIdeConsoleAction extends DumbAwareAction {
   }
 
   private static final class ConsoleWriter extends Writer {
-    private final WeakReference<RunContentDescriptor> myDescriptor;
+    private final @NotNull Reference<? extends RunContentDescriptor> myDescriptor;
     private final Key<?> myOutputType;
     private final AnsiEscapeDecoder myAnsiEscapeDecoder;
 
-    private ConsoleWriter(@NotNull WeakReference<RunContentDescriptor> descriptor, Key<?> outputType) {
+    private ConsoleWriter(@NotNull Reference<? extends RunContentDescriptor> descriptor, Key<?> outputType) {
       myDescriptor = descriptor;
       myOutputType = outputType;
       myAnsiEscapeDecoder = new AnsiEscapeDecoder();

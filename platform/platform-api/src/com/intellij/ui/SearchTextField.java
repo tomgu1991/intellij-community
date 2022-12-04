@@ -6,6 +6,7 @@ import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.keymap.KeymapUtil;
 import com.intellij.openapi.project.DumbAwareAction;
+import com.intellij.openapi.ui.popup.AlignedPopup;
 import com.intellij.openapi.ui.popup.JBPopup;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.openapi.util.Condition;
@@ -13,6 +14,7 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.wm.IdeFocusManager;
 import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBTextField;
+import com.intellij.ui.dsl.builder.DslComponentProperty;
 import com.intellij.ui.scale.JBUIScale;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
@@ -25,6 +27,8 @@ import java.awt.*;
 import java.awt.event.*;
 import java.util.ArrayList;
 import java.util.List;
+
+import static com.intellij.ui.dsl.gridLayout.GapsKt.toGaps;
 
 public class SearchTextField extends JPanel {
 
@@ -98,6 +102,18 @@ public class SearchTextField extends JPanel {
         }
         return bounds;
       }
+
+      @Override
+      public String getToolTipText() {
+        if (myPopup != null && myPopup.isVisible()) return null;
+        return super.getToolTipText();
+      }
+
+      @Override
+      public String getToolTipText(MouseEvent event) {
+        if (myPopup != null && myPopup.isVisible()) return null;
+        return super.getToolTipText(event);
+      }
     };
     myTextField.setColumns(15);
     myTextField.addFocusListener(new FocusAdapter() {
@@ -148,6 +164,8 @@ public class SearchTextField extends JPanel {
       myTextField.setText("");
       onFieldCleared();
     });
+    putClientProperty(DslComponentProperty.TOP_BOTTOM_GAP, true);
+    putClientProperty(DslComponentProperty.VISUAL_PADDINGS, toGaps(myTextField.getInsets()));
     DumbAwareAction.create(event -> {
       showPopup();
     }).registerCustomShortcutSet(KeymapUtil.getActiveKeymapShortcuts("ShowSearchHistory"), myTextField);
@@ -388,8 +406,10 @@ public class SearchTextField extends JPanel {
       myPopup = JBPopupFactory.getInstance().createListPopupBuilder(list)
         .setMovable(false)
         .setRequestFocus(true)
-        .setItemChoosenCallback(chooseRunnable).createPopup();
-      myPopup.showUnderneathOf(getPopupLocationComponent());
+        .setItemChoosenCallback(chooseRunnable)
+        .setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
+        .createPopup();
+      AlignedPopup.showUnderneathWithoutAlignment(myPopup, getPopupLocationComponent());
     }
   }
 
@@ -444,6 +464,11 @@ public class SearchTextField extends JPanel {
     @Override
     public void update(@NotNull AnActionEvent e) {
       e.getPresentation().setEnabledAndVisible(e.getData(KEY) != null);
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.BGT;
     }
   }
 }

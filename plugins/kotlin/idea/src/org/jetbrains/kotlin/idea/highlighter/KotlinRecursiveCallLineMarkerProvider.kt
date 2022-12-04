@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.highlighter
 
@@ -11,7 +11,7 @@ import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.descriptors.ClassDescriptor
 import org.jetbrains.kotlin.descriptors.SimpleFunctionDescriptor
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.highlighter.markers.LineMarkerInfos
 import org.jetbrains.kotlin.idea.inspections.RecursivePropertyAccessorInspection
@@ -31,7 +31,7 @@ import org.jetbrains.kotlin.util.OperatorNameConventions
 class KotlinRecursiveCallLineMarkerProvider : LineMarkerProvider {
     override fun getLineMarkerInfo(element: PsiElement) = null
 
-    override fun collectSlowLineMarkers(elements: MutableList<out PsiElement>, result: LineMarkerInfos) {
+    override fun collectSlowLineMarkers(elements: List<PsiElement>, result: LineMarkerInfos) {
         val markedLineNumbers = HashSet<Int>()
 
         for (element in elements) {

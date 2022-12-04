@@ -139,6 +139,7 @@ public class LightAdvHighlightingTest extends LightDaemonAnalyzerTestCase {
   public void testLabels() { doTest(false); }
   public void testUnclosedBlockComment() { doTest(false); }
   public void testUnclosedComment() { doTest(false); }
+  public void testBadUnicodeEscapeInComment() { doTest(false); }
   public void testUnclosedDecl() { doTest(false); }
   public void testSillyAssignment() {
     LanguageLevelProjectExtension.getInstance(getJavaFacade().getProject()).setLanguageLevel(LanguageLevel.JDK_1_7);
@@ -152,10 +153,9 @@ public class LightAdvHighlightingTest extends LightDaemonAnalyzerTestCase {
   public void testSerializableStuff() {  doTest(true); }
   public void testDeprecated() { doTest(true); }
   public void testJavadoc() { enableInspectionTool(new JavadocDeclarationInspection()); doTest(true); }
-  public void testExpressionsInSwitch () { doTest(false); }
+  public void testExpressionsInSwitch () { IdeaTestUtil.withLevel(getModule(), LanguageLevel.JDK_19_PREVIEW, () -> doTest(false)); }
   public void testAccessInner() {
     Editor e = createSaveAndOpenFile("x/BeanContextServicesSupport.java",
-                                     "" +
                                      "package x;\n" +
                                      "public class BeanContextServicesSupport {" +
                                      "  protected class BCSSChild {" +
@@ -166,7 +166,6 @@ public class LightAdvHighlightingTest extends LightDaemonAnalyzerTestCase {
                                      "  }" +
                                      "}");
     Editor e2 = createSaveAndOpenFile("x/Component.java",
-                                      "" +
                                       "package x;\n" +
                                       "public class Component {" +
                                       "  protected class FlipBufferStrategy {" +
@@ -408,6 +407,8 @@ public class LightAdvHighlightingTest extends LightDaemonAnalyzerTestCase {
   public void testNotWellFormedExpressionStatementWithoutSemicolon() {
     doTest(false);
   }
+
+  public void testTooManyArrayDimensions() { doTest(false);}
 
   public void testInsane() {
     configureFromFileText("x.java", "class X { \nx_x_x_x\n }");

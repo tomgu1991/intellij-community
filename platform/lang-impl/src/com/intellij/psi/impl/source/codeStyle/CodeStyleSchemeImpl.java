@@ -24,8 +24,6 @@ public class CodeStyleSchemeImpl extends ExternalizableSchemeAdapter implements 
   private final boolean myIsDefault;
   private volatile CodeStyleSettings myCodeStyleSettings;
   private long myLastModificationCount;
-  private boolean myIsUsedForVisualFormatting;
-
   private final Object lock = new Object();
 
   CodeStyleSchemeImpl(@NotNull String name, String parentSchemeName, @NotNull SchemeDataHolder<? super CodeStyleSchemeImpl> dataHolder) {
@@ -54,7 +52,6 @@ public class CodeStyleSchemeImpl extends ExternalizableSchemeAdapter implements 
         parentSettings = parentSettings.getParentSettings();
       }
       settings.setParentSettings(parentSettings);
-      myIsUsedForVisualFormatting = parentScheme.isUsedForVisualFormatting();
     }
 
     if (root != null) {
@@ -80,15 +77,16 @@ public class CodeStyleSchemeImpl extends ExternalizableSchemeAdapter implements 
 
     synchronized (lock) {
       SchemeDataHolder<? super CodeStyleSchemeImpl> dataHolder = myDataHolder;
-      if (dataHolder == null) {
-        return myCodeStyleSettings;
+      Element element= null;
+      if (dataHolder != null) {
+        element = dataHolder.read();
+        // nullize only after element is successfully read, otherwise our state will be undefined - both myDataHolder and myCodeStyleSettings are null
+        myDataHolder = null;
       }
-
-      Element element = dataHolder.read();
-      // nullize only after element is successfully read, otherwise our state will be undefined - both myDataHolder and myCodeStyleSettings are null
-      myDataHolder = null;
       settings = init(myParentSchemeName == null ? null : CodeStyleSchemesImpl.getSchemeManager().findSchemeByName(myParentSchemeName), element);
-      dataHolder.updateDigest(this);
+      if (dataHolder != null) {
+        dataHolder.updateDigest(this);
+      }
       myParentSchemeName = null;
     }
     return settings;
@@ -112,7 +110,8 @@ public class CodeStyleSchemeImpl extends ExternalizableSchemeAdapter implements 
   public SchemeState getSchemeState() {
     synchronized (lock) {
       if (myDataHolder == null) {
-        final long currModificationCount = myCodeStyleSettings.getModificationTracker().getModificationCount();
+        CodeStyleSettings settings = myCodeStyleSettings;
+        long currModificationCount = settings == null ? 0L : settings.getModificationTracker().getModificationCount();
         if (myLastModificationCount != currModificationCount) {
           myLastModificationCount = currModificationCount;
           return SchemeState.POSSIBLY_CHANGED;
@@ -147,14 +146,5 @@ public class CodeStyleSchemeImpl extends ExternalizableSchemeAdapter implements 
       return ApplicationBundle.message("code.style.scheme.default");
     }
     return super.getDisplayName();
-  }
-
-  @Override
-  public boolean isUsedForVisualFormatting() {
-    return myIsUsedForVisualFormatting;
-  }
-
-  public void setUsedForVisualFormatting(boolean usedForVisualFormatting) {
-    myIsUsedForVisualFormatting = usedForVisualFormatting;
   }
 }

@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.externalSystem.service.project.manage
 
 import com.intellij.openapi.application.runWriteAction
@@ -90,7 +90,7 @@ class SourceFolderManagerTest: HeavyPlatformTestCase() {
 
     var notificationsCount = 0
     val version = WorkspaceModel.getInstance(project).entityStorage.version
-    WorkspaceModelTopics.getInstance(project).subscribeImmediately(project.messageBus.connect(), object : WorkspaceModelChangeListener {
+    project.messageBus.connect().subscribe(WorkspaceModelTopics.CHANGED, object : WorkspaceModelChangeListener {
       override fun changed(event: VersionedStorageChange) {
         notificationsCount++
       }
@@ -103,7 +103,7 @@ class SourceFolderManagerTest: HeavyPlatformTestCase() {
 
   private fun createModuleWithContentRoot(dir: File, moduleName: String = "topModule"): Module {
     val moduleManager = ModuleManager.getInstance(project)
-    val modifiableModel = moduleManager.modifiableModel
+    val modifiableModel = moduleManager.getModifiableModel()
     val newModule: Module =
       try {
         modifiableModel.newModule(dir.toPath().resolve(moduleName).toAbsolutePath(), ModuleTypeId.JAVA_MODULE)

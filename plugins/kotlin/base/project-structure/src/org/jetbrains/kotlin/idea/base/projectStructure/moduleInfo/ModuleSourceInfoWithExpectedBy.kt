@@ -1,11 +1,10 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.kotlin.idea.base.projectStructure.moduleInfo
 
-import org.jetbrains.kotlin.analyzer.ModuleInfo
+import com.intellij.openapi.projectRoots.Sdk
 import org.jetbrains.kotlin.caches.project.cacheByClassInvalidatingOnRootModifications
 import org.jetbrains.kotlin.config.SourceKotlinRootType
 import org.jetbrains.kotlin.config.TestSourceKotlinRootType
-import org.jetbrains.kotlin.idea.base.facet.additionalVisibleModules
 import org.jetbrains.kotlin.idea.base.facet.implementedModules
 import org.jetbrains.kotlin.idea.base.projectStructure.ModuleDependencyCollector
 import org.jetbrains.kotlin.idea.base.projectStructure.productionSourceInfo
@@ -21,15 +20,14 @@ sealed class ModuleSourceInfoWithExpectedBy(private val forProduction: Boolean) 
     override fun dependencies(): List<IdeaModuleInfo> = module.cacheByClassInvalidatingOnRootModifications(this::class.java) {
         val sourceRootType = if (forProduction) SourceKotlinRootType else TestSourceKotlinRootType
         ModuleDependencyCollector.getInstance(module.project)
-            .collectModuleDependencies(module, platform, sourceRootType, includeTransitive = true)
+            .collectModuleDependencies(module, platform, sourceRootType, includeExportedDependencies = true)
             .toList()
     }
 
-    override fun modulesWhoseInternalsAreVisible(): Collection<ModuleInfo> {
-        return module.cacheByClassInvalidatingOnRootModifications(KeyForModulesWhoseInternalsAreVisible::class.java) {
-            module.additionalVisibleModules.mapNotNull { if (forProduction) it.productionSourceInfo else it.testSourceInfo }
-        }
+    final override fun sdk(): Sdk? = module.cacheByClassInvalidatingOnRootModifications(keyForSdk()::class.java) {
+        super.sdk()
     }
 
-    private object KeyForModulesWhoseInternalsAreVisible
+    protected abstract fun keyForSdk(): Any
+
 }

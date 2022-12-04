@@ -1,11 +1,11 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.actions.generate
 
 import com.intellij.java.JavaBundle
 import com.intellij.openapi.ui.Messages
 import org.jetbrains.kotlin.descriptors.*
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.base.compilerPreferences.KotlinBaseCompilerConfigurationUiBundle
 import org.jetbrains.kotlin.idea.caches.resolve.unsafeResolveToDescriptor
 import org.jetbrains.kotlin.idea.core.overrideImplement.BodyType
@@ -30,7 +30,7 @@ tailrec fun ClassDescriptor.findDeclaredFunction(
         .firstOrNull { it.containingDeclaration == this && it.kind == CallableMemberDescriptor.Kind.DECLARATION && filter(it) }
         ?.let { return it }
 
-    return if (checkSuperClasses) getSuperClassOrAny().findDeclaredFunction(name, checkSuperClasses, filter) else null
+    return if (checkSuperClasses) getSuperClassOrAny().findDeclaredFunction(name, checkSuperClasses = true, filter) else null
 }
 
 fun getPropertiesToUseInGeneratedMember(classOrObject: KtClassOrObject): List<KtNamedDeclaration> {
@@ -68,6 +68,6 @@ fun confirmMemberRewrite(targetClass: KtClass, vararg descriptors: FunctionDescr
 
 fun generateFunctionSkeleton(descriptor: FunctionDescriptor, targetClass: KtClassOrObject): KtNamedFunction {
     return OverrideMemberChooserObject
-        .create(targetClass.project, descriptor, descriptor, BodyType.FROM_TEMPLATE)
+        .create(targetClass.project, descriptor, descriptor, BodyType.FromTemplate)
         .generateMember(targetClass, false) as KtNamedFunction
 }

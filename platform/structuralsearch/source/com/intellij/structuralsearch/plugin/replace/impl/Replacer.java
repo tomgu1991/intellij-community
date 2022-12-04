@@ -222,6 +222,7 @@ public class Replacer {
     if (elementParent == null || !elementParent.isValid()) return;
     final PsiFile containingFile = elementParent.getContainingFile();
 
+    replaceHandler.postProcess(elementParent, options);
     if (containingFile != null && options.isToReformatAccordingToStyle()) {
       final VirtualFile file = containingFile.getVirtualFile();
       if (file != null) {
@@ -234,7 +235,6 @@ public class Replacer {
       final int parentOffset = elementParent.getTextRange().getStartOffset();
       CodeStyleManager.getInstance(project).reformatRange(containingFile, parentOffset, parentOffset + elementParent.getTextLength(), true);
     }
-    replaceHandler.postProcess(elementParent, options);
   }
 
   public static void handleComments(final PsiElement el, final PsiElement replacement, ReplacementInfo replacementInfo) {
@@ -297,12 +297,14 @@ public class Replacer {
           if (definition == null || definition.getScriptCodeConstraint().length() <= 2 /*empty quotes*/) {
             throw new MalformedPatternException(SSRBundle.message("replacement.variable.is.not.defined.message", replacementSegmentName));
           } else {
-            ScriptSupport.buildScript( // build script to check whether script is compilable
-              definition.getName(),
-              StringUtil.unquoteString(definition.getScriptCodeConstraint()),
-              options.getMatchOptions(),
-              (problem) -> SSRBundle.message("replacement.variable.is.not.valid", replacementSegmentName, problem)
-            );
+            final String scriptText = StringUtil.unquoteString(definition.getScriptCodeConstraint());
+            try {
+              ScriptSupport.buildScript(definition.getName(), scriptText, options.getMatchOptions());
+            } catch (MalformedPatternException e) {
+              throw new MalformedPatternException(
+                SSRBundle.message("replacement.variable.is.not.valid", replacementSegmentName, e.getLocalizedMessage())
+              );
+            }
           }
         }
       }

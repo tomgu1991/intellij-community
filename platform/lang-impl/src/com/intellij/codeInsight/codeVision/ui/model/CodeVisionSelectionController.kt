@@ -7,6 +7,7 @@ import com.intellij.codeInsight.codeVision.ui.renderers.CodeVisionRenderer
 import com.intellij.codeInsight.codeVision.ui.renderers.painters.CodeVisionTheme
 import com.intellij.ide.IdeTooltip
 import com.intellij.ide.IdeTooltipManager
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.diagnostic.trace
 import com.intellij.openapi.editor.Editor
@@ -20,7 +21,6 @@ import com.intellij.util.ui.UIUtil
 import com.jetbrains.rd.util.asProperty
 import com.jetbrains.rd.util.debounceNotNull
 import com.jetbrains.rd.util.lifetime.Lifetime
-import com.jetbrains.rd.util.lifetime.onTermination
 import com.jetbrains.rd.util.reactive.adviseWithPrev
 import com.jetbrains.rd.util.reactive.map
 import com.jetbrains.rd.util.reactive.viewNotNull
@@ -36,8 +36,8 @@ class CodeVisionSelectionController private constructor(val lifetime: Lifetime,
                                                         val projectModel: ProjectCodeVisionModel) {
 
   companion object {
-    val map = HashMap<Editor, CodeVisionSelectionController>()
-    val logger = logger<CodeVisionSelectionController>()
+    private val map: HashMap<Editor, CodeVisionSelectionController> = HashMap<Editor, CodeVisionSelectionController>()
+    private val logger: Logger = logger<CodeVisionSelectionController>()
 
     fun install(editor: EditorImpl, projectModel: ProjectCodeVisionModel) {
       var controller = map[editor]

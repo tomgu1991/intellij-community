@@ -15,12 +15,11 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.util.application
 import com.jetbrains.rd.util.first
 import com.jetbrains.rd.util.lifetime.SequentialLifetimes
-import com.jetbrains.rd.util.lifetime.onTermination
 import java.awt.event.MouseEvent
 
-val editorLensContextKey = Key<EditorCodeVisionContext>("EditorCodeLensContext")
-val codeVisionEntryOnHighlighterKey = Key.create<CodeVisionEntry>("CodeLensEntryOnHighlighter")
-val codeVisionEntryMouseEventKey = Key.create<MouseEvent>("CodeVisionEntryMouseEventKey")
+val editorLensContextKey: Key<EditorCodeVisionContext> = Key<EditorCodeVisionContext>("EditorCodeLensContext")
+val codeVisionEntryOnHighlighterKey: Key<CodeVisionEntry> = Key.create<CodeVisionEntry>("CodeLensEntryOnHighlighter")
+val codeVisionEntryMouseEventKey: Key<MouseEvent> = Key.create<MouseEvent>("CodeVisionEntryMouseEventKey")
 
 val Editor.lensContext: EditorCodeVisionContext?
   get() = getOrCreateCodeVisionContext(this)
@@ -34,11 +33,12 @@ open class EditorCodeVisionContext(
   private val codeVisionHost: CodeVisionHost,
   val editor: Editor
 ) {
-  val outputLifetimes = SequentialLifetimes((editor as EditorImpl).disposable.createLifetime())
+  val outputLifetimes: SequentialLifetimes = SequentialLifetimes((editor as EditorImpl).disposable.createLifetime())
   private var frontendResults: List<RangeMarker> = listOf()
 
   companion object {
-    val logger = Logger.getInstance(EditorCodeVisionContext::class.java)
+    @JvmStatic
+    protected val logger: Logger = Logger.getInstance(EditorCodeVisionContext::class.java)
   }
 
   private var hasPendingLenses = false
@@ -68,7 +68,7 @@ open class EditorCodeVisionContext(
     logger.trace("Have new frontend lenses ${lenses.size}")
     frontendResults.forEach { it.dispose() }
     frontendResults = lenses.mapNotNull { (range, entry) ->
-      if(!range.isValidFor(editor.document)) return@mapNotNull null
+      if (!range.isValidFor(editor.document)) return@mapNotNull null
       editor.document.createRangeMarker(range).apply {
         putUserData(codeVisionEntryOnHighlighterKey, entry)
       }
@@ -77,12 +77,13 @@ open class EditorCodeVisionContext(
     hasPendingLenses = false
   }
 
-  fun discardPending(){
+  fun discardPending() {
     hasPendingLenses = false
   }
 
-
-  protected fun resubmitThings() {
+  // used externally
+  @Suppress("MemberVisibilityCanBePrivate")
+  fun resubmitThings() {
     val viewService = ServiceManager.getService(
       editor.project!!,
       CodeVisionView::class.java
@@ -124,7 +125,7 @@ open class EditorCodeVisionContext(
     setResults(emptyList())
   }
 
-  protected open fun getValidResult() = frontendResults.asSequence().filter { it.isValid }
+  protected open fun getValidResult(): Sequence<RangeMarker> = frontendResults.asSequence().filter { it.isValid }
 
   protected fun TextRange.isValidFor(document: Document): Boolean {
     return this.startOffset >= 0 && this.endOffset <= document.textLength
@@ -141,7 +142,7 @@ open class EditorCodeVisionContext(
     return frontendResults.mapNotNull { it.getUserData(codeVisionEntryOnHighlighterKey) }.any { it.providerId == id }
   }
 
-  open fun hasOnlyPlaceholders(): Boolean{
+  open fun hasOnlyPlaceholders(): Boolean {
     return frontendResults.all { it.getUserData(codeVisionEntryOnHighlighterKey) is PlaceholderCodeVisionEntry }
   }
 }

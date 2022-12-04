@@ -4,6 +4,7 @@ package org.jetbrains.kotlin.idea.vfilefinder
 import com.intellij.ide.highlighter.JavaClassFileType
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.progress.ProcessCanceledException
+import com.intellij.openapi.util.ThrowableComputable
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.util.indexing.*
 import com.intellij.util.io.IOUtil
@@ -19,7 +20,9 @@ import java.util.*
 import java.util.jar.Manifest
 
 fun FileBasedIndexExtension<FqName, Void>.hasSomethingInPackage(fqName: FqName, scope: GlobalSearchScope): Boolean =
-    !FileBasedIndex.getInstance().processValues(name, fqName, null, { _, _ -> false }, scope)
+    DumbModeAccessType.RELIABLE_DATA_ONLY.ignoreDumbMode(ThrowableComputable {
+        !FileBasedIndex.getInstance().processValues(name, fqName, null, { _, _ -> false }, scope)
+    })
 
 @ApiStatus.Internal
 object FqNameKeyDescriptor : KeyDescriptor<FqName> {
@@ -78,7 +81,7 @@ object KotlinStdlibIndex : KotlinFileIndexBase<KotlinStdlibIndex>(KotlinStdlibIn
     private const val LIBRARY_NAME_MANIFEST_ATTRIBUTE = "Implementation-Title"
     private const val STDLIB_TAG_MANIFEST_ATTRIBUTE = "Kotlin-Runtime-Component"
     val KOTLIN_STDLIB_NAME = FqName("kotlin-stdlib")
-    val KOTLIN_STDLIB_COMMON_NAME = FqName("kotlin-stdlib-common")
+    private val KOTLIN_STDLIB_COMMON_NAME = FqName("kotlin-stdlib-common")
 
     val STANDARD_LIBRARY_DEPENDENCY_NAMES = setOf(
         KOTLIN_STDLIB_COMMON_NAME,

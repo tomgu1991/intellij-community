@@ -1,15 +1,15 @@
-// Copyright 2000-2018 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.ide.actions;
 
 import com.intellij.ide.CopyProvider;
 import com.intellij.ide.lightEdit.LightEditCompatible;
 import com.intellij.openapi.actionSystem.*;
-import com.intellij.openapi.actionSystem.impl.Utils;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.util.ui.EDT;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.function.Consumer;
 
@@ -36,20 +36,20 @@ public class CopyAction extends AnAction implements DumbAware, LightEditCompatib
 
   @Override
   public void update(@NotNull AnActionEvent event) {
-    computeWithProviderDumbAware(event, PlatformDataKeys.COPY_PROVIDER, provider -> {
+    updateWithProvider(event, event.getData(PlatformDataKeys.COPY_PROVIDER), false, provider -> {
       boolean isEditorPopup = event.getPlace().equals(ActionPlaces.EDITOR_POPUP);
       event.getPresentation().setEnabled(provider.isCopyEnabled(event.getDataContext()));
       event.getPresentation().setVisible(!isEditorPopup || provider.isCopyVisible(event.getDataContext()));
     });
   }
 
-  static <T extends ActionUpdateThreadAware> void computeWithProviderDumbAware(@NotNull AnActionEvent event,
-                                                                               @NotNull DataKey<T> key,
-                                                                               @NotNull Consumer<T> consumer) {
-    DataContext dataContext = event.getDataContext();
-    T provider = key.getData(dataContext);
+  static <T extends ActionUpdateThreadAware> void updateWithProvider(@NotNull AnActionEvent event,
+                                                                     @Nullable T provider,
+                                                                     boolean checkDumbAwareness,
+                                                                     @NotNull Consumer<T> consumer) {
     Project project = event.getData(CommonDataKeys.PROJECT);
-    if (provider == null || project != null && DumbService.isDumb(project) && !DumbService.isDumbAware(provider)) {
+    if (provider == null ||
+        (checkDumbAwareness && project != null && DumbService.isDumb(project) && !DumbService.isDumbAware(provider))) {
       event.getPresentation().setEnabled(false);
       event.getPresentation().setVisible(true);
       return;
@@ -59,11 +59,10 @@ public class CopyAction extends AnAction implements DumbAware, LightEditCompatib
       consumer.accept(provider);
     }
     else {
-      Utils.getOrCreateUpdateSession(event).compute(
-        provider.getClass().getName() + "#update", updateThread, () -> {
-          consumer.accept(provider);
-          return true;
-        });
+      event.getUpdateSession().compute(provider, "update", updateThread, () -> {
+        consumer.accept(provider);
+        return null;
+      });
     }
   }
 }

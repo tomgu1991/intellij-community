@@ -87,7 +87,6 @@ public class SettingsImpl implements EditorSettings {
   private Boolean myWrapWhenTypingReachesRightMargin;
   private Boolean myShowIntentionBulb;
   private Boolean myShowingSpecialCharacters;
-  private Boolean myShowVisualFormattingLayer;
 
   private List<Integer> mySoftMargins;
 
@@ -363,15 +362,14 @@ public class SettingsImpl implements EditorSettings {
 
     if (project == null || project.isDisposed()) return;
 
-    final PsiDocumentManager psiManager = PsiDocumentManager.getInstance(project);
-    final PsiFile file = psiManager.getPsiFile(document);
+    VirtualFile file = FileDocumentManager.getInstance().getFile(document);
     if (file == null) return;
 
     if (LOG.isDebugEnabled()) {
       LOG.debug("reinitDocumentIndentOptions, file " + file.getName());
     }
 
-    CodeStyle.updateDocumentIndentOptions(project, document);
+    CodeStyle.updateDocumentIndentOptions(project, file, document);
   }
 
   @Override
@@ -781,17 +779,6 @@ public class SettingsImpl implements EditorSettings {
     if (newState != oldState) {
       fireEditorRefresh();
     }
-  }
-
-  @Override
-  @Nullable
-  public Boolean isShowVisualFormattingLayer() {
-    return myShowVisualFormattingLayer;
-  }
-
-  @Override
-  public void setShowVisualFormattingLayer(@Nullable Boolean showVisualFormattingLayer) {
-    myShowVisualFormattingLayer = showVisualFormattingLayer;
   }
 
   @Override

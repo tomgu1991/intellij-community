@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.actions.generate
 
@@ -12,7 +12,7 @@ import org.jetbrains.kotlin.descriptors.ClassDescriptor
 import org.jetbrains.kotlin.descriptors.ConstructorDescriptor
 import org.jetbrains.kotlin.descriptors.PropertyDescriptor
 import org.jetbrains.kotlin.diagnostics.Errors
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.base.fe10.codeInsight.DescriptorMemberChooserObject
 import org.jetbrains.kotlin.idea.core.CollectingNameValidator
 import org.jetbrains.kotlin.idea.base.fe10.codeInsight.newDeclaration.Fe10KotlinNameSuggester
@@ -27,6 +27,7 @@ import org.jetbrains.kotlin.idea.util.getTypeSubstitution
 import org.jetbrains.kotlin.idea.util.orEmpty
 import org.jetbrains.kotlin.idea.util.toSubstitutor
 import org.jetbrains.kotlin.psi.*
+import org.jetbrains.kotlin.psi.psiUtil.quoteIfNeeded
 import org.jetbrains.kotlin.psi.psiUtil.siblings
 import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.descriptorUtil.builtIns
@@ -148,7 +149,7 @@ class KotlinGenerateSecondaryConstructorAction : KotlinGenerateMemberActionBase<
         ) return null
 
         val targetClass = classDescriptor.source.getPsi() as KtClass
-        val psiFactory = KtPsiFactory(targetClass)
+        val psiFactory = KtPsiFactory(targetClass.project)
 
         val validator = CollectingNameValidator()
 
@@ -162,14 +163,11 @@ class KotlinGenerateSecondaryConstructorAction : KotlinGenerateMemberActionBase<
             val delegationCallArguments = ArrayList<String>()
             for (parameter in superConstructor.valueParameters) {
                 val isVararg = parameter.varargElementType != null
-
-                val paramName = Fe10KotlinNameSuggester.suggestNameByName(parameter.name.asString(), validator)
-
+                val paramName = suggestSafeNameByName(parameter.name.asString(), validator)
                 val typeToUse = parameter.varargElementType ?: parameter.type
                 val paramType = IdeDescriptorRenderers.SOURCE_CODE.renderType(
                     substitutor.substitute(typeToUse, Variance.INVARIANT) ?: classDescriptor.builtIns.anyType
                 )
-
                 val modifiers = if (isVararg) "vararg " else ""
 
                 parameterList.addParameter(psiFactory.createParameter("$modifiers$paramName: $paramType"))
@@ -184,12 +182,12 @@ class KotlinGenerateSecondaryConstructorAction : KotlinGenerateMemberActionBase<
         if (propertiesToInitialize.isNotEmpty()) {
             val body = psiFactory.createEmptyBody()
             for (property in propertiesToInitialize) {
-                val propertyName = property.name
-                val paramName = Fe10KotlinNameSuggester.suggestNameByName(propertyName.asString(), validator)
+                val propertyName = property.name.asString()
+                val paramName = suggestSafeNameByName(propertyName, validator)
                 val paramType = IdeDescriptorRenderers.SOURCE_CODE.renderType(property.type)
 
                 parameterList.addParameter(psiFactory.createParameter("$paramName: $paramType"))
-                body.appendElement(psiFactory.createExpression("this.$propertyName = $paramName"), true)
+                body.appendElement(psiFactory.createExpression("this.${propertyName.quoteIfNeeded()} = $paramName"), true)
             }
 
             constructor.add(body)
@@ -197,4 +195,7 @@ class KotlinGenerateSecondaryConstructorAction : KotlinGenerateMemberActionBase<
 
         return constructor
     }
+
+    private fun suggestSafeNameByName(originalName: String, validator: CollectingNameValidator): String =
+        Fe10KotlinNameSuggester.suggestNameByName(originalName, validator).quoteIfNeeded()
 }

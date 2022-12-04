@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring.changeSignature.usages
 
@@ -29,7 +29,7 @@ class KotlinComponentUsageInDestructuring(element: KtDestructuringDeclarationEnt
         val currentEntries = declaration.entries
         val newParameterInfos = changeInfo.getNonReceiverParameters()
 
-        val newDestructuring = KtPsiFactory(element).buildDestructuringDeclaration {
+        val newDestructuring = KtPsiFactory(element.project).buildDestructuringDeclaration {
             val lastIndex = newParameterInfos.indexOfLast { it.oldIndex in currentEntries.indices }
             val nameValidator = CollectingNameValidator(
                 filter = Fe10KotlinNewDeclarationNameValidator(

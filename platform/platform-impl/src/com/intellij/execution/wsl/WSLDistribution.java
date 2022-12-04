@@ -39,6 +39,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.function.Supplier;
+import java.util.regex.Pattern;
 
 import static com.intellij.execution.wsl.WSLUtil.LOG;
 import static com.intellij.openapi.util.NullableLazyValue.lazyNullable;
@@ -61,6 +63,11 @@ public class WSLDistribution implements AbstractWslDistribution {
 
   private static final Key<ProcessListener> SUDO_LISTENER_KEY = Key.create("WSL sudo listener");
   private static final String RSYNC = "rsync";
+
+  /**
+   * @see <a href="https://www.gnu.org/software/bash/manual/html_node/Definitions.html#index-name">bash identifier definition</a>
+   */
+  private static final Pattern ENV_VARIABLE_NAME_PATTERN = Pattern.compile("[a-zA-Z_][a-zA-Z0-9_]*");
 
   private final @NotNull WslDistributionDescriptor myDescriptor;
   private final @Nullable Path myExecutablePath;
@@ -207,7 +214,7 @@ public class WSLDistribution implements AbstractWslDistribution {
   /**
    * @deprecated use {@link #patchCommandLine(GeneralCommandLine, Project, WSLCommandLineOptions)} instead
    */
-  @Deprecated(forRemoval = true)
+  @Deprecated
   public @NotNull <T extends GeneralCommandLine> T patchCommandLine(@NotNull T commandLine,
                                                                     @Nullable Project project,
                                                                     @Nullable String remoteWorkingDir,
@@ -275,7 +282,12 @@ public class WSLDistribution implements AbstractWslDistribution {
     }
     if (executeCommandInShell && !options.isPassEnvVarsUsingInterop()) {
       commandLine.getEnvironment().forEach((key, val) -> {
-        prependCommand(linuxCommand, "export", CommandLineUtil.posixQuote(key) + "=" + CommandLineUtil.posixQuote(val), "&&");
+        if (ENV_VARIABLE_NAME_PATTERN.matcher(key).matches()) {
+          prependCommand(linuxCommand, "export", key + "=" + CommandLineUtil.posixQuote(val), "&&");
+        }
+        else {
+          LOG.debug("Can not pass environment variable (bad name): '", key, "'");
+        }
       });
       commandLine.getEnvironment().clear();
     }
@@ -440,15 +452,14 @@ public class WSLDistribution implements AbstractWslDistribution {
    */
   public @Nullable Map<String, String> getEnvironment() {
     try {
-      ProcessOutput processOutput =
-        executeOnWsl(Collections.singletonList("env"),
-                     new WSLCommandLineOptions()
-                       .setExecuteCommandInShell(true)
-                       .setExecuteCommandInLoginShell(true)
-                       .setExecuteCommandInInteractiveShell(true),
-                     5000,
-                     null);
-      if (processOutput.getExitCode() == 0){
+      ProcessOutput processOutput = WslExecution.executeInShellAndGetCommandOnlyStdout(
+        this, new GeneralCommandLine("env"),
+        new WSLCommandLineOptions()
+          .setExecuteCommandInShell(true)
+          .setExecuteCommandInLoginShell(true)
+          .setExecuteCommandInInteractiveShell(true),
+        5000);
+      if (processOutput.getExitCode() == 0) {
         Map<String, String> result = new HashMap<>();
         for (String string : processOutput.getStdoutLines()) {
           int assignIndex = string.indexOf('=');
@@ -468,12 +479,16 @@ public class WSLDistribution implements AbstractWslDistribution {
     return null;
   }
 
+  public @NotNull @NlsSafe String getWindowsPath(@NotNull String wslPath) {
+    return getWindowsPath(wslPath, this::getMntRoot);
+  }
+
   /**
    * @return Windows-dependent path for a file, pointed by {@code wslPath} in WSL, or {@code null} if path is unmappable
    */
-  public @NotNull @NlsSafe String getWindowsPath(@NotNull String wslPath) {
+  public @NotNull @NlsSafe String getWindowsPath(@NotNull String wslPath, @NotNull Supplier<String> mntRootSupplier) {
     if (containsDriveLetter(wslPath)) {
-      String windowsPath = WSLUtil.getWindowsPath(wslPath, getMntRoot());
+      String windowsPath = WSLUtil.getWindowsPath(wslPath, mntRootSupplier.get());
       if (windowsPath != null) {
         return windowsPath;
       }
@@ -569,7 +584,7 @@ public class WSLDistribution implements AbstractWslDistribution {
   /**
    * @deprecated use {@link WSLDistribution#getUNCRootPath()} instead
    */
-  @Deprecated(forRemoval = true)
+  @Deprecated
   public @NotNull File getUNCRoot() {
     return new File(WslConstants.UNC_PREFIX + myDescriptor.getMsId());
   }
@@ -616,8 +631,15 @@ public class WSLDistribution implements AbstractWslDistribution {
     }
     if (Registry.is("wsl.obtain.windows.host.ip.alternatively", true)) {
       InetAddress wslAddr = getWslIpAddress();
+      // Connect to any port on WSL IP. The destination endpoint is not needed to be reachable as no real connection is established.
+      // This transfers the socket into "connected" state including setting the local endpoint according to the system's routing table.
+      // Works on Windows and Linux.
       try (DatagramSocket datagramSocket = new DatagramSocket()) {
-        datagramSocket.connect(wslAddr, 0);
+        // Any port in range [1, 0xFFFF] can be used. Port=0 is forbidden: https://datatracker.ietf.org/doc/html/rfc8085
+        // "A UDP receiver SHOULD NOT bind to port zero".
+        // Java asserts "port != 0" since v15 (https://bugs.java.com/bugdatabase/view_bug.do?bug_id=8240533).
+        int anyPort = 1;
+        datagramSocket.connect(wslAddr, anyPort);
         return datagramSocket.getLocalAddress().getHostAddress();
       }
       catch (Exception e) {

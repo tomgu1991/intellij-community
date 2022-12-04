@@ -1,3 +1,3 @@
-FirLightClassForSymbol: B
-FirLightInterfaceClassSymbol: I2
-FirLightInterfaceClassSymbol: I3
+KtClass: B
+KtClass: I2
+KtClass: I3

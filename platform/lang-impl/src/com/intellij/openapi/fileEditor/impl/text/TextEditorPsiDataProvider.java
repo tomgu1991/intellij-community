@@ -44,7 +44,6 @@ import com.intellij.psi.util.PsiUtilCore;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Collections;
 import java.util.LinkedHashSet;
 
 import static com.intellij.openapi.actionSystem.LangDataKeys.*;
@@ -57,7 +56,7 @@ public class TextEditorPsiDataProvider implements EditorDataProvider {
     if (e.isDisposed() || !(e instanceof EditorEx)) {
       return null;
     }
-    VirtualFile file = ((EditorEx)e).getVirtualFile();
+    VirtualFile file = e.getVirtualFile();
     if (file == null || !file.isValid()) return null;
 
     if (HOST_EDITOR.is(dataId)) {
@@ -69,8 +68,8 @@ public class TextEditorPsiDataProvider implements EditorDataProvider {
     if (IDE_VIEW.is(dataId)) {
       return getIdeView(e, file);
     }
-    if (PlatformCoreDataKeys.SLOW_DATA_PROVIDERS.is(dataId)) {
-      return Collections.<DataProvider>singletonList(o -> getSlowData(o, e, caret));
+    if (PlatformCoreDataKeys.BGT_DATA_PROVIDER.is(dataId)) {
+      return (DataProvider)slowId -> getSlowData(slowId, e, caret);
     }
     return null;
   }
@@ -107,7 +106,7 @@ public class TextEditorPsiDataProvider implements EditorDataProvider {
     if (e.isDisposed() || !(e instanceof EditorEx)) {
       return null;
     }
-    VirtualFile file = ((EditorEx)e).getVirtualFile();
+    VirtualFile file = e.getVirtualFile();
     if (file == null || !file.isValid()) return null;
 
     Project project = e.getProject();

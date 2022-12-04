@@ -14,13 +14,10 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
-/**
-* @author peter
-*/
 public class JavaStaticMemberProcessor extends StaticMemberProcessor {
   private final PsiElement myOriginalPosition;
 
-  public JavaStaticMemberProcessor(CompletionParameters parameters) {
+  public JavaStaticMemberProcessor(@NotNull CompletionParameters parameters) {
     super(parameters.getPosition());
     myOriginalPosition = parameters.getOriginalPosition();
     final PsiFile file = parameters.getPosition().getContainingFile();
@@ -28,7 +25,10 @@ public class JavaStaticMemberProcessor extends StaticMemberProcessor {
       final PsiImportList importList = ((PsiJavaFile)file).getImportList();
       if (importList != null) {
         for (PsiImportStaticStatement statement : importList.getImportStaticStatements()) {
-          importMembersOf(statement.resolveTargetClass());
+          PsiClass aClass = statement.resolveTargetClass();
+          if (aClass != null) {
+            importMembersOf(aClass);
+          }
         }
       }
     }

@@ -1,6 +1,7 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package git4idea.history;
 
+import com.intellij.diagnostic.telemetry.TraceManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
@@ -14,7 +15,6 @@ import com.intellij.util.containers.ContainerUtil;
 import com.intellij.vcs.log.*;
 import com.intellij.vcs.log.impl.HashImpl;
 import com.intellij.vcs.log.impl.LogDataImpl;
-import com.intellij.vcs.log.util.StopWatch;
 import git4idea.GitCommit;
 import git4idea.GitUtil;
 import git4idea.branch.GitBranchUtil;
@@ -30,6 +30,7 @@ import org.jetbrains.annotations.Nullable;
 import java.nio.charset.Charset;
 import java.util.*;
 
+import static com.intellij.diagnostic.telemetry.TraceUtil.runWithSpanThrows;
 import static git4idea.history.GitLogParser.GitLogOption.*;
 
 @ApiStatus.Internal
@@ -170,13 +171,13 @@ public final class GitLogUtil {
       handler.addParameters("--decorate=full");
       handler.endOptions();
 
-      StopWatch sw = StopWatch.start("loading commit metadata in [" + root.getName() + "]");
+      runWithSpanThrows(TraceManager.INSTANCE.getTracer("vcs"), "loading commit metadata", span -> {
+        span.setAttribute("rootName", root.getName());
 
-      GitLogOutputSplitter<GitLogRecord> handlerListener = new GitLogOutputSplitter<>(handler, parser, recordConsumer);
-      Git.getInstance().runCommandWithoutCollectingOutput(handler).throwOnError();
-      handlerListener.reportErrors();
-
-      sw.report();
+        GitLogOutputSplitter<GitLogRecord> handlerListener = new GitLogOutputSplitter<>(handler, parser, recordConsumer);
+        Git.getInstance().runCommandWithoutCollectingOutput(handler).throwOnError();
+        handlerListener.reportErrors();
+      });
     }
     catch (VcsException e) {
       if (commits.isEmpty()) {

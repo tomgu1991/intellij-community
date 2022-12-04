@@ -1,6 +1,7 @@
 // Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.plugins.github.pullrequest.ui.toolwindow
 
+import com.intellij.collaboration.ui.CollaborationToolsUIUtil
 import com.intellij.collaboration.ui.SingleValueModel
 import com.intellij.collaboration.ui.codereview.commits.CommitsBrowserComponentBuilder
 import com.intellij.ide.DataManager
@@ -24,7 +25,6 @@ import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.SideBorder
 import com.intellij.ui.components.panels.Wrapper
 import com.intellij.ui.tabs.JBTabs
-import com.intellij.util.containers.JBIterable
 import com.intellij.util.containers.TreeTraversal
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
@@ -58,7 +58,6 @@ import org.jetbrains.plugins.github.pullrequest.ui.details.GHPRMetadataModelImpl
 import org.jetbrains.plugins.github.pullrequest.ui.details.GHPRStateModelImpl
 import org.jetbrains.plugins.github.pullrequest.ui.getResultFlow
 import org.jetbrains.plugins.github.ui.HtmlInfoPanel
-import org.jetbrains.plugins.github.ui.util.GHUIUtil
 import org.jetbrains.plugins.github.util.DiffRequestChainProducer
 import javax.swing.JComponent
 import javax.swing.JList
@@ -187,7 +186,7 @@ internal class GHPRViewComponentFactory(private val actionManager: ActionManager
           break
         }
       }
-      GHUIUtil.focusPanel(list)
+      CollaborationToolsUIUtil.focusPanel(list)
     }
 
     private fun findCommitsList(parent: JComponent): JList<VcsCommitMetadata>? {
@@ -210,7 +209,7 @@ internal class GHPRViewComponentFactory(private val actionManager: ActionManager
         tabs.select(it, false)
       }
       val tree = UIUtil.findComponentOfType(filesComponent, ChangesTree::class.java) ?: return
-      GHUIUtil.focusPanel(tree)
+      CollaborationToolsUIUtil.focusPanel(tree)
 
       if (oid == null || !changesLoadingModel.resultAvailable) {
         tree.selectFile(VcsUtil.getFilePath(filePath, false))
@@ -386,7 +385,8 @@ internal class GHPRViewComponentFactory(private val actionManager: ActionManager
   ): JComponent {
     val tree = GHPRChangesTreeFactory(project, model).create(emptyTextText)
 
-    val diffPreviewController = createAndSetupDiffPreview(tree, diffRequestProducer.changeProducerFactory, dataProvider, dataContext.filesManager)
+    val diffPreviewController = createAndSetupDiffPreview(tree, diffRequestProducer.changeProducerFactory, dataProvider,
+                                                          dataContext.filesManager)
 
     reloadChangesAction.registerCustomShortcutSet(tree, null)
     tree.installPopupHandler(actionManager.getAction("Github.PullRequest.Changes.Popup") as ActionGroup)
@@ -434,9 +434,6 @@ internal class GHPRViewComponentFactory(private val actionManager: ActionManager
 }
 
 private fun ChangesTree.getPullRequestFiles(): Iterable<FilePath> =
-  JBIterable.create {
-    VcsTreeModelData.selected(this)
-      .userObjectsStream(Change::class.java)
-      .map { ChangesUtil.getFilePath(it) }
-      .iterator()
-  }
+  VcsTreeModelData.selected(this)
+    .iterateUserObjects(Change::class.java)
+    .map { ChangesUtil.getFilePath(it) }

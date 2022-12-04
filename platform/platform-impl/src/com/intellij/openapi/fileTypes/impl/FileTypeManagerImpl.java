@@ -47,6 +47,7 @@ import org.jetbrains.jps.model.fileTypes.FileNameMatcherFactory;
 
 import java.lang.reflect.Field;
 import java.util.*;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -184,7 +185,7 @@ public class FileTypeManagerImpl extends FileTypeManagerEx implements Persistent
         });
       }
     };
-    mySchemeManager = SchemeManagerFactory.getInstance().create(FILE_SPEC, abstractTypesProcessor);
+    mySchemeManager = SchemeManagerFactory.getInstance().create(FILE_SPEC, abstractTypesProcessor, null, null, SettingsCategory.CODE);
 
     myDetectionService = new FileTypeDetectionService(this);
     Disposer.register(this, myDetectionService);
@@ -493,8 +494,12 @@ public class FileTypeManagerImpl extends FileTypeManagerEx implements Persistent
           fileType = (FileType)field.get(null);
         }
       }
-      catch (ClassNotFoundException | NoSuchFieldException | IllegalAccessException e) {
-        LOG.error(new PluginException(e, pluginId));
+      catch (ProcessCanceledException | CancellationException e) {
+        throw e;
+      }
+      catch (Exception e) {
+        // no need to wrap into PluginException - instantiateClass and loadClass both do this if needed
+        LOG.error(e);
         return null;
       }
 
@@ -519,11 +524,6 @@ public class FileTypeManagerImpl extends FileTypeManagerEx implements Persistent
           myPatternsTable.addHashBangPattern(hashBang, new FileTypeWithDescriptor(fileType, bean.getPluginDescriptor()));
           myInitialAssociations.addHashBangPattern(hashBang, fileType);
         }
-      }
-
-      PluginAdvertiserExtensionsStateService pluginAdvertiser = PluginAdvertiserExtensionsStateService.getInstance();
-      for (FileNameMatcher matcher : standardFileType.matchers) {
-        pluginAdvertiser.registerLocalPlugin(matcher, bean.getPluginDescriptor());
       }
 
       myPendingAssociations.removeAllAssociations(bean);
@@ -567,6 +567,12 @@ public class FileTypeManagerImpl extends FileTypeManagerEx implements Persistent
     return stdFileType != null ? stdFileType.fileType : PlainTextFileType.INSTANCE;
   }
 
+  @ApiStatus.Internal
+  public @NotNull List<FileNameMatcher> getStandardMatchers(@NotNull FileType type) {
+    StandardFileType stdFileType = myStandardFileTypes.get(type.getName());
+    return (stdFileType != null) ? stdFileType.matchers : Collections.emptyList();
+  }
+
   private void instantiatePendingFileTypeByName(@NotNull String name) {
     FileTypeBean bean = withReadLock(() -> myPendingFileTypes.get(name));
     if (bean != null) {
@@ -578,7 +584,7 @@ public class FileTypeManagerImpl extends FileTypeManagerEx implements Persistent
   public void initializeComponent() {
     initStandardFileTypes();
 
-    if (!myUnresolvedMappings.isEmpty()) {
+    if (!myPendingFileTypes.isEmpty()) {
       instantiatePendingFileTypes();
     }
 
@@ -697,10 +703,12 @@ public class FileTypeManagerImpl extends FileTypeManagerEx implements Persistent
     Pair<VirtualFile, FileType> fixedType = FILE_TYPE_FIXED_TEMPORARILY.get();
     if (fixedType != null && fixedType.getFirst().equals(file)) {
       FileType fileType = fixedType.getSecond();
-      if (toLog()) {
-        log("F: getByFile(" + file.getName() + ") was frozen to " + fileType.getName() + " in " + Thread.currentThread());
+      if (fileType != null) {
+        if (toLog()) {
+          log("F: getByFile(" + file.getName() + ") was frozen to " + fileType.getName() + " in " + Thread.currentThread());
+        }
+        return fileType.equals(requestedFileType);
       }
-      return fileType.equals(requestedFileType);
     }
 
     if (file instanceof LightVirtualFile) {
@@ -1428,6 +1436,11 @@ public class FileTypeManagerImpl extends FileTypeManagerEx implements Persistent
 
     if (newFileType instanceof FileTypeIdentifiableByVirtualFile) {
       mySpecialFileTypes = ArrayUtil.append(mySpecialFileTypes, (FileTypeIdentifiableByVirtualFile)newFileType, FileTypeIdentifiableByVirtualFile.ARRAY_FACTORY);
+    }
+
+    PluginAdvertiserExtensionsStateService pluginAdvertiser = PluginAdvertiserExtensionsStateService.getInstance();
+    for (FileNameMatcher matcher : newMatchers) {
+      pluginAdvertiser.registerLocalPlugin(matcher, newPluginDescriptor);
     }
   }
 

@@ -17,13 +17,13 @@ import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.options.advanced.AdvancedSettings;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.NlsSafe;
 import com.intellij.openapi.util.registry.Registry;
-import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
@@ -55,7 +55,9 @@ import kotlin.Unit;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.plugins.terminal.action.*;
+import org.jetbrains.plugins.terminal.action.MoveTerminalToolWindowTabLeftAction;
+import org.jetbrains.plugins.terminal.action.MoveTerminalToolWindowTabRightAction;
+import org.jetbrains.plugins.terminal.action.RenameTerminalSessionAction;
 import org.jetbrains.plugins.terminal.arrangement.TerminalArrangementManager;
 import org.jetbrains.plugins.terminal.arrangement.TerminalArrangementState;
 import org.jetbrains.plugins.terminal.arrangement.TerminalWorkingDirectoryManager;
@@ -235,7 +237,9 @@ public final class TerminalView implements Disposable {
       contentManager.setSelectedContent(content, requestFocus);
     };
     if (requestFocus && !toolWindow.isActive()) {
-      LOG.info("Activating " + toolWindow.getId() + " tool window");
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Activating " + toolWindow.getId() + " tool window");
+      }
       toolWindow.activate(selectRunnable, true, true);
     }
     else {
@@ -258,10 +262,7 @@ public final class TerminalView implements Disposable {
                                         boolean deferSessionStartUntilUiShown) {
     TerminalToolWindowPanel panel = new TerminalToolWindowPanel(PropertiesComponent.getInstance(myProject), toolWindow);
 
-    String tabName = ObjectUtils.notNull(tabState != null ? tabState.myTabName : null,
-                                         TerminalOptionsProvider.getInstance().getTabName());
-
-    Content content = ContentFactory.getInstance().createContent(panel, tabName, false);
+    Content content = ContentFactory.getInstance().createContent(panel, null, false);
 
     if (terminalWidget == null) {
       String currentWorkingDir = terminalRunner.getCurrentWorkingDir(tabState);
@@ -272,7 +273,20 @@ public final class TerminalView implements Disposable {
     else {
       terminalWidget.moveDisposable(content);
     }
-    setupTerminalWidget(toolWindow, terminalWidget, tabState, content, true);
+
+    if (tabState != null && tabState.myTabName != null) {
+      terminalWidget.getTerminalTitle().change(state -> {
+        if (tabState.myIsUserDefinedTabTitle) {
+          state.setUserDefinedTitle(tabState.myTabName);
+        }
+        else {
+          state.setDefaultTitle(tabState.myTabName);
+        }
+        return null;
+      });
+    }
+    updateTabTitle(terminalWidget.getTerminalTitle(), toolWindow, content);
+    setupTerminalWidget(toolWindow, terminalWidget, content);
 
     content.setCloseable(true);
     content.putUserData(TERMINAL_WIDGET_KEY, terminalWidget);
@@ -292,9 +306,7 @@ public final class TerminalView implements Disposable {
 
   private void setupTerminalWidget(@NotNull ToolWindow toolWindow,
                                    @NotNull JBTerminalWidget terminalWidget,
-                                   @Nullable TerminalTabState tabState,
-                                   @NotNull Content content,
-                                   boolean updateContentDisplayName) {
+                                   @NotNull Content content) {
     MoveTerminalToolWindowTabLeftAction moveTabLeftAction = new MoveTerminalToolWindowTabLeftAction();
     MoveTerminalToolWindowTabRightAction moveTabRightAction = new MoveTerminalToolWindowTabRightAction();
 
@@ -312,11 +324,13 @@ public final class TerminalView implements Disposable {
 
       @Override
       public void onTitleChanged(@NlsSafe String title) {
-        TerminalTitle terminalTitle = terminalWidget.getTerminalTitle();
-        terminalTitle.change(terminalTitleState -> {
-          terminalTitleState.setApplicationTitle(title);
-          return null;
-        });
+        if (AdvancedSettings.getBoolean("terminal.show.application.title")) {
+          TerminalTitle terminalTitle = terminalWidget.getTerminalTitle();
+          terminalTitle.change(terminalTitleState -> {
+            terminalTitleState.setApplicationTitle(title);
+            return null;
+          });
+        }
       }
     });
 
@@ -327,11 +341,7 @@ public final class TerminalView implements Disposable {
       }
 
       @Override
-      public void onTerminalStarted() {
-        if (updateContentDisplayName && (tabState == null || StringUtil.isEmpty(tabState.myTabName))) {
-          updateTabTitle(terminalWidget.getTerminalTitle(), toolWindow, content);
-        }
-      }
+      public void onTerminalStarted() {}
 
       @Override
       public void onPreviousTabSelected() {
@@ -440,7 +450,7 @@ public final class TerminalView implements Disposable {
     TerminalContainer container = getContainer(widget);
     String workingDirectory = TerminalWorkingDirectoryManager.getWorkingDirectory(widget, container.getContent().getDisplayName());
     JBTerminalWidget newWidget = myTerminalRunner.createTerminalWidget(container.getContent(), workingDirectory, true);
-    setupTerminalWidget(myToolWindow, newWidget, null, container.getContent(), false);
+    setupTerminalWidget(myToolWindow, newWidget, container.getContent());
     container.split(!vertically, newWidget);
   }
 
@@ -553,7 +563,7 @@ public final class TerminalView implements Disposable {
     }
 
     @Override
-    public JComponent getContainerComponent() {
+    public @NotNull JComponent getContainerComponent() {
       return myToolWindow.getComponent();
     }
 
@@ -567,7 +577,7 @@ public final class TerminalView implements Disposable {
       }
     }
 
-    private boolean isTerminalSessionContent(@NotNull DockableContent<?> content) {
+    private static boolean isTerminalSessionContent(@NotNull DockableContent<?> content) {
       return content.getKey() instanceof TerminalSessionVirtualFileImpl;
     }
 

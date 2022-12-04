@@ -4,10 +4,10 @@ package org.jetbrains.kotlin.idea.debugger.test
 
 import com.intellij.psi.PsiFile
 import com.intellij.testFramework.LightProjectDescriptor
-import org.jetbrains.kotlin.idea.core.util.getLineCount
-import org.jetbrains.kotlin.idea.core.util.getLineEndOffset
-import org.jetbrains.kotlin.idea.core.util.getLineStartOffset
-import org.jetbrains.kotlin.idea.debugger.breakpoints.BreakpointChecker
+import org.jetbrains.kotlin.idea.base.psi.getLineCount
+import org.jetbrains.kotlin.idea.base.psi.getLineEndOffset
+import org.jetbrains.kotlin.idea.base.psi.getLineStartOffset
+import org.jetbrains.kotlin.idea.debugger.core.breakpoints.BreakpointChecker
 import org.jetbrains.kotlin.idea.test.KotlinLightCodeInsightFixtureTestCase
 import org.jetbrains.kotlin.idea.test.KotlinTestUtils
 import org.jetbrains.kotlin.idea.test.KotlinWithJdkAndRuntimeLightProjectDescriptor
@@ -19,10 +19,10 @@ abstract class AbstractBreakpointApplicabilityTest : KotlinLightCodeInsightFixtu
     }
 
     override fun getProjectDescriptor(): LightProjectDescriptor {
-        return KotlinWithJdkAndRuntimeLightProjectDescriptor.INSTANCE
+        return KotlinWithJdkAndRuntimeLightProjectDescriptor.getInstance()
     }
 
-    protected fun doTest(unused: String) {
+    protected open fun doTest(unused: String) {
         val ktFile = myFixture.configureByFile(fileName()) as KtFile
 
         val actualContents = checkBreakpoints(ktFile, BreakpointChecker())

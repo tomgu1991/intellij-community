@@ -47,9 +47,9 @@ public final class MarkdownCodeFenceHtmlCache implements Disposable {
       public void after(@NotNull List<? extends @NotNull VFileEvent> events) {
         final var fileTypeRegistry = FileTypeRegistry.getInstance();
         for (final var event: events) {
-          if (event instanceof VFileDeleteEvent) {
-            final var file = event.getFile();
-            if (file != null && fileTypeRegistry.isFileOfType(file, MarkdownFileType.INSTANCE)) {
+          if (event instanceof VFileDeleteEvent fileDeleteEvent) {
+            final var file = fileDeleteEvent.getFile();
+            if (fileTypeRegistry.isFileOfType(file, MarkdownFileType.INSTANCE)) {
               myAdditionalCacheToDelete.addAll(processSourceFileToDelete(file, ContainerUtil.emptyList()));
             }
           }
@@ -60,7 +60,7 @@ public final class MarkdownCodeFenceHtmlCache implements Disposable {
   }
 
   private static List<File> getPluginSystemPaths() {
-    return CodeFenceGeneratingProvider.Companion.getAll$intellij_markdown_core().stream()
+    return CodeFenceGeneratingProvider.collectProviders().stream()
       .filter(MarkdownCodeFenceCacheableProvider.class::isInstance)
       .map(MarkdownCodeFenceCacheableProvider.class::cast)
       .map(provider -> provider.getCacheRootPath().toFile())

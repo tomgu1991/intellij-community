@@ -7,7 +7,6 @@ import com.intellij.codeInspection.ex.InspectionProfileImpl
 import com.intellij.codeInspection.ui.InspectionResultsView
 import com.intellij.codeInspection.ui.InspectionTree
 import com.intellij.ide.util.PropertiesComponent
-import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.*
 import com.intellij.openapi.diagnostic.Logger
@@ -36,7 +35,7 @@ import javax.swing.JPanel
 val LOG = Logger.getInstance(InspectionResultsExportActionProvider::class.java)
 
 /**
- * Extension point to add actions in the inspections results export popup.
+ * Extension point to add actions in the inspection results export popup.
  */
 abstract class InspectionResultsExportActionProvider(text: Supplier<String?>,
                                                      description: Supplier<String?>,
@@ -50,10 +49,6 @@ abstract class InspectionResultsExportActionProvider(text: Supplier<String?>,
   val propertyGraph = PropertyGraph()
 
   abstract val progressTitle: @ProgressTitle String
-
-  override fun getActionUpdateThread(): ActionUpdateThread {
-    return ActionUpdateThread.BGT
-  }
 
   override fun actionPerformed(e: AnActionEvent) {
     val view: InspectionResultsView = getView(e) ?: return

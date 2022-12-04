@@ -1,16 +1,55 @@
 package com.intellij.workspaceModel.storage.entities.test.api
 
 import com.intellij.workspaceModel.storage.*
+import com.intellij.workspaceModel.storage.EntitySource
+import com.intellij.workspaceModel.storage.GeneratedCodeApiVersion
+import com.intellij.workspaceModel.storage.MutableEntityStorage
+import com.intellij.workspaceModel.storage.WorkspaceEntity
+import kotlin.jvm.JvmName
+import kotlin.jvm.JvmOverloads
+import kotlin.jvm.JvmStatic
 import org.jetbrains.deft.ObjBuilder
 import org.jetbrains.deft.Type
 import org.jetbrains.deft.annotations.Abstract
 import org.jetbrains.deft.annotations.Child
-import com.intellij.workspaceModel.storage.EntitySource
-import com.intellij.workspaceModel.storage.GeneratedCodeApiVersion
-import com.intellij.workspaceModel.storage.ModifiableWorkspaceEntity
-import com.intellij.workspaceModel.storage.MutableEntityStorage
 
 
+interface HeadAbstractionEntity : WorkspaceEntityWithSymbolicId {
+  val data: String
+  val child: @Child CompositeBaseEntity?
+
+  override val symbolicId: SymbolicEntityId<WorkspaceEntityWithSymbolicId>
+    get() = HeadAbstractionSymbolicId(data)
+
+  //region generated code
+  @GeneratedCodeApiVersion(1)
+  interface Builder : HeadAbstractionEntity, WorkspaceEntity.Builder<HeadAbstractionEntity>, ObjBuilder<HeadAbstractionEntity> {
+    override var entitySource: EntitySource
+    override var data: String
+    override var child: CompositeBaseEntity?
+  }
+
+  companion object : Type<HeadAbstractionEntity, Builder>() {
+    @JvmOverloads
+    @JvmStatic
+    @JvmName("create")
+    operator fun invoke(data: String, entitySource: EntitySource, init: (Builder.() -> Unit)? = null): HeadAbstractionEntity {
+      val builder = builder()
+      builder.data = data
+      builder.entitySource = entitySource
+      init?.invoke(builder)
+      return builder
+    }
+  }
+  //endregion
+}
+
+//region generated code
+fun MutableEntityStorage.modifyEntity(entity: HeadAbstractionEntity, modification: HeadAbstractionEntity.Builder.() -> Unit) = modifyEntity(
+  HeadAbstractionEntity.Builder::class.java, entity, modification)
+//endregion
+
+data class HeadAbstractionSymbolicId(override val presentableName: String) : SymbolicEntityId<HeadAbstractionEntity>
 
 
 @Abstract
@@ -18,22 +57,23 @@ interface BaseEntity : WorkspaceEntity {
   val parentEntity: CompositeBaseEntity?
 
   //region generated code
-  //@formatter:off
   @GeneratedCodeApiVersion(1)
-  interface Builder<T: BaseEntity>: BaseEntity, ModifiableWorkspaceEntity<T>, ObjBuilder<T> {
-      override var parentEntity: CompositeBaseEntity?
-      override var entitySource: EntitySource
+  interface Builder<T : BaseEntity> : BaseEntity, WorkspaceEntity.Builder<T>, ObjBuilder<T> {
+    override var entitySource: EntitySource
+    override var parentEntity: CompositeBaseEntity?
   }
-  
-  companion object: Type<BaseEntity, Builder<BaseEntity>>() {
-      operator fun invoke(entitySource: EntitySource, init: (Builder<BaseEntity>.() -> Unit)? = null): BaseEntity {
-          val builder = builder()
-          builder.entitySource = entitySource
-          init?.invoke(builder)
-          return builder
-      }
+
+  companion object : Type<BaseEntity, Builder<BaseEntity>>() {
+    @JvmOverloads
+    @JvmStatic
+    @JvmName("create")
+    operator fun invoke(entitySource: EntitySource, init: (Builder<BaseEntity>.() -> Unit)? = null): BaseEntity {
+      val builder = builder()
+      builder.entitySource = entitySource
+      init?.invoke(builder)
+      return builder
+    }
   }
-  //@formatter:on
   //endregion
 
 }
@@ -42,25 +82,28 @@ interface BaseEntity : WorkspaceEntity {
 interface CompositeBaseEntity : BaseEntity {
   val children: List<@Child BaseEntity>
 
+  val parent: HeadAbstractionEntity?
 
   //region generated code
-  //@formatter:off
   @GeneratedCodeApiVersion(1)
-  interface Builder<T: CompositeBaseEntity>: CompositeBaseEntity, BaseEntity.Builder<T>, ModifiableWorkspaceEntity<T>, ObjBuilder<T> {
-      override var parentEntity: CompositeBaseEntity?
-      override var children: List<BaseEntity>
-      override var entitySource: EntitySource
+  interface Builder<T : CompositeBaseEntity> : CompositeBaseEntity, BaseEntity.Builder<T>, WorkspaceEntity.Builder<T>, ObjBuilder<T> {
+    override var entitySource: EntitySource
+    override var parentEntity: CompositeBaseEntity?
+    override var children: List<BaseEntity>
+    override var parent: HeadAbstractionEntity?
   }
-  
-  companion object: Type<CompositeBaseEntity, Builder<CompositeBaseEntity>>(BaseEntity) {
-      operator fun invoke(entitySource: EntitySource, init: (Builder<CompositeBaseEntity>.() -> Unit)? = null): CompositeBaseEntity {
-          val builder = builder()
-          builder.entitySource = entitySource
-          init?.invoke(builder)
-          return builder
-      }
+
+  companion object : Type<CompositeBaseEntity, Builder<CompositeBaseEntity>>(BaseEntity) {
+    @JvmOverloads
+    @JvmStatic
+    @JvmName("create")
+    operator fun invoke(entitySource: EntitySource, init: (Builder<CompositeBaseEntity>.() -> Unit)? = null): CompositeBaseEntity {
+      val builder = builder()
+      builder.entitySource = entitySource
+      init?.invoke(builder)
+      return builder
+    }
   }
-  //@formatter:on
   //endregion
 
 }
@@ -68,31 +111,33 @@ interface CompositeBaseEntity : BaseEntity {
 interface MiddleEntity : BaseEntity {
   val property: String
 
-
   //region generated code
-  //@formatter:off
   @GeneratedCodeApiVersion(1)
-  interface Builder: MiddleEntity, BaseEntity.Builder<MiddleEntity>, ModifiableWorkspaceEntity<MiddleEntity>, ObjBuilder<MiddleEntity> {
-      override var parentEntity: CompositeBaseEntity?
-      override var property: String
-      override var entitySource: EntitySource
+  interface Builder : MiddleEntity, BaseEntity.Builder<MiddleEntity>, WorkspaceEntity.Builder<MiddleEntity>, ObjBuilder<MiddleEntity> {
+    override var entitySource: EntitySource
+    override var parentEntity: CompositeBaseEntity?
+    override var property: String
   }
-  
-  companion object: Type<MiddleEntity, Builder>(BaseEntity) {
-      operator fun invoke(property: String, entitySource: EntitySource, init: (Builder.() -> Unit)? = null): MiddleEntity {
-          val builder = builder()
-          builder.property = property
-          builder.entitySource = entitySource
-          init?.invoke(builder)
-          return builder
-      }
+
+  companion object : Type<MiddleEntity, Builder>(BaseEntity) {
+    @JvmOverloads
+    @JvmStatic
+    @JvmName("create")
+    operator fun invoke(property: String, entitySource: EntitySource, init: (Builder.() -> Unit)? = null): MiddleEntity {
+      val builder = builder()
+      builder.property = property
+      builder.entitySource = entitySource
+      init?.invoke(builder)
+      return builder
+    }
   }
-  //@formatter:on
   //endregion
 
 }
+
 //region generated code
-fun MutableEntityStorage.modifyEntity(entity: MiddleEntity, modification: MiddleEntity.Builder.() -> Unit) = modifyEntity(MiddleEntity.Builder::class.java, entity, modification)
+fun MutableEntityStorage.modifyEntity(entity: MiddleEntity, modification: MiddleEntity.Builder.() -> Unit) = modifyEntity(
+  MiddleEntity.Builder::class.java, entity, modification)
 //endregion
 
 fun MutableEntityStorage.addMiddleEntity(property: String = "prop", source: EntitySource = MySource): MiddleEntity {
@@ -104,31 +149,33 @@ fun MutableEntityStorage.addMiddleEntity(property: String = "prop", source: Enti
 // ---------------------------
 
 interface LeftEntity : CompositeBaseEntity {
+  //region generated code
+  @GeneratedCodeApiVersion(1)
+  interface Builder : LeftEntity, CompositeBaseEntity.Builder<LeftEntity>, WorkspaceEntity.Builder<LeftEntity>, ObjBuilder<LeftEntity> {
+    override var entitySource: EntitySource
+    override var parentEntity: CompositeBaseEntity?
+    override var children: List<BaseEntity>
+    override var parent: HeadAbstractionEntity?
+  }
 
-
-    //region generated code
-    //@formatter:off
-    @GeneratedCodeApiVersion(1)
-    interface Builder: LeftEntity, CompositeBaseEntity.Builder<LeftEntity>, ModifiableWorkspaceEntity<LeftEntity>, ObjBuilder<LeftEntity> {
-        override var parentEntity: CompositeBaseEntity?
-        override var children: List<BaseEntity>
-        override var entitySource: EntitySource
+  companion object : Type<LeftEntity, Builder>(CompositeBaseEntity) {
+    @JvmOverloads
+    @JvmStatic
+    @JvmName("create")
+    operator fun invoke(entitySource: EntitySource, init: (Builder.() -> Unit)? = null): LeftEntity {
+      val builder = builder()
+      builder.entitySource = entitySource
+      init?.invoke(builder)
+      return builder
     }
-    
-    companion object: Type<LeftEntity, Builder>(CompositeBaseEntity) {
-        operator fun invoke(entitySource: EntitySource, init: (Builder.() -> Unit)? = null): LeftEntity {
-            val builder = builder()
-            builder.entitySource = entitySource
-            init?.invoke(builder)
-            return builder
-        }
-    }
-    //@formatter:on
-    //endregion
+  }
+  //endregion
 
 }
+
 //region generated code
-fun MutableEntityStorage.modifyEntity(entity: LeftEntity, modification: LeftEntity.Builder.() -> Unit) = modifyEntity(LeftEntity.Builder::class.java, entity, modification)
+fun MutableEntityStorage.modifyEntity(entity: LeftEntity, modification: LeftEntity.Builder.() -> Unit) = modifyEntity(
+  LeftEntity.Builder::class.java, entity, modification)
 //endregion
 
 fun MutableEntityStorage.addLeftEntity(children: Sequence<BaseEntity>, source: EntitySource = MySource): LeftEntity {
@@ -142,31 +189,33 @@ fun MutableEntityStorage.addLeftEntity(children: Sequence<BaseEntity>, source: E
 // ---------------------------
 
 interface RightEntity : CompositeBaseEntity {
+  //region generated code
+  @GeneratedCodeApiVersion(1)
+  interface Builder : RightEntity, CompositeBaseEntity.Builder<RightEntity>, WorkspaceEntity.Builder<RightEntity>, ObjBuilder<RightEntity> {
+    override var entitySource: EntitySource
+    override var parentEntity: CompositeBaseEntity?
+    override var children: List<BaseEntity>
+    override var parent: HeadAbstractionEntity?
+  }
 
-
-    //region generated code
-    //@formatter:off
-    @GeneratedCodeApiVersion(1)
-    interface Builder: RightEntity, CompositeBaseEntity.Builder<RightEntity>, ModifiableWorkspaceEntity<RightEntity>, ObjBuilder<RightEntity> {
-        override var parentEntity: CompositeBaseEntity?
-        override var children: List<BaseEntity>
-        override var entitySource: EntitySource
+  companion object : Type<RightEntity, Builder>(CompositeBaseEntity) {
+    @JvmOverloads
+    @JvmStatic
+    @JvmName("create")
+    operator fun invoke(entitySource: EntitySource, init: (Builder.() -> Unit)? = null): RightEntity {
+      val builder = builder()
+      builder.entitySource = entitySource
+      init?.invoke(builder)
+      return builder
     }
-    
-    companion object: Type<RightEntity, Builder>(CompositeBaseEntity) {
-        operator fun invoke(entitySource: EntitySource, init: (Builder.() -> Unit)? = null): RightEntity {
-            val builder = builder()
-            builder.entitySource = entitySource
-            init?.invoke(builder)
-            return builder
-        }
-    }
-    //@formatter:on
-    //endregion
+  }
+  //endregion
 
 }
+
 //region generated code
-fun MutableEntityStorage.modifyEntity(entity: RightEntity, modification: RightEntity.Builder.() -> Unit) = modifyEntity(RightEntity.Builder::class.java, entity, modification)
+fun MutableEntityStorage.modifyEntity(entity: RightEntity, modification: RightEntity.Builder.() -> Unit) = modifyEntity(
+  RightEntity.Builder::class.java, entity, modification)
 //endregion
 
 fun MutableEntityStorage.addRightEntity(children: Sequence<BaseEntity>, source: EntitySource = MySource): RightEntity {

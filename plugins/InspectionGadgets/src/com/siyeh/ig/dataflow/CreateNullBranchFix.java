@@ -2,6 +2,7 @@
 package com.siyeh.ig.dataflow;
 
 import com.intellij.codeInsight.daemon.impl.analysis.HighlightingFeature;
+import com.intellij.codeInsight.intention.FileModifier;
 import com.intellij.psi.*;
 import com.intellij.psi.util.JavaPsiPatternUtil;
 import com.intellij.psi.util.PsiTreeUtil;
@@ -38,6 +39,12 @@ public final class CreateNullBranchFix extends BaseSwitchFix {
   }
 
   @Override
+  public @Nullable FileModifier getFileModifierForPreview(@NotNull PsiFile target) {
+    PsiSwitchBlock block = myBlock.getElement();
+    return block == null ? null : new CreateNullBranchFix(PsiTreeUtil.findSameElementInCopy(block, target));
+  }
+
+  @Override
   protected void invoke() {
     PsiSwitchBlock switchBlock = myBlock.getElement();
     if (switchBlock == null) return;
@@ -51,7 +58,7 @@ public final class CreateNullBranchFix extends BaseSwitchFix {
     List<PsiElement> branches = SwitchUtils.getSwitchBranches(switchBlock);
     for (PsiElement branch : branches) {
       // just for the case if we already contain null or total pattern, there is no need to apply the fix
-      if (branch instanceof PsiExpression && TypeConversionUtil.isNullType(((PsiExpression)branch).getType())) return;
+      if (branch instanceof PsiExpression expression && TypeConversionUtil.isNullType(expression.getType())) return;
       if (branch instanceof PsiPattern && JavaPsiPatternUtil.isTotalForType(((PsiPattern)branch), selectorType)) return;
     }
     PsiElement defaultElement = SwitchUtils.findDefaultElement(switchBlock);

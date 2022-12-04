@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.debugger.ui.breakpoints;
 
 import com.intellij.debugger.JavaDebuggerBundle;
@@ -10,6 +10,7 @@ import com.intellij.debugger.jdi.ThreadReferenceProxyImpl;
 import com.intellij.debugger.settings.TraceSettings;
 import com.intellij.debugger.ui.overhead.OverheadProducer;
 import com.intellij.debugger.ui.overhead.OverheadTimings;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.DumbAwareToggleAction;
@@ -114,7 +115,7 @@ public class CallTracer implements OverheadProducer {
                 res.append(StringUtil.getShortName(objectReference.referenceType().name())).append("@").append(objectReference.uniqueID());
               }
               else {
-                res.append(value.toString());
+                res.append(value);
               }
             }
           }
@@ -221,6 +222,11 @@ public class CallTracer implements OverheadProducer {
     public void update(@NotNull AnActionEvent e) {
       e.getPresentation().setEnabledAndVisible(Registry.is("debugger.call.tracing"));
       super.update(e);
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.BGT;
     }
 
     @Override

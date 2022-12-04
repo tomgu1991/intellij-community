@@ -1,12 +1,13 @@
 // Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.execution.runToolbar
 
-import com.intellij.ide.util.PropertiesComponent
+import com.intellij.ide.DataManager
 import com.intellij.openapi.actionSystem.ActionGroup
+import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.impl.ActionButton
 import com.intellij.openapi.actionSystem.impl.segmentedActionBar.SegmentedActionToolbarComponent
+import com.intellij.openapi.project.Project
 import com.intellij.util.containers.ComparatorUtil
-import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.JBValue
 import java.awt.Component
 import java.awt.Dimension
@@ -14,52 +15,9 @@ import java.awt.Rectangle
 import javax.swing.JComponent
 
 open class FixWidthSegmentedActionToolbarComponent(place: String, group: ActionGroup) : SegmentedActionToolbarComponent(place, group) {
-  companion object {
-    val RUN_CONFIG_WIDTH_UNSCALED_MIN = 200
-    private val RUN_CONFIG_WIDTH_UNSCALED_MAX = 1200
-    private val ARROW_WIDTH_UNSCALED = 28
-    const val RUN_CONFIG_WIDTH_PROP = "com.intellij.execution.runToolbar.runConfigWidthProp"
 
-    var RUN_CONFIG_SCALED_WIDTH = PropertiesComponent.getInstance().getInt(RUN_CONFIG_WIDTH_PROP, JBUI.scale(RUN_CONFIG_WIDTH_UNSCALED_MIN))
-      set(value) {
-        if (field == value) return
-        val min = JBUI.scale(RUN_CONFIG_WIDTH_UNSCALED_MIN)
-        val max = JBUI.scale(RUN_CONFIG_WIDTH_UNSCALED_MAX)
-
-        field = if (value > max) {
-          max
-        }
-        else if (value < min) {
-          min
-        }
-        else value
-
-        listeners.forEach { it.updated() }
-      }
-
-    val ARROW_WIDTH: Int
-      get() {
-        return JBUI.scale(ARROW_WIDTH_UNSCALED)
-      }
-
-    val CONFIG_WITH_ARROW_WIDTH: Int
-      get() {
-        return JBUI.scale(ARROW_WIDTH_UNSCALED) + RUN_CONFIG_SCALED_WIDTH
-      }
-
-    private var runConfigWidth: JBValue.Float? = null
-    private var rightSideWidth: JBValue.Float? = null
-
-    private val listeners = mutableListOf<UpdateWidth>()
-    private fun addListener(listener: UpdateWidth) {
-      listeners.add(listener)
-    }
-
-    private fun removeListener(listener: UpdateWidth) {
-      listeners.remove(listener)
-    }
-  }
-
+  private var project: Project? = null
+  private var runWidgetWidthHelper: RunWidgetWidthHelper? = null
 
   private val listener = object : UpdateWidth {
     override fun updated() {
@@ -67,20 +25,32 @@ open class FixWidthSegmentedActionToolbarComponent(place: String, group: ActionG
     }
   }
 
+
+  override fun addNotify() {
+    super.addNotify()
+
+
+    CommonDataKeys.PROJECT.getData(DataManager.getInstance().getDataContext(this))?.let {
+      project = it
+
+      runWidgetWidthHelper = RunWidgetWidthHelper.getInstance(it).apply {
+        addListener(listener)
+      }
+    }
+  }
+
+
+  override fun removeNotify() {
+    runWidgetWidthHelper?.removeListener(listener)
+    project = null
+    super.removeNotify()
+  }
+
+
   protected open fun updateWidthHandler() {
     preferredSize
     revalidate()
     repaint()
-  }
-
-  override fun addNotify() {
-    super.addNotify()
-    addListener(listener)
-  }
-
-  override fun removeNotify() {
-    removeListener(listener)
-    super.removeNotify()
   }
 
   override fun calculateBounds(size2Fit: Dimension, bounds: MutableList<Rectangle>) {
@@ -97,12 +67,12 @@ open class FixWidthSegmentedActionToolbarComponent(place: String, group: ActionG
           is RTRunConfiguration -> {
             if (anAction.isStable()) {
               val configWidth = getChildPreferredSize(it).width.toFloat()
-              runConfigWidth?.let { float ->
+              runWidgetWidthHelper?.runConfigWidth?.let { float ->
                 if (configWidth > float.float) {
-                  runConfigWidth = JBValue.Float(configWidth, true)
+                  runWidgetWidthHelper?.runConfigWidth = JBValue.Float(configWidth, true)
                 }
               } ?: kotlin.run {
-                runConfigWidth = JBValue.Float(configWidth, true)
+                runWidgetWidthHelper?.runConfigWidth = JBValue.Float(configWidth, true)
               }
             }
             null
@@ -115,11 +85,11 @@ open class FixWidthSegmentedActionToolbarComponent(place: String, group: ActionG
 
     val max = ComparatorUtil.max(executorButtonsPrefWidth, controlButtonsPrefWidth)
 
-    if ((rightSideWidth?.get() ?: 0) < max) {
-      rightSideWidth = JBValue.Float(max.toFloat(), true)
+    if ((runWidgetWidthHelper?.rightSideWidth?.get() ?: 0) < max) {
+      runWidgetWidthHelper?.rightSideWidth = JBValue.Float(max.toFloat(), true)
     }
 
-    rightSideWidth?.let {
+    runWidgetWidthHelper?.rightSideWidth?.let {
       calculateBoundsToFit(size2Fit, bounds)
     } ?: run {
       super.calculateBounds(size2Fit, bounds)
@@ -151,7 +121,7 @@ open class FixWidthSegmentedActionToolbarComponent(place: String, group: ActionG
       }
     }
 
-    rightSideWidth?.get()?.let { rightWidth ->
+    runWidgetWidthHelper?.rightSideWidth?.get()?.let { rightWidth ->
       bounds.clear()
       for (i in 0 until componentCount) {
         bounds.add(Rectangle())
@@ -169,8 +139,7 @@ open class FixWidthSegmentedActionToolbarComponent(place: String, group: ActionG
         val delta = rightWidth - stablePrefWidth - flexiblePrefWidth
         val rightAdditionWidth = if (delta > 0) delta / right_flexible.size else 0
 
-        val lastAddition = if (delta <= 0) 0
-        else rightWidth - stablePrefWidth - flexiblePrefWidth - (rightAdditionWidth * right_flexible.size).let { gap ->
+        val lastAddition = if(delta <= 0) 0 else rightWidth - stablePrefWidth - flexiblePrefWidth - (rightAdditionWidth * right_flexible.size).let { gap ->
           if (gap < 0) 0 else gap
         }
 
@@ -183,15 +152,16 @@ open class FixWidthSegmentedActionToolbarComponent(place: String, group: ActionG
           right_stable.contains(getComponent(it))
         }.sumOf { getChildPreferredSize(it).width }
 
-        (rightWidth + CONFIG_WITH_ARROW_WIDTH - stablePrefWidth).let {
+
+        runWidgetWidthHelper?.configWithArrow?.let { (rightWidth + it - stablePrefWidth).let {
           if (it > 0) it else null
-        }?.let {
+        } } ?.let {
           var offset = 0
           for (i in 0 until componentCount) {
             val d = getChildPreferredSize(i)
             var w = d.width
             val component = getComponent(i)
-            if (component == flexible[0]) {
+            if(component == flexible[0]) {
               w = it
             }
 
@@ -203,8 +173,7 @@ open class FixWidthSegmentedActionToolbarComponent(place: String, group: ActionG
         } ?: run {
           super.calculateBounds(size2Fit, bounds)
         }
-      }
-      else if (right_stable.isNotEmpty() && flexible.isEmpty()) {
+      } else if(right_stable.isNotEmpty() && flexible.isEmpty()) {
         val stablePrefWidth = (0 until componentCount).filter {
           right_stable.contains(getComponent(it))
         }.sumOf { getChildPreferredSize(it).width }
@@ -212,8 +181,7 @@ open class FixWidthSegmentedActionToolbarComponent(place: String, group: ActionG
         val delta = rightWidth - stablePrefWidth
         val rightAdditionWidth = if (delta > 0) delta / right_stable.size else 0
 
-        val lastAddition = if (delta <= 0) 0
-        else rightWidth - stablePrefWidth - (rightAdditionWidth * right_stable.size).let { gap ->
+        val lastAddition = if(delta <= 0) 0 else rightWidth - stablePrefWidth - (rightAdditionWidth * right_stable.size).let { gap ->
           if (gap < 0) 0 else gap
         }
 
@@ -222,14 +190,13 @@ open class FixWidthSegmentedActionToolbarComponent(place: String, group: ActionG
         return
 
 
-      }
-      else {
+      } else {
         super.calculateBounds(size2Fit, bounds)
       }
     } ?: run {
       super.calculateBounds(size2Fit, bounds)
     }
-  }
+ }
 
   private fun setComponentsBounds(flexible: MutableList<Component>,
                                   additionWidth: Int,
@@ -251,9 +218,5 @@ open class FixWidthSegmentedActionToolbarComponent(place: String, group: ActionG
       r.setBounds(insets.left + offset, insets.top, w, DEFAULT_MINIMUM_BUTTON_SIZE.height)
       offset += w
     }
-  }
-
-  private interface UpdateWidth {
-    fun updated()
   }
 }

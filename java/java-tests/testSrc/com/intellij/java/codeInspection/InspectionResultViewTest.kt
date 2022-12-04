@@ -13,7 +13,6 @@ import com.intellij.testFramework.LightProjectDescriptor
 import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.createGlobalContextForTool
 import com.intellij.util.ui.UIUtil
-import com.intellij.util.ui.tree.TreeUtil
 import java.io.File
 
 class InspectionResultViewTest : LightJava9ModulesCodeInsightFixtureTestCase() {
@@ -48,15 +47,15 @@ class InspectionResultViewTest : LightJava9ModulesCodeInsightFixtureTestCase() {
     val view = runInspections()
 
     updateTree(view)
-    TreeUtil.expandAll(view.tree)
+    PlatformTestUtil.expandAll(view.tree)
     updateTree(view)
     PlatformTestUtil.assertTreeEqual(view.tree, """
-      -Inspections Results
+      -Inspection Results
        -Java
         -Code maturity
          -Usage of API marked for removal
           -some.module
-           'M2' is deprecated and marked for removal(LIKE_DEPRECATED)
+           'M2' is deprecated and marked for removal
         -Declaration redundancy
          -Redundant 'requires' directive in module-info
           -some.module
@@ -67,16 +66,16 @@ class InspectionResultViewTest : LightJava9ModulesCodeInsightFixtureTestCase() {
     view.update()
 
     updateTree(view)
-    TreeUtil.expandAll(view.tree)
+    PlatformTestUtil.expandAll(view.tree)
     updateTree(view)
     PlatformTestUtil.assertTreeEqual(view.tree, """
-      -Inspections Results
+      -Inspection Results
        -Java
         -Code maturity
          -Usage of API marked for removal
           -${LightProjectDescriptor.TEST_MODULE_NAME}
            -some.module
-            'M2' is deprecated and marked for removal(LIKE_DEPRECATED)
+            'M2' is deprecated and marked for removal
         -Declaration redundancy
          -Redundant 'requires' directive in module-info
           -${LightProjectDescriptor.TEST_MODULE_NAME}
@@ -92,10 +91,10 @@ class InspectionResultViewTest : LightJava9ModulesCodeInsightFixtureTestCase() {
     view.globalInspectionContext.uiOptions.SHOW_STRUCTURE = true
     view.update()
     updateTree(view)
-    TreeUtil.expandAll(view.tree)
+    PlatformTestUtil.expandAll(view.tree)
     updateTree(view)
     PlatformTestUtil.assertTreeEqual(view.tree, """
-      -Inspections Results
+      -Inspection Results
        -Groovy
         -Data flow
          -Unused assignment

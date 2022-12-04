@@ -23,18 +23,18 @@ public interface FileEditorManagerListener extends EventListener {
    * This method is called synchronously (in the same EDT event), as the creation of {@link FileEditor}s.
    *
    * @see #fileOpened(FileEditorManager, VirtualFile)
-   * @deprecated use {@link #fileOpenedSync(FileEditorManager, VirtualFile, List)}
+   * @deprecated use {@link FileOpenedSyncListener#fileOpenedSync(FileEditorManager, VirtualFile, List)}
    */
+  @SuppressWarnings("unused")
   @Deprecated
   default void fileOpenedSync(@NotNull FileEditorManager source, @NotNull VirtualFile file,
                               @NotNull Pair<FileEditor[], FileEditorProvider[]> editors) {
   }
 
   /**
-   * This method is called synchronously (in the same EDT event), as the creation of {@link FileEditor}s.
-   *
-   * @see #fileOpened(FileEditorManager, VirtualFile)
+   * @deprecated use {@link FileOpenedSyncListener#fileOpenedSync(FileEditorManager, VirtualFile, List)}
    */
+  @Deprecated
   default void fileOpenedSync(@NotNull FileEditorManager source, @NotNull VirtualFile file,
                               @NotNull List<FileEditorWithProvider> editorsWithProviders) {
     fileOpenedSync(source, file, new Pair<>(
@@ -49,7 +49,7 @@ public interface FileEditorManagerListener extends EventListener {
    * which means that it may gain the focus way after this method is called.
    * When necessary, use {@link FileEditorManager#runWhenLoaded(Editor, Runnable)}) to ensure the desired ordering.
    * <p>
-   * {@link #fileOpenedSync(FileEditorManager, VirtualFile, List<FileEditorWithProvider>)} is always invoked before this method,
+   * {@link #fileOpenedSync(FileEditorManager, VirtualFile, List)} is always invoked before this method,
    * either in the same or the previous EDT event.
    *
    * @see #fileOpenedSync(FileEditorManager, VirtualFile, List)
@@ -73,18 +73,6 @@ public interface FileEditorManagerListener extends EventListener {
     }
 
     default void beforeFileClosed(@NotNull FileEditorManager source, @NotNull VirtualFile file) {
-    }
-
-    /**
-     * @deprecated use {@link Before} directly
-     */
-    @Deprecated(forRemoval = true)
-    class Adapter implements Before {
-      @Override
-      public void beforeFileOpened(@NotNull FileEditorManager source, @NotNull VirtualFile file) { }
-
-      @Override
-      public void beforeFileClosed(@NotNull FileEditorManager source, @NotNull VirtualFile file) { }
     }
   }
 }

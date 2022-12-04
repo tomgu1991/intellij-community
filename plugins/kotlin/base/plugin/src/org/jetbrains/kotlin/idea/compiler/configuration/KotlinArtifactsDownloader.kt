@@ -14,6 +14,7 @@ import com.intellij.workspaceModel.storage.url.VirtualFileUrlManager
 import org.jetbrains.annotations.Nls
 import org.jetbrains.idea.maven.aether.ArtifactKind
 import org.jetbrains.idea.maven.utils.library.RepositoryLibraryProperties
+import org.jetbrains.jps.model.library.JpsMavenRepositoryLibraryDescriptor
 import org.jetbrains.kotlin.idea.base.plugin.KotlinBasePluginBundle
 import org.jetbrains.kotlin.idea.base.plugin.artifacts.KotlinArtifactConstants.KOTLIN_DIST_FOR_JPS_META_ARTIFACT_ID
 import org.jetbrains.kotlin.idea.base.plugin.artifacts.KotlinArtifactConstants.KOTLIN_DIST_LOCATION_PREFIX
@@ -26,6 +27,9 @@ import org.jetbrains.kotlin.idea.compiler.configuration.LazyKotlinMavenArtifactD
 import org.jetbrains.kotlin.idea.util.application.isUnitTestMode
 import java.awt.EventQueue
 import java.io.File
+import java.io.FileNotFoundException
+import java.io.IOException
+import java.io.InputStream
 import java.net.URL
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -35,8 +39,7 @@ object KotlinArtifactsDownloader {
         if (IdeKotlinVersion.get(version).isStandaloneCompilerVersion) KotlinPluginLayout.kotlinc
         else KOTLIN_DIST_LOCATION_PREFIX.resolve(version)
 
-    fun getUnpackedKotlinDistPath(project: Project) =
-        KotlinJpsPluginSettings.jpsVersion(project)?.let { getUnpackedKotlinDistPath(it) } ?: KotlinPluginLayout.kotlinc
+    fun getUnpackedKotlinDistPath(project: Project) = getUnpackedKotlinDistPath(KotlinJpsPluginSettings.jpsVersion(project))
 
     /**
      * @see lazyDownloadAndUnpackKotlincDist
@@ -144,25 +147,46 @@ object KotlinArtifactsDownloader {
         check(isUnitTestMode() || !EventQueue.isDispatchThread()) {
             "Don't call downloadMavenArtifact on UI thread"
         }
+
+        val excludedDeps = // Since 1.7.20, 'kotlin-dist-for-jps-meta' doesn't depend on broken 'kotlin-annotation-processing'
+            if (artifactId == KOTLIN_DIST_FOR_JPS_META_ARTIFACT_ID && IdeKotlinVersion.get(version) < IdeKotlinVersion.get("1.7.20")) {
+                listOf( // Not existing deps of kotlin-annotation-processing KTI-878
+                    "$KOTLIN_MAVEN_GROUP_ID:util",
+                    "$KOTLIN_MAVEN_GROUP_ID:cli",
+                    "$KOTLIN_MAVEN_GROUP_ID:backend",
+                    "$KOTLIN_MAVEN_GROUP_ID:frontend",
+                    "$KOTLIN_MAVEN_GROUP_ID:frontend.java",
+                    "$KOTLIN_MAVEN_GROUP_ID:plugin-api",
+                    "$KOTLIN_MAVEN_GROUP_ID:backend.jvm.entrypoint",
+                )
+            } else {
+                emptyList()
+            }
+
         val prop = RepositoryLibraryProperties(
-            "$KOTLIN_MAVEN_GROUP_ID:$artifactId:$version",
-            if (artifactIsPom) ArtifactKind.POM.extension else ArtifactKind.ARTIFACT.extension,
-            /* includeTransitiveDependencies = */ true,
+            JpsMavenRepositoryLibraryDescriptor(
+                KOTLIN_MAVEN_GROUP_ID,
+                artifactId,
+                version,
+                if (artifactIsPom) ArtifactKind.POM.extension else ArtifactKind.ARTIFACT.extension,
+                true,
+                excludedDeps,
+            )
         )
 
         val repos = getMavenRepos(project) + additionalMavenRepos
-        val downloadedArtifacts =
-            JarRepositoryManager.loadDependenciesSync(project, prop, false, false, null, repos, indicator)
 
-        return downloadedArtifacts.map { File(it.file.toVirtualFileUrl(VirtualFileUrlManager.getInstance(project)).presentableUrl) }
+        return JarRepositoryManager.loadDependenciesSync(project, prop, false, false, null, repos, indicator)
+            .map { File(it.file.toVirtualFileUrl(VirtualFileUrlManager.getInstance(project)).presentableUrl).canonicalFile }
+            .distinct()
     }
 
-    fun downloadArtifactForIdeFromSources(libraryFileName: String, artifactId: String, suffix: String = ".jar"): File {
+    @JvmOverloads
+    fun downloadArtifactForIdeFromSources(artifactId: String, version: String, suffix: String = ".jar"): File? {
         check(isRunningFromSources) {
             "${::downloadArtifactForIdeFromSources.name} must be called only for IDE running from sources or tests. " +
                     "Use ${::downloadMavenArtifacts.name} when run in production"
         }
-        val version = KotlinMavenUtils.findLibraryVersion(libraryFileName) ?: error("Can't get '$libraryFileName' version")
 
         // In cooperative development artifacts are already downloaded and stored in $PROJECT_DIR$/../build/repo
         KotlinMavenUtils.findArtifact(KOTLIN_MAVEN_GROUP_ID, artifactId, version, suffix)?.let {
@@ -177,10 +201,11 @@ object KotlinArtifactsDownloader {
             .also { Files.createDirectories(it.parent) }
 
         if (!artifact.exists()) {
-            val stream = URL(
+            val idePluginDeps =
                 "https://cache-redirector.jetbrains.com/maven.pkg.jetbrains.space/kotlin/p/kotlin/kotlin-ide-plugin-dependencies/" +
-                        "org/jetbrains/kotlin/$artifactId/$version/$fileName"
-            ).openStream()
+                    "org/jetbrains/kotlin/$artifactId/$version/$fileName"
+            val mavenCentral = "https://repo1.maven.org/maven2/org/jetbrains/kotlin/$artifactId/$version/$fileName"
+            val stream = URL(idePluginDeps).openStreamOrNull() ?: URL(mavenCentral).openStreamOrNull() ?: return null
             Files.copy(stream, artifact)
             check(artifact.exists()) { "$artifact should be downloaded" }
         }
@@ -226,3 +251,12 @@ object KotlinArtifactsDownloader {
         ) + "\n\n" + suggestion
     }
 }
+
+private fun URL.openStreamOrNull(): InputStream? =
+    try {
+        openStream()
+    } catch (ex: FileNotFoundException) {
+        null
+    } catch (ex: IOException) {
+        null
+    }

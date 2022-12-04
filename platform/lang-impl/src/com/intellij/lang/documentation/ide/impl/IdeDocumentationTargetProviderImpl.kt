@@ -12,17 +12,15 @@ import com.intellij.model.Pointer
 import com.intellij.model.Symbol
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.component1
-import com.intellij.openapi.util.component2
 import com.intellij.psi.PsiFile
-import com.intellij.util.castSafelyTo
+import com.intellij.util.asSafely
 
 open class IdeDocumentationTargetProviderImpl(private val project: Project) : IdeDocumentationTargetProvider {
 
   override fun documentationTarget(editor: Editor, file: PsiFile, lookupElement: LookupElement): DocumentationTarget? {
     val symbolTargets = (lookupElement.`object` as? Pointer<*>)
       ?.dereference()
-      ?.castSafelyTo<Symbol>()
+      ?.asSafely<Symbol>()
       ?.let { symbolDocumentationTargets(file.project, listOf(it)) }
     if (!symbolTargets.isNullOrEmpty()) {
       return symbolTargets.first()
@@ -34,13 +32,6 @@ open class IdeDocumentationTargetProviderImpl(private val project: Project) : Id
   }
 
   override fun documentationTargets(editor: Editor, file: PsiFile, offset: Int): List<DocumentationTarget> {
-    val symbolTargets = symbolDocumentationTargets(file, offset)
-    if (symbolTargets.isNotEmpty()) {
-      return symbolTargets
-    }
-    val documentationManager = DocumentationManager.getInstance(project)
-    val (targetElement, sourceElement) = documentationManager.findTargetElementAndContext(editor, offset, file)
-                                         ?: return emptyList()
-    return listOf(psiDocumentationTarget(targetElement, sourceElement))
+    return com.intellij.lang.documentation.impl.documentationTargets(file, offset)
   }
 }

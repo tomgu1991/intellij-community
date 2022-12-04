@@ -4,8 +4,6 @@ package com.intellij.openapi.util.io;
 import com.intellij.jna.JnaLoader;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.SystemInfo;
-import com.intellij.openapi.util.io.win32.FileInfo;
-import com.intellij.openapi.util.io.win32.IdeaWin32;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.CharsetToolkit;
 import com.intellij.util.SystemProperties;
@@ -28,13 +26,14 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.DosFileAttributes;
-import java.nio.file.attribute.PosixFileAttributes;
-import java.nio.file.attribute.PosixFilePermission;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 public final class FileSystemUtil {
+  private static final Logger LOG = Logger.getInstance(FileSystemUtil.class);
   static final String FORCE_USE_NIO2_KEY = "idea.io.use.nio2";
 
   private static final String COARSE_TIMESTAMP_KEY = "idea.io.coarse.ts";
@@ -42,12 +41,13 @@ public final class FileSystemUtil {
   @ApiStatus.Internal
   public static final boolean DO_NOT_RESOLVE_SYMLINKS = Boolean.getBoolean("idea.symlinks.no.resolve");
 
-  private static final Logger LOG = Logger.getInstance(FileSystemUtil.class);
+  private volatile static boolean MAC_CASE_SENSITIVITY_NATIVE_API_AVAILABLE = true;
+  private volatile static boolean LINUX_CASE_SENSITIVITY_NATIVE_API_AVAILABLE = true;
+  private volatile static boolean WINDOWS_CASE_SENSITIVITY_NATIVE_API_AVAILABLE = true;
 
   interface Mediator {
     @Nullable FileAttributes getAttributes(@NotNull String path) throws IOException;
     @Nullable String resolveSymLink(@NotNull String path) throws IOException;
-    boolean clonePermissions(@NotNull String source, @NotNull String target, boolean execOnly) throws IOException;
   }
 
   private static final Mediator ourMediator = computeMediator();
@@ -55,11 +55,8 @@ public final class FileSystemUtil {
   static @NotNull Mediator computeMediator() {
     if (!Boolean.getBoolean(FORCE_USE_NIO2_KEY)) {
       try {
-        if (SystemInfo.isWindows && IdeaWin32.isAvailable()) {
-          return check(new IdeaWin32MediatorImpl());
-        }
-        else if ((SystemInfo.isLinux || SystemInfo.isMac) && CpuArch.isIntel64() && JnaLoader.isLoaded() && JnaLoader.isSupportsDirectMapping()) {
-          return check(new JnaUnixMediatorImpl());
+        if ((SystemInfo.isLinux || SystemInfo.isMac) && CpuArch.isIntel64() && JnaLoader.isLoaded()) {
+          return ensureSane(new JnaUnixMediatorImpl());
         }
       }
       catch (Throwable t) {
@@ -70,7 +67,7 @@ public final class FileSystemUtil {
     return new Nio2MediatorImpl();
   }
 
-  private static Mediator check(Mediator mediator) throws Exception {
+  private static Mediator ensureSane(@NotNull Mediator mediator) throws Exception {
     String quickTestPath = SystemInfo.isWindows ? "C:\\" : "/";
     mediator.getAttributes(quickTestPath);
     return mediator;
@@ -107,7 +104,7 @@ public final class FileSystemUtil {
   }
 
   /**
-   * Checks if a last element in the path is a symlink.
+   * Checks if the last element in the path is a symlink.
    */
   public static boolean isSymLink(@NotNull String path) {
     FileAttributes attributes = getAttributes(path);
@@ -115,7 +112,7 @@ public final class FileSystemUtil {
   }
 
   /**
-   * Checks if a last element in the path is a symlink.
+   * Checks if the last element in the path is a symlink.
    */
   public static boolean isSymLink(@NotNull File file) {
     return isSymLink(file.getAbsolutePath());
@@ -128,7 +125,7 @@ public final class FileSystemUtil {
         long t = System.nanoTime();
         realPath = ourMediator.resolveSymLink(path);
         t = System.nanoTime() - t;
-        LOG.trace("resolveSymLink(" + path + ") = "+realPath+" in " + TimeUnit.NANOSECONDS.toMicros(t) + " mks");
+        LOG.trace("resolveSymLink(" + path + ") = " + realPath + " in " + TimeUnit.NANOSECONDS.toMicros(t) + " mks");
       }
       else {
         realPath = ourMediator.resolveSymLink(path);
@@ -147,73 +144,6 @@ public final class FileSystemUtil {
     return resolveSymLink(file.getAbsolutePath());
   }
 
-  /**
-   * Gives the second file permissions of the first one if possible; returns {@code true} on success; no-op on Windows.
-   */
-  public static boolean clonePermissions(@NotNull String source, @NotNull String target) {
-    try {
-      return ourMediator.clonePermissions(source, target, false);
-    }
-    catch (Exception e) {
-      LOG.warn(e);
-      return false;
-    }
-  }
-
-  /**
-   * Gives the second file permissions of the first one if possible; returns {@code true} on success; no-op on Windows.
-   */
-  public static boolean clonePermissionsToExecute(@NotNull String source, @NotNull String target) {
-    try {
-      return ourMediator.clonePermissions(source, target, true);
-    }
-    catch (Exception e) {
-      LOG.warn(e);
-      return false;
-    }
-  }
-
-  private static class IdeaWin32MediatorImpl implements Mediator {
-    private final IdeaWin32 myInstance = IdeaWin32.getInstance();
-
-    @Override
-    public FileAttributes getAttributes(@NotNull String path) {
-      FileInfo fileInfo = myInstance.getInfo(path);
-      return fileInfo != null ? fileInfo.toFileAttributes() : null;
-    }
-
-    @Override
-    public String resolveSymLink(@NotNull String path) {
-      path = new File(path).getAbsolutePath();
-
-      if (!(path.length() > 3 && OSAgnosticPathUtil.isAbsoluteDosPath(path))) {
-        return path;  // unknown format
-      }
-
-      int remainder = 4;
-      while (remainder < path.length()) {
-        int next = path.indexOf('\\', remainder);
-        String subPath = next > 0 ? path.substring(0, next) : path;
-        FileAttributes attributes = getAttributes(subPath);
-        if (attributes == null) {
-          return null;
-        }
-        if (attributes.isSymLink()) {
-          return myInstance.resolveSymLink(path);
-        }
-
-        remainder = next > 0 ? next + 1 : path.length();
-      }
-
-      return path;
-    }
-
-    @Override
-    public boolean clonePermissions(@NotNull String source, @NotNull String target, boolean execOnly) {
-      return false;
-    }
-  }
-
   // thanks to SVNKit for the idea of platform-specific offsets
   private static class JnaUnixMediatorImpl implements Mediator {
     @SuppressWarnings({"OctalInteger", "SpellCheckingInspection"})
@@ -223,14 +153,11 @@ public final class FileSystemUtil {
       static final int S_IFLNK = 0120000;  // symbolic link
       static final int S_IFREG = 0100000;  // regular file
       static final int S_IFDIR = 0040000;  // directory
-      static final int PERM_MASK = 0777;
-      static final int EXECUTE_MASK = 0111;
       static final int WRITE_MASK = 0222;
       static final int W_OK = 2;           // write permission flag for access(2)
 
       static native int getuid();
       static native int getgid();
-      static native int chmod(String path, int mode);
       static native int access(String path, int mode);
     }
 
@@ -304,7 +231,7 @@ public final class FileSystemUtil {
         long mTime2 = myCoarseTs ? 0 : Native.LONG_SIZE == 4 ? buffer.getInt(myOffsets[OFF_TIME] + 4) : buffer.getLong(myOffsets[OFF_TIME] + 8);
         long mTime = mTime1 * 1000 + mTime2 / 1000000;
 
-        boolean writable = ownFile(buffer) ? (mode & LibC.WRITE_MASK) != 0 : LibC.access(path, LibC.W_OK) == 0;
+        boolean writable = isDirectory || (ownFile(buffer) ? (mode & LibC.WRITE_MASK) != 0 : LibC.access(path, LibC.W_OK) == 0);
 
         return new FileAttributes(isDirectory, isSpecial, isSymlink, false, size, mTime, writable);
       }
@@ -328,84 +255,26 @@ public final class FileSystemUtil {
       }
     }
 
-    @Override
-    public boolean clonePermissions(@NotNull String source, @NotNull String target, boolean execOnly) {
-      Memory buffer = new Memory(256);
-      if (!loadFileStatus(source, buffer)) return false;
-
-      int permissions;
-      int sourcePermissions = getModeFlags(buffer) & LibC.PERM_MASK;
-      if (execOnly) {
-        if (!loadFileStatus(target, buffer)) return false;
-        int targetPermissions = getModeFlags(buffer) & LibC.PERM_MASK;
-        permissions = targetPermissions & ~LibC.EXECUTE_MASK | sourcePermissions & LibC.EXECUTE_MASK;
-      }
-      else {
-        permissions = sourcePermissions;
-      }
-      return LibC.chmod(target, permissions) == 0;
-    }
-
-    private static boolean loadFileStatus(@NotNull String path, @NotNull Memory buffer) {
+    private static boolean loadFileStatus(String path, Memory buffer) {
       return (SystemInfo.isLinux ? LinuxLibC.__xstat64(STAT_VER, path, buffer) : UnixLibC.stat(path, buffer)) == 0;
     }
 
-    private int getModeFlags(@NotNull Memory buffer) {
+    private int getModeFlags(Memory buffer) {
       return SystemInfo.isLinux ? buffer.getInt(myOffsets[OFF_MODE]) : buffer.getShort(myOffsets[OFF_MODE]);
     }
 
-    private boolean ownFile(@NotNull Memory buffer) {
+    private boolean ownFile(Memory buffer) {
       return buffer.getInt(myOffsets[OFF_UID]) == myUid && buffer.getInt(myOffsets[OFF_GID]) == myGid;
     }
   }
 
   private static class Nio2MediatorImpl implements Mediator {
-    private final LinkOption[] myNoFollowLinkOptions = {LinkOption.NOFOLLOW_LINKS};
-    private final PosixFilePermission[] myExecPermissions =
-      {PosixFilePermission.OWNER_EXECUTE, PosixFilePermission.GROUP_EXECUTE, PosixFilePermission.OTHERS_EXECUTE};
-
     @Override
     public FileAttributes getAttributes(@NotNull String pathStr) {
       try {
         Path path = Paths.get(pathStr);
-
-        Class<? extends BasicFileAttributes> schema = SystemInfo.isWindows ? DosFileAttributes.class : PosixFileAttributes.class;
-        BasicFileAttributes attributes = Files.readAttributes(path, schema, myNoFollowLinkOptions);
-        boolean isSymbolicLink = attributes != null &&
-                                 (attributes.isSymbolicLink() ||
-                                  SystemInfo.isWindows && attributes.isOther() && attributes.isDirectory() && path.getParent() != null);
-        if (isSymbolicLink) {
-          try {
-            attributes = Files.readAttributes(path, schema);
-          }
-          catch (FileSystemException e) {
-            LOG.debug(pathStr, e);
-            return FileAttributes.BROKEN_SYMLINK;
-          }
-        }
-        if (attributes == null) {
-          return null;
-        }
-
-        boolean isDirectory = attributes.isDirectory();
-        boolean isOther = attributes.isOther();
-        long size = attributes.size();
-        long lastModified = attributes.lastModifiedTime().toMillis();
-        boolean isHidden;
-        boolean isWritable;
-        if (SystemInfo.isWindows) {
-          isHidden = path.getParent() != null && ((DosFileAttributes)attributes).isHidden();
-          isWritable = isDirectory || !((DosFileAttributes)attributes).isReadOnly();
-        }
-        else {
-          isHidden = false;
-          try {
-            isWritable = Files.isWritable(path);
-          } catch (SecurityException e){
-            isWritable = false;
-          }
-        }
-        return new FileAttributes(isDirectory, isOther, isSymbolicLink, isHidden, size, lastModified, isWritable);
+        BasicFileAttributes attributes = NioFiles.readAttributes(path);
+        return attributes == NioFiles.BROKEN_SYMLINK ? FileAttributes.BROKEN_SYMLINK : FileAttributes.fromNio(path, attributes);
       }
       catch (IOException | InvalidPathException e) {
         LOG.debug(pathStr, e);
@@ -422,33 +291,6 @@ public final class FileSystemUtil {
         LOG.debug(path, e);
         return null;
       }
-    }
-
-    @Override
-    public boolean clonePermissions(@NotNull String source, @NotNull String target, boolean execOnly) throws IOException {
-      if (!SystemInfo.isUnix) return false;
-
-      Path sourcePath = Paths.get(source);
-      Path targetPath = Paths.get(target);
-      Set<PosixFilePermission> sourcePermissions = Files.readAttributes(sourcePath, PosixFileAttributes.class).permissions();
-      Set<PosixFilePermission> targetPermissions = Files.readAttributes(targetPath, PosixFileAttributes.class).permissions();
-      Set<PosixFilePermission> newPermissions;
-      if (execOnly) {
-        newPermissions = EnumSet.copyOf(targetPermissions);
-        for (PosixFilePermission permission : myExecPermissions) {
-          if (sourcePermissions.contains(permission)) {
-            newPermissions.add(permission);
-          }
-          else {
-            newPermissions.remove(permission);
-          }
-        }
-      }
-      else {
-        newPermissions = sourcePermissions;
-      }
-      Files.setAttribute(targetPath, "posix:permissions", newPermissions);
-      return true;
     }
   }
 
@@ -543,13 +385,13 @@ public final class FileSystemUtil {
     if (JnaLoader.isLoaded()) {
       File parent = anyChild.getParentFile();
       String path = (parent != null ? parent : anyChild).getAbsolutePath();
-      if (SystemInfo.isWin10OrNewer && OSAgnosticPathUtil.isAbsoluteDosPath(path)) {
-        detected = getNtfsCaseSensitivity(path);
+      if (SystemInfo.isWin10OrNewer && WINDOWS_CASE_SENSITIVITY_NATIVE_API_AVAILABLE) {
+        detected = OSAgnosticPathUtil.isAbsoluteDosPath(path) ? getNtfsCaseSensitivity(path) : FileAttributes.CaseSensitivity.UNKNOWN;
       }
-      else if (SystemInfo.isMac) {
+      else if (SystemInfo.isMac && MAC_CASE_SENSITIVITY_NATIVE_API_AVAILABLE) {
         detected = getMacOsCaseSensitivity(path);
       }
-      else if (SystemInfo.isLinux) {
+      else if (SystemInfo.isLinux && LINUX_CASE_SENSITIVITY_NATIVE_API_AVAILABLE) {
         detected = getLinuxCaseSensitivity(path);
       }
     }
@@ -572,7 +414,7 @@ public final class FileSystemUtil {
 
   // return child which name can be used for querying by different-case names (e.g "child.txt" vs "CHILD.TXT")
   // or null if there are none (e.g., there's only one child "123.456").
-  private static @Nullable String findCaseToggleableChild(@NotNull File dir) {
+  private static @Nullable String findCaseToggleableChild(File dir) {
     try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir.toPath())) {
       for (Path path : stream) {
         String name = path.getFileName().toString();
@@ -587,10 +429,17 @@ public final class FileSystemUtil {
 
   //<editor-fold desc="Windows case sensitivity detection (NTFS-only)">
   private static FileAttributes.CaseSensitivity getNtfsCaseSensitivity(String path) {
+    Kernel32 kernel32;
+    NtOsKrnl ntOsKrnl;
     try {
-      Kernel32 kernel32 = Kernel32.INSTANCE;
-      NtOsKrnl ntOsKrnl = NtOsKrnl.INSTANCE;
-
+      kernel32 = Kernel32.INSTANCE;
+      ntOsKrnl = NtOsKrnl.INSTANCE;
+    }
+    catch (Throwable e) {
+      WINDOWS_CASE_SENSITIVITY_NATIVE_API_AVAILABLE = false;
+      return FileAttributes.CaseSensitivity.UNKNOWN;
+    }
+    try {
       String name = "\\\\?\\" + path;
       WinNT.HANDLE handle = kernel32.CreateFile(name, 0, NtOsKrnl.FILE_SHARE_ALL, null, WinNT.OPEN_EXISTING, WinNT.FILE_FLAG_BACKUP_SEMANTICS, null);
       if (handle == WinBase.INVALID_HANDLE_VALUE) {
@@ -660,9 +509,15 @@ public final class FileSystemUtil {
 
   //<editor-fold desc="macOS case sensitivity detection">
   private static FileAttributes.CaseSensitivity getMacOsCaseSensitivity(String path) {
+    CoreFoundation cf;
     try {
-      CoreFoundation cf = CoreFoundation.INSTANCE;
-
+      cf = CoreFoundation.INSTANCE;
+    }
+    catch (Throwable e) {
+      MAC_CASE_SENSITIVITY_NATIVE_API_AVAILABLE = false;
+      return FileAttributes.CaseSensitivity.UNKNOWN;
+    }
+    try {
       byte[] buffer = path.getBytes(StandardCharsets.UTF_8);
       CoreFoundation.CFTypeRef url = cf.CFURLCreateFromFileSystemRepresentation(null, buffer, buffer.length, true);
       try {
@@ -711,25 +566,42 @@ public final class FileSystemUtil {
 
   //<editor-fold desc="Linux case sensitivity detection">
   private static FileAttributes.CaseSensitivity getLinuxCaseSensitivity(String path) {
+    LibC libC;
+    try {
+      libC = LibC.INSTANCE;
+    }
+    catch (Throwable e) {
+      ourLibExt2FsPresent = false;
+      LINUX_CASE_SENSITIVITY_NATIVE_API_AVAILABLE = false;
+      return FileAttributes.CaseSensitivity.UNKNOWN;
+    }
     try {
       Memory buf = new Memory(256);
-      if (LibC.INSTANCE.statfs(path, buf) != 0) {
+      if (libC.statfs(path, buf) != 0) {
         if (LOG.isDebugEnabled()) LOG.debug("statfs(" + path + "): error");
       }
       else {
-        long fs = Native.LONG_SIZE == 4 ? buf.getInt(0) : buf.getLong(0);
+        long fs = Native.LONG_SIZE == 4 ? ((long)buf.getInt(0)) & 0xFFFFFFFFL : buf.getLong(0);
         // Btrfs, XFS
-        if (fs == 0x9123683e || fs == 0x58465342) {
+        if (fs == 0x9123683EL || fs == 0x58465342L) {
           return FileAttributes.CaseSensitivity.SENSITIVE;
         }
         // VFAT
-        if (fs == 0x4d44) {
+        if (fs == 0x4D44L) {
           return FileAttributes.CaseSensitivity.INSENSITIVE;
         }
         // Ext*, F2FS
-        if ((fs == 0xef53 || fs == 0xf2f52010) && ourLibExt2FsPresent) {
+        if ((fs == 0xEF53L || fs == 0xF2F52010L) && ourLibExt2FsPresent) {
+          E2P e2P;
+          try {
+            e2P = E2P.INSTANCE;
+          }
+          catch (Throwable e) {
+            LINUX_CASE_SENSITIVITY_NATIVE_API_AVAILABLE = false;
+            return FileAttributes.CaseSensitivity.UNKNOWN;
+          }
           LongByReference flags = new LongByReference();
-          if (E2P.INSTANCE.fgetflags(path, flags) != 0) {
+          if (e2P.fgetflags(path, flags) != 0) {
             if (LOG.isDebugEnabled()) LOG.debug("fgetflags(" + path + "): error");
           }
           else {

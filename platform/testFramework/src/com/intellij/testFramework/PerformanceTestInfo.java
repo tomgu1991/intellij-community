@@ -136,11 +136,14 @@ public class PerformanceTestInfo {
         throw new RuntimeException(throwable);
       }
 
-      int expectedOnMyMachine = getExpectedTimeOnThisMachine(actualInputSize.get());
+      int actualUsedCpuCores = usedReferenceCpuCores < 8
+                  ? Math.min(JobSchedulerImpl.getJobPoolParallelism(), usedReferenceCpuCores)
+                  : JobSchedulerImpl.getJobPoolParallelism();
+      int expectedOnMyMachine = getExpectedTimeOnThisMachine(actualInputSize.get(), actualUsedCpuCores);
       IterationResult iterationResult = data.getIterationResult(expectedOnMyMachine);
 
       boolean testPassed = iterationResult == IterationResult.ACCEPTABLE || iterationResult == IterationResult.BORDERLINE;
-      String logMessage = formatMessage(data, expectedOnMyMachine, actualInputSize.get(), iterationResult, initialMaxRetries);
+      String logMessage = formatMessage(data, expectedOnMyMachine, actualInputSize.get(), actualUsedCpuCores, iterationResult, initialMaxRetries);
 
       if (testPassed) {
         TeamCityLogger.info(logMessage);
@@ -175,6 +178,7 @@ public class PerformanceTestInfo {
   private @NotNull String formatMessage(@NotNull CpuUsageData data,
                                         int expectedOnMyMachine,
                                         int actualInputSize,
+                                        int actualUsedCpuCores, 
                                         @NotNull IterationResult iterationResult,
                                         int initialMaxRetries) {
     long duration = data.durationMs;
@@ -185,9 +189,10 @@ public class PerformanceTestInfo {
     return
       what+" took \u001B[" + colorCode + Math.abs(percentage) + "% " + (percentage > 0 ? "more" : "less") + " time\u001B[0m than expected" +
       (iterationResult == IterationResult.DISTRACTED && initialMaxRetries != 1 ? " (but JIT compilation took too long, will retry anyway)" : "") +
-      "\n  Expected: " + expectedOnMyMachine + "ms (" + StringUtil.formatDuration(expectedOnMyMachine) + ")" +
-      "\n  Actual:   " + duration + "ms (" + StringUtil.formatDuration(duration) + ")" +
+      "\n  Expected: " + expectedOnMyMachine + "ms" + (expectedOnMyMachine < 1000 ? "" : " (" + StringUtil.formatDuration(expectedOnMyMachine) + ")") +
+      "\n  Actual:   " + duration + "ms" + (duration < 1000 ? "" : " (" + StringUtil.formatDuration(duration) + ")") +
       (expectedInputSize != actualInputSize ? "\n  (Expected time was adjusted accordingly to input size: expected " + expectedInputSize + ", actual " + actualInputSize + ".)": "") +
+      (usedReferenceCpuCores != actualUsedCpuCores ? "\n  (Expected time was adjusted accordingly to number of available CPU cores: reference CPU has " + usedReferenceCpuCores + ", actual value is " + actualUsedCpuCores + ".)": "") +
       "\n  Timings:  " + Timings.getStatistics() +
       "\n  Threads:  " + data.getThreadStats() +
       "\n  GC stats: " + data.getGcStats() +
@@ -230,15 +235,12 @@ public class PerformanceTestInfo {
     DISTRACTED  // CPU was occupied by irrelevant computations for too long (e.g., JIT or GC)
   }
 
-  private int getExpectedTimeOnThisMachine(int actualInputSize) {
+  private int getExpectedTimeOnThisMachine(int actualInputSize, int actualUsedCpuCores) {
     int expectedOnMyMachine = (int) (((long)expectedMs) * actualInputSize / expectedInputSize);
     if (adjustForCPU) {
-      int coreCountUsedHere = usedReferenceCpuCores < 8
-                              ? Math.min(JobSchedulerImpl.getJobPoolParallelism(), usedReferenceCpuCores)
-                              : JobSchedulerImpl.getJobPoolParallelism();
       expectedOnMyMachine *= usedReferenceCpuCores;
       expectedOnMyMachine = adjust(expectedOnMyMachine, Timings.CPU_TIMING, Timings.REFERENCE_CPU_TIMING, useLegacyScaling);
-      expectedOnMyMachine /= coreCountUsedHere;
+      expectedOnMyMachine /= actualUsedCpuCores;
     }
     if (adjustForIO) {
       expectedOnMyMachine = adjust(expectedOnMyMachine, Timings.IO_TIMING, Timings.REFERENCE_IO_TIMING, useLegacyScaling);

@@ -5,6 +5,7 @@ import com.intellij.codeHighlighting.HighlightDisplayLevel;
 import com.intellij.codeInsight.daemon.impl.SeverityRegistrar;
 import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.lang.injection.InjectedLanguageManager;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.editor.colors.TextAttributesKey;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Comparing;
@@ -46,7 +47,7 @@ public final class ToolsImpl implements Tools {
     return insertTool(scope, toolWrapper, enabled, level, myTools != null ? myTools.size() : 0);
   }
 
-  @NotNull ScopeToolState prependTool(@NotNull NamedScope scope,
+  public @NotNull ScopeToolState prependTool(@NotNull NamedScope scope,
                                       @NotNull InspectionToolWrapper<?,?> toolWrapper,
                                       boolean enabled,
                                       @NotNull HighlightDisplayLevel level) {
@@ -337,32 +338,30 @@ public final class ToolsImpl implements Tools {
 
   @NotNull
   public HighlightDisplayLevel getLevel(PsiElement element) {
-    if (myTools == null || element == null) return myDefaultState.getLevel();
-    Project project = element.getProject();
-    DependencyValidationManager manager = DependencyValidationManager.getInstance(project);
-    for (ScopeToolState state : myTools) {
-      NamedScope scope = state.getScope(project);
-      PackageSet set = scope != null ? scope.getValue() : null;
-      if (set != null && set.contains(element.getContainingFile(), manager)) {
-        return state.getLevel();
+    return getState(element).getLevel();
+  }
+  
+  public ScopeToolState getState(PsiElement element) {
+    if (myTools == null || element == null) return myDefaultState;
+    return ReadAction.compute(() -> {
+      if (!element.isValid()) return myDefaultState;
+      
+      Project project = element.getProject();
+      DependencyValidationManager manager = DependencyValidationManager.getInstance(project);
+      for (ScopeToolState state : myTools) {
+        NamedScope scope = state.getScope(project);
+        PackageSet set = scope != null ? scope.getValue() : null;
+        if (set != null && set.contains(element.getContainingFile(), manager)) {
+          return state;
+        }
       }
-    }
-    return myDefaultState.getLevel();
+      return myDefaultState;
+    });
   }
   
   @Nullable
   public TextAttributesKey getAttributesKey(PsiElement element) {
-    if (myTools == null || element == null) return myDefaultState.getEditorAttributesKey();
-    Project project = element.getProject();
-    DependencyValidationManager manager = DependencyValidationManager.getInstance(project);
-    for (ScopeToolState state : myTools) {
-      NamedScope scope = state.getScope(project);
-      PackageSet set = scope != null ? scope.getValue() : null;
-      if (set != null && set.contains(element.getContainingFile(), manager)) {
-        return state.getEditorAttributesKey();
-      }
-    }
-    return myDefaultState.getEditorAttributesKey();
+    return getState(element).getEditorAttributesKey();
   }
 
   @NotNull
@@ -379,44 +378,20 @@ public final class ToolsImpl implements Tools {
   @Override
   public boolean isEnabled(PsiElement element) {
     if (!myEnabled) return false;
-    if (myTools == null || element == null) return myDefaultState.isEnabled();
-    Project project = element.getProject();
-    DependencyValidationManager manager = DependencyValidationManager.getInstance(project);
-    for (ScopeToolState state : myTools) {
-      NamedScope scope = state.getScope(project);
-      if (scope != null) {
-        PackageSet set = scope.getValue();
-        if (set != null && set.contains(element.getContainingFile(), manager)) {
-          return state.isEnabled();
-        }
-      }
-    }
-    return myDefaultState.isEnabled();
+    return getState(element).isEnabled();
   }
 
   @Nullable
   @Override
   public InspectionToolWrapper<?,?> getEnabledTool(@Nullable PsiElement element, boolean includeDoNotShow) {
     if (!myEnabled) return null;
-    if (myTools != null && element != null) {
-      Project project = element.getProject();
-      DependencyValidationManager manager = DependencyValidationManager.getInstance(project);
-      for (ScopeToolState state : myTools) {
-        NamedScope scope = state.getScope(project);
-        if (scope != null) {
-          PackageSet set = scope.getValue();
-          if (set != null && set.contains(element.getContainingFile(), manager)) {
-            return state.isEnabled() && (includeDoNotShow || isAvailableInBatch(state)) ? state.getTool() : null;
-          }
-        }
-      }
-    }
-    return myDefaultState.isEnabled() && (includeDoNotShow || isAvailableInBatch(myDefaultState)) ? myDefaultState.getTool() : null;
+    ScopeToolState state = getState(element);
+    return state.isEnabled() && (includeDoNotShow || isAvailableInBatch(state)) ? state.getTool() : null;
   }
 
   private static boolean isAvailableInBatch(ScopeToolState state) {
     HighlightDisplayLevel level = state.getLevel();
-    return !(HighlightDisplayLevel.DO_NOT_SHOW.equals(level) || HighlightDisplayLevel.TEXT_ATTRIBUTES.equals(level));
+    return !(HighlightDisplayLevel.DO_NOT_SHOW.equals(level) || HighlightDisplayLevel.CONSIDERATION_ATTRIBUTES.equals(level));
   }
 
   @Nullable
@@ -553,6 +528,10 @@ public final class ToolsImpl implements Tools {
         }
       }
     }
+  }
+  
+  public void setLevel(HighlightDisplayLevel level, PsiElement element) {
+    getState(element).setLevel(level);
   }
   
   public void setLevel(@NotNull HighlightDisplayLevel level, @Nullable String scopeName, Project project) {

@@ -2,11 +2,14 @@
 package com.intellij.execution.runToolbar
 
 import com.intellij.icons.AllIcons
+import com.intellij.ide.DataManager
 import com.intellij.idea.ActionsBundle
 import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.actionSystem.ex.CustomComponentAction
 import com.intellij.openapi.actionSystem.impl.ActionButton
+import com.intellij.openapi.actionSystem.impl.segmentedActionBar.SegmentedActionToolbarComponent
 import com.intellij.openapi.project.DumbAware
+import com.intellij.openapi.project.Project
 import net.miginfocom.swing.MigLayout
 import java.awt.Dimension
 import java.awt.Point
@@ -37,6 +40,7 @@ internal class RunToolbarShowHidePopupAction : AnAction(ActionsBundle.message("a
         e.presentation.isEnabledAndVisible = e.presentation.isEnabledAndVisible && checkMainSlotVisibility(it)
       }
     }
+    e.presentation.isEnabled = e.presentation.isEnabled && e.isFromActionToolbar
   }
 
   override fun createCustomComponent(presentation: Presentation, place: String): JComponent {
@@ -55,7 +59,7 @@ internal class RunToolbarShowHidePopupAction : AnAction(ActionsBundle.message("a
       }
     }.apply {
       isOpaque = false
-      add(DraggablePane(), "pos 0 0")
+      add(RunWidgetResizePane(), "pos 0 0")
       add(extraSlotsActionButton, "grow")
     }
   }
@@ -64,6 +68,18 @@ internal class RunToolbarShowHidePopupAction : AnAction(ActionsBundle.message("a
                                        presentation: Presentation,
                                        place: String) : ActionButton(action, presentation, place,
                                                                      ActionToolbar.DEFAULT_MINIMUM_BUTTON_SIZE), PopupControllerComponent {
+    private var project: Project? = null
+
+    init {
+      setLook(SegmentedActionToolbarComponent.segmentedButtonLook)
+    }
+
+    private fun getProject(): Project? {
+      return project ?: run {
+        project = CommonDataKeys.PROJECT.getData(DataManager.getInstance().getDataContext(this))
+        project
+      }
+    }
 
     override fun addNotify() {
       super.addNotify()
@@ -102,7 +118,9 @@ internal class RunToolbarShowHidePopupAction : AnAction(ActionsBundle.message("a
 
     override fun getPreferredSize(): Dimension {
       val d = super.getPreferredSize()
-      d.width = FixWidthSegmentedActionToolbarComponent.ARROW_WIDTH
+      getProject()?.let {
+        d.width = RunWidgetWidthHelper.getInstance(it).arrow
+      }
       return d
     }
   }

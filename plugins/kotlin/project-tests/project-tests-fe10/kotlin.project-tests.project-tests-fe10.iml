@@ -22,7 +22,7 @@
     <orderEntry type="module" module-name="kotlin.idea" scope="TEST" />
     <orderEntry type="module" module-name="kotlin.idea.tests" scope="TEST" />
     <orderEntry type="module" module-name="kotlin.line-indent-provider" scope="TEST" />
-    <orderEntry type="module" module-name="kotlin.gradle.gradle-idea" scope="TEST" />
+    <orderEntry type="module" module-name="kotlin.gradle.gradle" scope="TEST" />
     <orderEntry type="module" module-name="kotlin.native" scope="TEST" />
     <orderEntry type="module" module-name="kotlin.formatter" scope="TEST" />
     <orderEntry type="module" module-name="kotlin.jvm" scope="TEST" />
@@ -39,5 +39,7 @@
     <orderEntry type="module" module-name="kotlin.compiler-plugins.kotlinx-serialization.gradle" scope="TEST" />
     <orderEntry type="module" module-name="kotlin.compiler-plugins.sam-with-receiver.common" scope="TEST" />
     <orderEntry type="module" module-name="kotlin.compiler-plugins.sam-with-receiver.gradle" scope="TEST" />
+    <orderEntry type="module" module-name="kotlin.compiler-plugins.assignment.common" scope="TEST" />
+    <orderEntry type="module" module-name="kotlin.compiler-plugins.assignment.gradle" scope="TEST" />
   </component>
 </module>

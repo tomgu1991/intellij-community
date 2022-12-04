@@ -18,6 +18,7 @@ import git4idea.index.ContentVersion
 import git4idea.index.GitFileStatus
 import git4idea.index.GitStageTracker
 import git4idea.index.createChange
+import org.jetbrains.concurrency.resolvedPromise
 import kotlin.properties.Delegates.observable
 
 private fun GitStageTracker.State.getStaged(): Set<GitFileStatus> =
@@ -49,13 +50,11 @@ class GitStageCommitPanel(project: Project) : NonModalCommitPanel(project) {
     Disposer.register(this, commitMessage)
 
     commitMessage.setChangesSupplier { state.stagedChanges }
-    progressPanel.setup(this, commitMessage.editorField)
-    bottomPanel = {
-      add(progressPanel.apply { border = empty(6) })
-      add(commitAuthorComponent.apply { border = empty(0, 5, 4, 0) })
-      add(commitActionsPanel)
-    }
-    buildLayout()
+    progressPanel.setup(this, commitMessage.editorField, empty(6))
+
+    bottomPanel.add(progressPanel.component)
+    bottomPanel.add(commitAuthorComponent.apply { border = empty(0, 5, 4, 0) })
+    bottomPanel.add(commitActionsPanel)
   }
 
   fun setIncludedRoots(includedRoots: Collection<VirtualFile>) {
@@ -79,14 +78,12 @@ class GitStageCommitPanel(project: Project) : NonModalCommitPanel(project) {
   }
 
   override fun activate(): Boolean = true
-  override fun refreshData() = Unit
+  override fun refreshData() = resolvedPromise<Unit>()
 
   override fun getDisplayedChanges(): List<Change> = emptyList()
   override fun getIncludedChanges(): List<Change> = state.stagedChanges
   override fun getDisplayedUnversionedFiles(): List<FilePath> = emptyList()
   override fun getIncludedUnversionedFiles(): List<FilePath> = emptyList()
-
-  override fun includeIntoCommit(items: Collection<*>) = Unit
 
   private inner class InclusionState(val includedRoots: Collection<VirtualFile>, val trackerState: GitStageTracker.State) {
     private val stagedStatuses: Set<GitFileStatus> = trackerState.getStaged()

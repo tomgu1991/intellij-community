@@ -16,9 +16,6 @@ import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * @author peter
- */
 class ClassLiteralLookupElement extends LookupElement implements TypedLookupItem {
   @NonNls private static final String DOT_CLASS = ".class";
   @Nullable private final SmartPsiElementPointer<PsiClass> myClass;
@@ -42,7 +39,7 @@ class ClassLiteralLookupElement extends LookupElement implements TypedLookupItem
   }
 
   @Override
-  public void renderElement(LookupElementPresentation presentation) {
+  public void renderElement(@NotNull LookupElementPresentation presentation) {
     presentation.setItemText(getLookupString());
     presentation.setIcon(myExpr.getIcon(0));
     String pkg = StringUtil.getPackageName(myCanonicalText);

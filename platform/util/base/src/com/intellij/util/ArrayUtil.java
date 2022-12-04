@@ -608,14 +608,13 @@ public final class ArrayUtil {
 
   //must be Comparables
   @Contract(pure=true)
-  public static <T> int lexicographicCompare(T @NotNull [] obj1, T @NotNull [] obj2) {
+  public static <T extends Comparable<T>> int lexicographicCompare(T @NotNull [] obj1, T @NotNull [] obj2) {
     for (int i = 0; i < Math.max(obj1.length, obj2.length); i++) {
       T o1 = i < obj1.length ? obj1[i] : null;
       T o2 = i < obj2.length ? obj2[i] : null;
       if (o1 == null) return -1;
       if (o2 == null) return 1;
-      //noinspection unchecked
-      int res = ((Comparable<T>)o1).compareTo(o2);
+      int res = o1.compareTo(o2);
       if (res != 0) return res;
     }
     return 0;
@@ -994,6 +993,26 @@ public final class ArrayUtil {
       }
     }
     return -1;
+  }
+
+  /**
+   * Checks the equality of two arrays, according to a custom condition. Like {@code Arrays#equals} but doesn't
+   * require a comparator.
+   * 
+   * @param arr1 first array
+   * @param arr2 second array
+   * @param equalityCondition BiPredicate that returns true if two elements are considered to be equal. Must return true
+   *                          if both arguments are the same object.
+   * @return true if both arrays are equal in terms of equalityCondition
+   * @param <T> type of array elements
+   */
+  public static <T> boolean areEqual(T @NotNull [] arr1, T @NotNull [] arr2, @NotNull BiPredicate<? super T, ? super T> equalityCondition) {
+    if (arr1 == arr2) return true;
+    if (arr1.length != arr2.length) return false;
+    for (int i = 0; i < arr1.length; i++) {
+      if (!equalityCondition.test(arr1[i], arr2[i])) return false;
+    }
+    return true;
   }
 
 }

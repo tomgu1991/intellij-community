@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.fir.resolve
 
@@ -14,7 +14,7 @@ abstract class AbstractFirReferenceResolveTest : AbstractReferenceResolveTest() 
     override fun isFirPlugin(): Boolean = true
 
     override fun getProjectDescriptor(): KotlinLightProjectDescriptor =
-        KotlinWithJdkAndRuntimeLightProjectDescriptor.INSTANCE_FULL_JDK
+        KotlinWithJdkAndRuntimeLightProjectDescriptor.getInstanceFullJdk()
 
     override fun tearDown() {
         runAll(

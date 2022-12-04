@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.debugger.evaluate.compilation
 
@@ -16,12 +16,11 @@ import org.jetbrains.kotlin.descriptors.annotations.Annotations
 import org.jetbrains.kotlin.descriptors.impl.*
 import org.jetbrains.kotlin.idea.FrontendInternals
 import org.jetbrains.kotlin.idea.base.projectStructure.languageVersionSettings
-import org.jetbrains.kotlin.idea.debugger.evaluate.EvaluationStatus
-import org.jetbrains.kotlin.idea.debugger.evaluate.ExecutionContext
+import org.jetbrains.kotlin.idea.debugger.base.util.evaluate.ExecutionContext
 import org.jetbrains.kotlin.idea.debugger.evaluate.classLoading.ClassToLoad
 import org.jetbrains.kotlin.idea.debugger.evaluate.classLoading.GENERATED_CLASS_NAME
 import org.jetbrains.kotlin.idea.debugger.evaluate.classLoading.GENERATED_FUNCTION_NAME
-import org.jetbrains.kotlin.idea.debugger.evaluate.compilation.CompiledDataDescriptor.MethodSignature
+import org.jetbrains.kotlin.idea.debugger.evaluate.compilation.CompiledCodeFragmentData.MethodSignature
 import org.jetbrains.kotlin.idea.debugger.evaluate.getResolutionFacadeForCodeFragment
 import org.jetbrains.kotlin.incremental.components.LookupLocation
 import org.jetbrains.kotlin.name.FqName
@@ -45,10 +44,9 @@ import org.jetbrains.kotlin.utils.Printer
 
 class CodeFragmentCodegenException(val reason: Exception) : Exception()
 
-class CodeFragmentCompiler(private val executionContext: ExecutionContext, private val status: EvaluationStatus) {
+class CodeFragmentCompiler(private val executionContext: ExecutionContext) {
 
     companion object {
-
         fun useIRFragmentCompiler(): Boolean =
             Registry.get("debugger.kotlin.evaluator.use.jvm.ir.backend").asBoolean()
     }
@@ -109,7 +107,7 @@ class CodeFragmentCompiler(private val executionContext: ExecutionContext, priva
             fragmentCompilerBackend.configureCompiler(this)
         }
 
-        val parameterInfo = fragmentCompilerBackend.computeFragmentParameters(executionContext, codeFragment, bindingContext, status)
+        val parameterInfo = fragmentCompilerBackend.computeFragmentParameters(executionContext, codeFragment, bindingContext)
 
         val (classDescriptor, methodDescriptor) = createDescriptorsForCodeFragment(
             codeFragment, Name.identifier(GENERATED_CLASS_NAME), Name.identifier(GENERATED_FUNCTION_NAME),

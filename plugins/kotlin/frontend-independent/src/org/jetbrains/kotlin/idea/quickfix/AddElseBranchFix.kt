@@ -11,7 +11,10 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiErrorElement
 import com.intellij.psi.util.elementType
 import org.jetbrains.kotlin.KtNodeTypes
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.KotlinPsiOnlyQuickFixAction
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.PsiElementSuitabilityCheckers
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.QuickFixesPsiBasedFactory
 import org.jetbrains.kotlin.idea.util.executeEnterHandler
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.endOffset
@@ -33,7 +36,7 @@ class AddWhenElseBranchFix(element: KtWhenExpression) : AddElseBranchFix<KtWhenE
     override fun invoke(project: Project, editor: Editor?, file: KtFile) {
         val element = element ?: return
         val whenCloseBrace = element.closeBrace ?: return
-        val entry = KtPsiFactory(file).createWhenEntry("else -> {}")
+        val entry = KtPsiFactory(project).createWhenEntry("else -> {}")
         CodeInsightUtilCore.forcePsiPostprocessAndRestoreElement(element.addBefore(entry, whenCloseBrace))?.endOffset?.let { offset ->
             editor?.caretModel?.moveToOffset(offset - 1)
         }
@@ -57,7 +60,7 @@ class AddIfElseBranchFix(element: KtIfExpression) : AddElseBranchFix<KtIfExpress
     override fun invoke(project: Project, editor: Editor?, file: KtFile) {
         val element = element ?: return
         val withBraces = element.then is KtBlockExpression
-        val psiFactory = KtPsiFactory(file)
+        val psiFactory = KtPsiFactory(project)
         val newIf = psiFactory.createExpression(
             if (withBraces) {
                 "if (true) {} else {}"

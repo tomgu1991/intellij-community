@@ -26,6 +26,7 @@ public final class GradleCommonClassNames {
   @NonNls public static final String GRADLE_API_COMPONENT_MODULE_METADATA_HANDLER = "org.gradle.api.artifacts.dsl.ComponentModuleMetadataHandler";
   @NonNls public static final String GRADLE_API_COMPONENT_MODULE_METADATA_DETAILS = "org.gradle.api.artifacts.ComponentModuleMetadataDetails";
   @NonNls public static final String GRADLE_API_ARTIFACTS_EXTERNAL_MODULE_DEPENDENCY = "org.gradle.api.artifacts.ExternalModuleDependency";
+  @NonNls public static final String GRADLE_API_ARTIFACTS_EXTERNAL_MODULE_DEPENDENCY_BUNDLE = "org.gradle.api.artifacts.ExternalModuleDependencyBundle";
   @NonNls public static final String GRADLE_API_ARTIFACTS_PROJECT_DEPENDENCY = "org.gradle.api.artifacts.ProjectDependency";
   @NonNls public static final String GRADLE_API_ARTIFACTS_SELF_RESOLVING_DEPENDENCY = "org.gradle.api.artifacts.SelfResolvingDependency";
   @NonNls public static final String GRADLE_API_ARTIFACTS_CLIENT_MODULE_DEPENDENCY = "org.gradle.api.artifacts.ClientModule";
@@ -68,6 +69,7 @@ public final class GradleCommonClassNames {
   @NonNls public static final String GRADLE_LANGUAGE_JVM_TASKS_PROCESS_RESOURCES = "org.gradle.language.jvm.tasks.ProcessResources";
   @NonNls public static final String GRADLE_BUILDSETUP_TASKS_SETUP_BUILD = "org.gradle.buildsetup.tasks.SetupBuild";
   @NonNls public static final String GRADLE_API_TASK_CONTAINER = "org.gradle.api.tasks.TaskContainer";
+  @NonNls public static final String GRADLE_API_TASK_COLLECTION = "org.gradle.api.tasks.TaskCollection";
   @NonNls public static final String GRADLE_API_JAVA_ARCHIVES_MANIFEST = "org.gradle.api.java.archives.Manifest";
   @NonNls public static final String GRADLE_API_DOMAIN_OBJECT_COLLECTION = "org.gradle.api.DomainObjectCollection";
   @NonNls public static final String GRADLE_API_NAMED_DOMAIN_OBJECT_COLLECTION = "org.gradle.api.NamedDomainObjectCollection";
@@ -84,6 +86,7 @@ public final class GradleCommonClassNames {
   @NonNls public static final String GRADLE_PROCESS_EXEC_SPEC = "org.gradle.process.ExecSpec";
   @NonNls public static final String GRADLE_API_PROVIDER_PROPERTY = "org.gradle.api.provider.Property";
   @NonNls public static final String GRADLE_API_PROVIDER_PROVIDER = "org.gradle.api.provider.Provider";
+  @NonNls public static final String GRADLE_PLUGIN_USE_PLUGIN_DEPENDENCY = "org.gradle.plugin.use.PluginDependency";
 
   private GradleCommonClassNames() {
   }

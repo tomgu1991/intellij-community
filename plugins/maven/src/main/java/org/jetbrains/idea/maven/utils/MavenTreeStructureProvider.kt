@@ -17,8 +17,8 @@ import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.psi.PsiFile
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.util.SmartList
-import com.intellij.util.ui.UIUtil
-import org.jetbrains.idea.maven.importing.MavenProjectImporter.Companion.isImportToTreeStructureEnabled
+import com.intellij.util.ui.NamedColorUtil
+import org.jetbrains.idea.maven.importing.MavenProjectImporter.Companion.isLegacyImportToTreeStructureEnabled
 import org.jetbrains.idea.maven.project.MavenProjectsManager
 
 class MavenTreeStructureProvider : TreeStructureProvider, DumbAware {
@@ -43,7 +43,7 @@ class MavenTreeStructureProvider : TreeStructureProvider, DumbAware {
 
           }
         }
-        if (isImportToTreeStructureEnabled(project) && child is PsiDirectoryNode && parent is PsiDirectoryNode) {
+        if (isLegacyImportToTreeStructureEnabled(project) && child is PsiDirectoryNode && parent is PsiDirectoryNode) {
           childToAdd = getMavenModuleNode(project, child, settings) ?: child
         }
         modifiedChildren.add(childToAdd)
@@ -86,7 +86,7 @@ class MavenTreeStructureProvider : TreeStructureProvider, DumbAware {
                                        value: PsiFile,
                                        viewSettings: ViewSettings?,
                                        val myIgnored: Boolean) : PsiFileNode(project, value, viewSettings) {
-    val strikeAttributes = SimpleTextAttributes(SimpleTextAttributes.STYLE_STRIKEOUT, UIUtil.getInactiveTextColor())
+    val strikeAttributes = SimpleTextAttributes(SimpleTextAttributes.STYLE_STRIKEOUT, NamedColorUtil.getInactiveTextColor())
     override fun updateImpl(data: PresentationData) {
       if (myIgnored) {
         data.addText(value.name, strikeAttributes)

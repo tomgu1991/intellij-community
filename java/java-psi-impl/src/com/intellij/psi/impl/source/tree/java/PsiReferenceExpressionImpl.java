@@ -641,6 +641,7 @@ public class PsiReferenceExpressionImpl extends ExpressionPsiElement implements 
       String qName = ((PsiClass)element).getQualifiedName();
       if (qName == null) {
         qName = ((PsiClass)element).getName();
+        LOG.assertTrue(qName != null, element);
       }
       else if (JavaPsiFacade.getInstance(manager.getProject()).findClass(qName, getResolveScope()) == null && !preserveQualification) {
         return this;
@@ -648,7 +649,7 @@ public class PsiReferenceExpressionImpl extends ExpressionPsiElement implements 
       else if (facade.getResolveHelper().resolveReferencedClass(qName, this) == null &&
                facade.getResolveHelper().resolveReferencedClass(StringUtil.getPackageName(qName), this) != null) {
         qName = ((PsiClass)element).getName();
-        assert qName != null : element;
+        LOG.assertTrue(qName != null, element);
       }
       PsiExpression ref = parserFacade.createExpressionFromText(qName, this);
       getTreeParent().replaceChildInternal(this, (TreeElement)ref.getNode());
@@ -668,10 +669,6 @@ public class PsiReferenceExpressionImpl extends ExpressionPsiElement implements 
       return ref;
     }
     else if ((element instanceof PsiField || element instanceof PsiMethod) && ((PsiMember) element).hasModifierProperty(PsiModifier.STATIC)) {
-      if (!isPhysical()) {
-        // don't qualify reference: the isReferenceTo() check fails anyway, whether we have a static import for this member or not
-        return this;
-      }
       PsiMember member = (PsiMember) element;
       PsiClass psiClass = member.getContainingClass();
       if (psiClass == null) throw new IncorrectOperationException();

@@ -2,6 +2,7 @@
 package com.intellij.ui
 
 import com.intellij.openapi.util.ScalableIcon
+import com.intellij.ui.icons.ReplaceableIcon
 import com.intellij.util.IconUtil
 import org.jetbrains.annotations.ApiStatus
 import java.awt.*
@@ -10,14 +11,12 @@ import javax.swing.Icon
 
 @ApiStatus.Internal
 @ApiStatus.Experimental
-abstract class HoledIcon(private val icon: Icon) : RetrievableIcon, ScalableIcon {
+abstract class HoledIcon(protected val icon: Icon) : ScalableIcon, ReplaceableIcon {
 
   protected abstract fun copyWith(icon: Icon):Icon
 
   protected abstract fun createHole(width: Int, height: Int): Shape?
   protected abstract fun paintHole(g: Graphics2D, width: Int, height: Int)
-
-  override fun retrieveIcon() = icon
 
   override fun getScale() = (icon as? ScalableIcon)?.scale ?: 1f
   override fun scale(factor: Float) = copyWith(IconUtil.scaleOrLoadCustomVersion(icon, factor))

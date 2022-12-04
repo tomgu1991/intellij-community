@@ -2,6 +2,7 @@
 package com.intellij.vcs.log.ui.actions;
 
 import com.intellij.openapi.actionSystem.ActionPlaces;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.project.DumbAware;
@@ -20,11 +21,17 @@ public class VcsLogToolbarPopupActionGroup extends DefaultActionGroup implements
   private final PopupState<JBPopup> myPopupState = PopupState.forPopup();
 
   @Override
+  public @NotNull ActionUpdateThread getActionUpdateThread() {
+    return ActionUpdateThread.BGT;
+  }
+
+  @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
     if (myPopupState.isRecentlyHidden()) return; // do not show new popup
     ListPopup popup = JBPopupFactory.getInstance().createActionGroupPopup(null, this, e.getDataContext(),
                                                                           JBPopupFactory.ActionSelectionAid.MNEMONICS, true,
                                                                           ActionPlaces.VCS_LOG_TOOLBAR_POPUP_PLACE);
+    popup.setShowSubmenuOnHover(true);
     myPopupState.prepareToShow(popup);
     PopupUtil.showForActionButtonEvent(popup, e);
   }

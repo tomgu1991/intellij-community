@@ -2,6 +2,7 @@
 package com.intellij.vcs.log.data.index;
 
 import com.intellij.concurrency.ConcurrentCollectionFactory;
+import com.intellij.diagnostic.telemetry.TraceManager;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.progress.ProcessCanceledException;
@@ -29,12 +30,14 @@ import com.intellij.vcs.log.data.SingleTaskController;
 import com.intellij.vcs.log.data.VcsLogProgress;
 import com.intellij.vcs.log.data.VcsLogStorage;
 import com.intellij.vcs.log.data.VcsLogStorageImpl;
-import com.intellij.vcs.log.impl.VcsLogErrorHandler;
 import com.intellij.vcs.log.impl.HeavyAwareExecutor;
 import com.intellij.vcs.log.impl.VcsIndexableLogProvider;
+import com.intellij.vcs.log.impl.VcsLogErrorHandler;
 import com.intellij.vcs.log.impl.VcsLogIndexer;
 import com.intellij.vcs.log.statistics.VcsLogIndexCollector;
 import com.intellij.vcs.log.util.*;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Scope;
 import it.unimi.dsi.fastutil.ints.IntSet;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -105,7 +108,8 @@ public class VcsLogPersistentIndex implements VcsLogModifiableIndex, Disposable 
                                      VcsLogStorageImpl.VERSION + VERSION);
     myIndexStorage = createIndexStorage(myIndexStorageId, errorHandler, userRegistry);
     if (myIndexStorage != null) {
-      myDataGetter = new IndexDataGetter(myProject, myRoots, myIndexStorage, myStorage, myErrorHandler);
+      myDataGetter = new IndexDataGetter(myProject, ContainerUtil.filter(providers, root -> myRoots.contains(root)),
+                                         myIndexStorage, myStorage, myErrorHandler);
     }
     else {
       myDataGetter = null;
@@ -154,7 +158,7 @@ public class VcsLogPersistentIndex implements VcsLogModifiableIndex, Disposable 
     doScheduleIndex(full, request -> request.run(myProgress.createProgressIndicator(INDEXING)));
   }
 
-  private synchronized void doScheduleIndex(boolean full, @NotNull Consumer<IndexingRequest> requestConsumer) {
+  private synchronized void doScheduleIndex(boolean full, @NotNull Consumer<? super IndexingRequest> requestConsumer) {
     if (myDisposableFlag.isDisposed()) return;
     if (myCommitsToIndex.isEmpty() || myIndexStorage == null) return;
     // for fresh index, wait for complete log to load and index everything in one command
@@ -363,7 +367,7 @@ public class VcsLogPersistentIndex implements VcsLogModifiableIndex, Disposable 
                                              AbstractStorage.PAGE_SIZE, indexStorageId.getVersion(), storageLockContext);
         Disposer.register(this, () -> catchAndWarn(timestamps::close));
 
-        checkConsistency();
+        reportEmpty();
       }
       catch (Throwable t) {
         Disposer.dispose(this);
@@ -371,22 +375,17 @@ public class VcsLogPersistentIndex implements VcsLogModifiableIndex, Disposable 
       }
     }
 
-    private void checkConsistency() throws IOException {
-      if (!commits.isEmpty()) {
-        boolean trigramsEmpty = trigrams.isEmpty();
-        boolean usersEmpty = users.isEmpty();
-        boolean pathsEmpty = paths.isEmpty();
-        if (trigramsEmpty || usersEmpty) {
-          IOException exception = new IOException("Broken index maps:\n" +
-                                                  "trigrams empty " + trigramsEmpty + "\n" +
-                                                  "users empty " + usersEmpty + "\n" +
-                                                  "paths empty " + pathsEmpty);
-          LOG.error(exception);
-          throw exception;
-        }
-        if (pathsEmpty) {
-          LOG.warn("Paths map is empty");
-        }
+    private void reportEmpty() throws IOException {
+      if (commits.isEmpty()) return;
+
+      boolean trigramsEmpty = trigrams.isEmpty();
+      boolean usersEmpty = users.isEmpty();
+      boolean pathsEmpty = paths.isEmpty();
+      if (trigramsEmpty || usersEmpty || pathsEmpty) {
+        LOG.warn("Some of the index maps empty:\n" +
+                 "trigrams empty " + trigramsEmpty + "\n" +
+                 "users empty " + usersEmpty + "\n" +
+                 "paths empty " + pathsEmpty);
       }
     }
 
@@ -484,6 +483,8 @@ public class VcsLogPersistentIndex implements VcsLogModifiableIndex, Disposable 
     @NotNull private final AtomicInteger myNewIndexedCommits = new AtomicInteger();
     @NotNull private final AtomicInteger myOldCommits = new AtomicInteger();
     private volatile long myStartTime;
+    private Span mySpan;
+    private Scope myScope;
 
     IndexingRequest(@NotNull VirtualFile root,
                     @NotNull VcsLogIndexer.PathsEncoder encoder,
@@ -508,6 +509,8 @@ public class VcsLogPersistentIndex implements VcsLogModifiableIndex, Disposable 
       indicator.setIndeterminate(false);
       indicator.setFraction(0);
 
+      mySpan = TraceManager.INSTANCE.getTracer("vcs").spanBuilder("indexing").startSpan();
+      myScope = mySpan.makeCurrent();
       myStartTime = getCurrentTimeMillis();
 
       LOG.info("Indexing " + (myFull ? "full repository" : myCommits.size() + " commits") + " in " + myRoot.getName());
@@ -574,6 +577,8 @@ public class VcsLogPersistentIndex implements VcsLogModifiableIndex, Disposable 
 
     private void report() {
       String formattedTime = StopWatch.formatTime(getCurrentTimeMillis() - myStartTime);
+      mySpan.setAttribute("numberOfCommits", myNewIndexedCommits.get());
+      mySpan.setAttribute("rootName", myRoot.getName());
       if (myFull) {
         LOG.info(formattedTime +
                  " for indexing " +
@@ -582,6 +587,8 @@ public class VcsLogPersistentIndex implements VcsLogModifiableIndex, Disposable 
       else {
         int leftCommits = myCommits.size() - myNewIndexedCommits.get() - myOldCommits.get();
         String leftCommitsMessage = (leftCommits > 0) ? ". " + leftCommits + " commits left" : "";
+        mySpan.setAttribute("totalCommits", myCommits.size());
+        mySpan.setAttribute("commitsLeft", leftCommits);
 
         LOG.info(formattedTime +
                  " for indexing " +
@@ -589,6 +596,8 @@ public class VcsLogPersistentIndex implements VcsLogModifiableIndex, Disposable 
                  " new commits out of " +
                  myCommits.size() + " in " + myRoot.getName() + leftCommitsMessage);
       }
+      mySpan.end();
+      myScope.close();
     }
 
     private void scheduleReindex() {
@@ -638,6 +647,7 @@ public class VcsLogPersistentIndex implements VcsLogModifiableIndex, Disposable 
       int limit = myIndexingLimit.get(myRoot).get();
       boolean isOvertime = time >= (Math.max(limit, 1L) * 60 * 1000) && !myBigRepositoriesList.isBig(myRoot);
       if (isOvertime || (myBigRepositoriesList.isBig(myRoot) && !indicator.isCanceled())) {
+        mySpan.setAttribute("cancelled", true);
         LOG.warn("Indexing " + myRoot.getName() + " was cancelled after " + StopWatch.formatTime(time));
         if (isOvertime) {
           myBigRepositoriesList.addRepository(myRoot);

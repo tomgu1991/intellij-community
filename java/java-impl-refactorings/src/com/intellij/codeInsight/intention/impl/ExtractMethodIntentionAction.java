@@ -17,6 +17,7 @@ import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.refactoring.extractMethod.ExtractMethodHandler;
 import com.intellij.refactoring.extractMethod.ExtractMethodProcessor;
 import com.intellij.refactoring.extractMethod.PrepareFailedException;
+import com.intellij.ui.ExperimentalUI;
 import com.intellij.util.IncorrectOperationException;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -75,6 +76,6 @@ public class ExtractMethodIntentionAction implements IntentionAction, Iconable {
 
   @Override
   public Icon getIcon(int flags) {
-    return AllIcons.Actions.RefactoringBulb;
+    return ExperimentalUI.isNewUI() ? null : AllIcons.Actions.RefactoringBulb;
   }
 }

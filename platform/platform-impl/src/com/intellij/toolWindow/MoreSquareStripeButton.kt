@@ -5,6 +5,7 @@ import com.intellij.icons.AllIcons
 import com.intellij.ide.HelpTooltip
 import com.intellij.ide.actions.ToolwindowSwitcher
 import com.intellij.openapi.actionSystem.ActionPlaces
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.Presentation
 import com.intellij.openapi.actionSystem.impl.ActionButton
@@ -43,7 +44,7 @@ internal class MoreSquareStripeButton(toolWindowToolbar: ToolWindowLeftToolbar) 
 
     private fun createPresentation(): Presentation {
       val presentation = Presentation()
-      presentation.icon = IconLoader.loadCustomVersionOrScale(AllIcons.Actions.MoreHorizontal as ScalableIcon, 20f)
+      presentation.icon = IconLoader.loadCustomVersionOrScale(AllIcons.Actions.MoreHorizontal as ScalableIcon, 20)
       presentation.isEnabledAndVisible = true
       return presentation
     }
@@ -53,13 +54,19 @@ internal class MoreSquareStripeButton(toolWindowToolbar: ToolWindowLeftToolbar) 
         override fun actionPerformed(e: AnActionEvent) {
           val moreSquareStripeButton = toolWindowToolbar.moreButton
           ToolwindowSwitcher.invokePopup(e.project!!, Comparator.comparing { it.stripeTitle },
-                                         notVisibleOnStripePredicate,
-                                         RelativePoint(toolWindowToolbar, Point(toolWindowToolbar.width, moreSquareStripeButton.y)))
+                                         e.dataContext, notVisibleOnStripePredicate,
+                                         RelativePoint(toolWindowToolbar, Point(toolWindowToolbar.width, moreSquareStripeButton.y)),
+                                         moreSquareStripeButton,
+          )
         }
 
         override fun update(e: AnActionEvent) {
           val toolWindowManager = ToolWindowManagerEx.getInstanceEx(e.project ?: return)
           e.presentation.isEnabledAndVisible = ToolwindowSwitcher.getToolWindows(toolWindowManager, notVisibleOnStripePredicate).isNotEmpty()
+        }
+
+        override fun getActionUpdateThread(): ActionUpdateThread {
+          return ActionUpdateThread.EDT
         }
       }
     }

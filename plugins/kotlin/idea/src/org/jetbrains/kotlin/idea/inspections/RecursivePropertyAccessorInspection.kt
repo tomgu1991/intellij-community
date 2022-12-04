@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.inspections
 
@@ -8,7 +8,7 @@ import com.intellij.psi.PsiElementVisitor
 import com.intellij.psi.util.PsiTreeUtil
 import org.jetbrains.kotlin.descriptors.ClassDescriptor
 import org.jetbrains.kotlin.descriptors.ClassKind
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
@@ -20,16 +20,19 @@ import org.jetbrains.kotlin.resolve.BindingContext.REFERENCE_TARGET
 import org.jetbrains.kotlin.synthetic.SyntheticJavaPropertyDescriptor
 import org.jetbrains.kotlin.util.capitalizeDecapitalize.capitalizeAsciiOnly
 
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.inspections.AbstractKotlinInspection
+
 class RecursivePropertyAccessorInspection : AbstractKotlinInspection() {
 
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean, session: LocalInspectionToolSession): PsiElementVisitor {
         return simpleNameExpressionVisitor { expression ->
             if (isRecursivePropertyAccess(expression)) {
+                val isExtensionProperty = expression.getStrictParentOfType<KtProperty>()?.receiverTypeReference != null
                 holder.registerProblem(
                     expression,
                     KotlinBundle.message("recursive.property.accessor"),
                     ProblemHighlightType.GENERIC_ERROR_OR_WARNING,
-                    ReplaceWithFieldFix()
+                    if (isExtensionProperty) null else ReplaceWithFieldFix()
                 )
             } else if (isRecursiveSyntheticPropertyAccess(expression)) {
                 holder.registerProblem(
@@ -49,7 +52,7 @@ class RecursivePropertyAccessorInspection : AbstractKotlinInspection() {
 
         override fun applyFix(project: Project, descriptor: ProblemDescriptor) {
             val expression = descriptor.psiElement as KtExpression
-            val factory = KtPsiFactory(expression)
+            val factory = KtPsiFactory(project)
             expression.replace(factory.createExpression("field"))
         }
     }

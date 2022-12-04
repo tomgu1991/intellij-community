@@ -1,2 +1,2 @@
-FirLightClassForSymbol: Y
-FirLightClassForSymbol: Z
+KtClass: Y
+KtClass: Z

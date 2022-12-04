@@ -6,6 +6,7 @@ import com.intellij.codeInspection.IntentionWrapper
 import com.intellij.codeInspection.LocalInspectionToolSession
 import com.intellij.codeInspection.ProblemHighlightType
 import com.intellij.codeInspection.ProblemsHolder
+import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiElementVisitor
 import org.jetbrains.kotlin.builtins.getReturnTypeFromFunctionType
 import org.jetbrains.kotlin.builtins.isBuiltinFunctionalType
@@ -14,7 +15,7 @@ import org.jetbrains.kotlin.descriptors.ClassDescriptor
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
 import org.jetbrains.kotlin.descriptors.ValueParameterDescriptor
 import org.jetbrains.kotlin.descriptors.VariableDescriptor
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToCall
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToDescriptorIfAny
@@ -32,6 +33,8 @@ import org.jetbrains.kotlin.resolve.calls.util.getParameterForArgument
 import org.jetbrains.kotlin.resolve.calls.util.getParentCall
 import org.jetbrains.kotlin.resolve.calls.util.getParentResolvedCall
 import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
+
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.inspections.AbstractKotlinInspection
 
 class SuspiciousCallableReferenceInLambdaInspection : AbstractKotlinInspection() {
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean, session: LocalInspectionToolSession): PsiElementVisitor =
@@ -83,7 +86,7 @@ class SuspiciousCallableReferenceInLambdaInspection : AbstractKotlinInspection()
     }
 
     class MoveIntoParenthesesIntention : ConvertLambdaToReferenceIntention(
-        KotlinBundle.lazyMessage("move.suspicious.callable.reference.into.parentheses")
+        KotlinBundle.lazyMessage("move.reference.into.parentheses")
     ) {
         override fun buildReferenceText(lambdaExpression: KtLambdaExpression): String? {
             val callableReferenceExpression =
@@ -110,6 +113,8 @@ class SuspiciousCallableReferenceInLambdaInspection : AbstractKotlinInspection()
         }
 
         override fun isApplicableTo(element: KtLambdaExpression) = true
+
+        override fun skipProcessingFurtherElementsAfter(element: PsiElement): Boolean = false
     }
 }
 

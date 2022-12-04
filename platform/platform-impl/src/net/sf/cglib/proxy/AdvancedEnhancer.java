@@ -382,8 +382,7 @@ public final class AdvancedEnhancer extends AbstractClassGenerator
       @Override
       public boolean test(@NotNull PluginClassLoader loader) {
         if (myMap == null) {
-          List<IdeaPluginDescriptorImpl> plugins = PluginManagerCore.getPluginSet()
-            .getRawListOfEnabledModules();
+          List<IdeaPluginDescriptorImpl> plugins = PluginManagerCore.getPluginSet().getEnabledModules();
 
           int count = 0;
           myMap = new Object2IntOpenHashMap<>(plugins.size());
@@ -401,7 +400,7 @@ public final class AdvancedEnhancer extends AbstractClassGenerator
       }
     };
 
-    if (interfaces != null && interfaces.length > 0) {
+    if (interfaces != null) {
       for (Class<?> anInterface : interfaces) {
         ClassLoader loader = anInterface.getClassLoader();
         if (loader instanceof PluginClassLoader) {
@@ -652,7 +651,7 @@ public final class AdvancedEnhancer extends AbstractClassGenerator
     }
   }
 
-  private void emitConstructors(ClassEmitter ce, List<MethodInfo> constructors) {
+  private void emitConstructors(ClassEmitter ce, List<? extends MethodInfo> constructors) {
     boolean seenNull = false;
     for (final MethodInfo constructor : constructors) {
       CodeEmitter e = EmitUtils.begin_method(ce, constructor, Constants.ACC_PUBLIC);

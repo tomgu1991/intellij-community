@@ -497,44 +497,50 @@ public class JavaDocInfoGenerator {
 
   private static String getPackageName(PsiElement element) {
     String packageName = null;
-    if (element instanceof PsiPackage) {
-      packageName = ((PsiPackage)element).getQualifiedName();
+    if (element instanceof PsiPackage pkg) {
+      packageName = pkg.getQualifiedName();
     }
     else {
       PsiFile file = element.getContainingFile();
-      if (file instanceof PsiClassOwner) {
-        packageName = ((PsiClassOwner)file).getPackageName();
+      if (file instanceof PsiClassOwner classOwner) {
+        packageName = classOwner.getPackageName();
       }
     }
     return packageName;
   }
 
   public boolean generateDocInfoCore(StringBuilder buffer, boolean generatePrologue) {
-    if (myElement instanceof PsiClass) {
-      generateClassJavaDoc(buffer, (PsiClass)myElement, generatePrologue);
+    if (myElement instanceof PsiClass cls) {
+      generateClassJavaDoc(buffer, cls, generatePrologue);
     }
-    else if (myElement instanceof PsiMethod) {
-      generateMethodJavaDoc(buffer, (PsiMethod)myElement, generatePrologue);
+    else if (myElement instanceof PsiMethod method) {
+      generateMethodJavaDoc(buffer, method, generatePrologue);
     }
-    else if (myElement instanceof PsiParameter) {
-      generateMethodParameterJavaDoc(buffer, (PsiParameter)myElement, generatePrologue);
+    else if (myElement instanceof PsiPatternVariable var) {
+      generatePatternVariableJavaDoc(buffer, generatePrologue, var);
     }
-    else if (myElement instanceof PsiField) {
-      generateFieldJavaDoc(buffer, (PsiField)myElement, generatePrologue);
+    else if (myElement instanceof PsiParameter parameter) {
+      generateMethodParameterJavaDoc(buffer, parameter, generatePrologue);
     }
-    else if (myElement instanceof PsiVariable) {
-      generateVariableJavaDoc(buffer, (PsiVariable)myElement, generatePrologue);
+    else if (myElement instanceof PsiField field) {
+      generateFieldJavaDoc(buffer, field, generatePrologue);
     }
-    else if (myElement instanceof PsiDirectory) {
-      PsiPackage aPackage = JavaDirectoryService.getInstance().getPackage((PsiDirectory)myElement);
+    else if (myElement instanceof PsiRecordComponent component) {
+      generateRecordComponentJavaDoc(buffer, generatePrologue, component);
+    }
+    else if (myElement instanceof PsiVariable var) {
+      generateVariableJavaDoc(buffer, var, generatePrologue);
+    }
+    else if (myElement instanceof PsiDirectory dir) {
+      PsiPackage aPackage = JavaDirectoryService.getInstance().getPackage(dir);
       if (aPackage == null) return false;
       generatePackageJavaDoc(buffer, aPackage, generatePrologue);
     }
-    else if (myElement instanceof PsiPackage) {
-      generatePackageJavaDoc(buffer, (PsiPackage)myElement, generatePrologue);
+    else if (myElement instanceof PsiPackage pkg) {
+      generatePackageJavaDoc(buffer, pkg, generatePrologue);
     }
-    else if (myElement instanceof PsiJavaModule) {
-      generateModuleJavaDoc(buffer, (PsiJavaModule)myElement, generatePrologue);
+    else if (myElement instanceof PsiJavaModule module) {
+      generateModuleJavaDoc(buffer, module, generatePrologue);
     }
     else {
       return false;
@@ -543,16 +549,80 @@ public class JavaDocInfoGenerator {
     return true;
   }
 
+  private void generateRecordComponentJavaDoc(StringBuilder buffer, boolean generatePrologue, @NotNull PsiRecordComponent recordComponent) {
+    if (generatePrologue) generatePrologue(buffer);
+    generateVariableDefinition(buffer, recordComponent, true);
+
+    PsiRecordHeader recordHeader = ObjectUtils.tryCast(recordComponent.getParent(), PsiRecordHeader.class);
+    if (recordHeader == null) return;
+    PsiRecordComponent[] components = recordHeader.getRecordComponents();
+    int recordIndex = ArrayUtil.indexOf(components, recordComponent);
+    PsiClass recordClass = recordComponent.getContainingClass();
+    if (recordClass == null) return;
+    String recordComponentJavadoc = getRecordComponentJavadocFromParameterTag(recordIndex, recordClass);
+    if (recordComponentJavadoc != null) {
+      buffer.append(DocumentationMarkup.CONTENT_START);
+      buffer.append(recordComponentJavadoc);
+      buffer.append(DocumentationMarkup.CONTENT_END);
+    }
+  }
+
+  private void generatePatternVariableJavaDoc(StringBuilder buffer, boolean generatePrologue, @NotNull PsiPatternVariable variable) {
+    if (generatePrologue) generatePrologue(buffer);
+    generateVariableDefinition(buffer, variable, true);
+
+    String docForPattern = getDocForPattern(variable);
+    if (docForPattern != null) {
+      buffer.append(DocumentationMarkup.CONTENT_START);
+      buffer.append(docForPattern);
+      buffer.append(DocumentationMarkup.CONTENT_END);
+    }
+  }
+
+
+  @Nullable
+  private String getDocForPattern(@NotNull PsiPatternVariable variable) {
+    PsiPattern pattern = variable.getPattern();
+    PsiElement parent = pattern.getParent();
+    if (!(parent instanceof PsiDeconstructionList deconstructionList)) return null;
+    PsiPattern[] components = deconstructionList.getDeconstructionComponents();
+    int index = ArrayUtil.indexOf(components, pattern);
+    PsiDeconstructionPattern deconstructionPattern = (PsiDeconstructionPattern)parent.getParent();
+    PsiTypeElement typeElement = deconstructionPattern.getTypeElement();
+    PsiType deconstructionType = typeElement.getType();
+    PsiClass recordClass = PsiUtil.resolveClassInClassTypeOnly(deconstructionType);
+    if (recordClass == null) return null;
+    return getRecordComponentJavadocFromParameterTag(index, recordClass);
+  }
+
+  @Nullable
+  private String getRecordComponentJavadocFromParameterTag(int recordComponentIndex, @NotNull PsiClass recordClass) {
+    PsiRecordComponent[] recordComponents = recordClass.getRecordComponents();
+    if (recordComponents.length <= recordComponentIndex) return null;
+    PsiRecordComponent recordComponent = recordComponents[recordComponentIndex];
+    PsiDocComment classComment = recordClass.getDocComment();
+    String recordComponentName = recordComponent.getName();
+    if (classComment == null) return null;
+    PsiDocTag tag = getParamTagByName(classComment, recordComponentName);
+    if (tag == null) return null;
+    PsiElement[] elements = tag.getDataElements();
+    if (elements.length == 0) return null;
+    String text = elements[0].getText();
+    StringBuilder buffer = new StringBuilder();
+    generateValue(buffer, new ParamInfo(recordComponentName, recordComponentName, tag, ourEmptyProvider), elements, text);
+    return buffer.toString();
+  }
+
   public @NlsSafe String generateSignature(PsiElement element) {
     StringBuilder buf = new StringBuilder();
-    if (element instanceof PsiClass) {
-      if (generateClassSignature(buf, (PsiClass)element, SignaturePlace.ToolTip)) return null;
+    if (element instanceof PsiClass cls) {
+      if (generateClassSignature(buf, cls, SignaturePlace.ToolTip)) return null;
     }
-    else if (element instanceof PsiField) {
-      generateFieldSignature(buf, (PsiField)element, SignaturePlace.ToolTip);
+    else if (element instanceof PsiField field) {
+      generateFieldSignature(buf, field, SignaturePlace.ToolTip);
     }
-    else if (element instanceof PsiMethod) {
-      generateMethodSignature(buf, (PsiMethod)element, SignaturePlace.ToolTip);
+    else if (element instanceof PsiMethod method) {
+      generateMethodSignature(buf, method, SignaturePlace.ToolTip);
     }
     return buf.toString();
   }
@@ -619,10 +689,19 @@ public class JavaDocInfoGenerator {
     @NlsSafe String ownerLink = null;
     String ownerIcon = null;
 
-    if (element instanceof PsiClass) {
+    if (element instanceof PsiPackage pkg) {
+      return HtmlChunk.div()
+        .setClass("bottom")
+        .children(
+          HtmlChunk.tag("icon").attr("src", "AllIcons.Nodes.Package"),
+          HtmlChunk.nbsp(),
+          HtmlChunk.tag("code").addText(pkg.getQualifiedName())
+        );
+    }
+    else if (element instanceof PsiClass) {
       PsiFile file = element.getContainingFile();
-      if (file instanceof PsiJavaFile) {
-        String packageName = ((PsiJavaFile)file).getPackageName();
+      if (file instanceof PsiJavaFile javaFile) {
+        String packageName = javaFile.getPackageName();
         if (!packageName.isEmpty()) {
           PsiPackage aPackage = JavaPsiFacade.getInstance(file.getProject()).findPackage(packageName);
           StringBuilder packageFqnBuilder = new StringBuilder();
@@ -639,8 +718,8 @@ public class JavaDocInfoGenerator {
         }
       }
     }
-    else if (element instanceof PsiMember) {
-      PsiClass parentClass = ((PsiMember)element).getContainingClass();
+    else if (element instanceof PsiMember member) {
+      PsiClass parentClass = member.getContainingClass();
       if (parentClass != null && !PsiUtil.isArrayClass(parentClass)) {
         String qName = parentClass.getQualifiedName();
         if (qName != null) {
@@ -677,8 +756,8 @@ public class JavaDocInfoGenerator {
       if (aPackage == null) return false;
       items = aPackage.getDirectories(GlobalSearchScope.everythingScope(myProject));
     }
-    else if (myElement instanceof PsiPackage) {
-      items = ((PsiPackage)myElement).getDirectories(GlobalSearchScope.everythingScope(myProject));
+    else if (myElement instanceof PsiPackage pkg) {
+      items = pkg.getDirectories(GlobalSearchScope.everythingScope(myProject));
     }
     else {
       if (myElement == null || myElement.getNavigationElement() == null) return false;
@@ -971,6 +1050,7 @@ public class JavaDocInfoGenerator {
   }
 
   private void generatePackageJavaDoc(StringBuilder buffer, PsiPackage psiPackage, boolean generatePrologue) {
+    boolean hasInfo = false;
     for (PsiDirectory directory : psiPackage.getDirectories(GlobalSearchScope.everythingScope(myProject))) {
       PsiFile packageInfoFile = directory.findFile(PsiPackage.PACKAGE_INFO_FILE);
       if (packageInfoFile != null) {
@@ -979,6 +1059,7 @@ public class JavaDocInfoGenerator {
           ASTNode docCommentNode = findRelevantCommentNode(node);
           if (docCommentNode != null) {
             generatePackageJavaDoc(buffer, (PsiDocComment)docCommentNode.getPsi(), generatePrologue);
+            hasInfo = true;
             break;
           }
         }
@@ -986,9 +1067,43 @@ public class JavaDocInfoGenerator {
       PsiFile packageHtmlFile = directory.findFile("package.html");
       if (packageHtmlFile != null) {
         generatePackageHtmlJavaDoc(buffer, packageHtmlFile, generatePrologue);
+        hasInfo = true;
         break;
       }
     }
+    if (!hasInfo) {
+      generateDefaultPackageDoc(buffer, psiPackage, generatePrologue);
+    }
+  }
+
+  private void generateDefaultPackageDoc(StringBuilder buffer, PsiPackage aPackage, boolean generatePrologue) {
+    if (generatePrologue) generatePrologue(buffer);
+    HtmlBuilder hb = new HtmlBuilder();
+    hb.append(HtmlChunk.tag("h3").addText(JavaBundle.message("package.classes")));
+    Comparator<PsiClass> comparator = Comparator.comparing(PsiClass::getName, Comparator.nullsLast(Comparator.naturalOrder()));
+    Arrays.stream(aPackage.getClasses()).sorted(comparator).forEach(psiClass -> {
+      String link = generateLink(psiClass, psiClass.getName(), false, false);
+      if (link != null) {
+        hb.append(HtmlChunk.tag("div")
+                    .children(
+                      HtmlChunk.tag("icon").attr("src", getIcon(psiClass)),
+                      HtmlChunk.nbsp(),
+                      HtmlChunk.raw(link)
+                    ));
+      }
+    });
+    buffer.append(hb);
+    buffer.append(DocumentationMarkup.SECTIONS_END);
+  }
+
+  @NotNull
+  private static String getIcon(@NotNull PsiClass psiClass) {
+    return psiClass.isEnum() ? "AllIcons.Nodes.Enum" :
+           psiClass.isRecord() ? "AllIcons.Nodes.Record" :
+           psiClass.isAnnotationType() ? "AllIcons.Nodes.Annotationtype" :
+           psiClass.isInterface() ? "AllIcons.Nodes.Interface" :
+           psiClass.hasModifierProperty(PsiModifier.ABSTRACT) ? "AllIcons.Nodes.AbstractClass" :
+           "AllIcons.Nodes.Class";
   }
 
   private void generatePackageJavaDoc(StringBuilder buffer, PsiDocComment comment, boolean generatePrologue) {
@@ -1132,35 +1247,56 @@ public class JavaDocInfoGenerator {
 
   private void appendInitializer(StringBuilder buffer, PsiVariable variable, int variableSignatureLength) {
     PsiExpression initializer = variable.getInitializer();
-    if (initializer == null) return;
+    if (initializer != null) {
+      String initializerText = initializer.getText().trim();
+      if (variableSignatureLength + initializerText.length() < 80) {
+        // initializer should be printed on the same line
+        buffer.append(" ");
+      }
+      else {
+        // initializer should be printed on the new line
+        buffer.append("\n");
+        buffer.append(NBSP.repeat(CodeStyle.getIndentSize(variable.getContainingFile())));
+      }
+      appendStyledSpan(buffer, getHighlightingManager().getOperationSignAttributes(), "= ");
 
-    String initializerText = initializer.getText().trim();
-    if (variableSignatureLength + initializerText.length() < 80) {
-      // initializer should be printed on the same line
-      buffer.append(" ");
+      int index = newLineIndex(initializerText);
+      if (index < initializerText.length()) {
+        initializerText = initializerText.substring(0, index);
+        buffer.append(StringUtil.escapeXmlEntities(initializerText));
+        buffer.append("...");
+      }
+      else {
+        generateExpressionText(initializer, buffer);
+      }
+      PsiExpression constantInitializer = calcInitializerExpression(variable);
+      if (constantInitializer != null) {
+        buffer.append(DocumentationMarkup.GRAYED_START);
+        appendExpressionValue(buffer, constantInitializer);
+        buffer.append(DocumentationMarkup.GRAYED_END);
+      }
     }
-    else {
-      // initializer should be printed on the new line
-      buffer.append("\n");
-      buffer.append(NBSP.repeat(CodeStyle.getIndentSize(variable.getContainingFile())));
+    else if (variable instanceof PsiEnumConstant) {
+      PsiExpressionList list = ((PsiEnumConstant)variable).getArgumentList();
+      if (canComputeArguments(list)) {
+        generateExpressionText(list, buffer);
+      }
     }
-    appendStyledSpan(buffer, getHighlightingManager().getOperationSignAttributes(), "= ");
+  }
 
-    int index = newLineIndex(initializerText);
-    if (index < initializerText.length()) {
-      initializerText = initializerText.substring(0, index);
-      buffer.append(StringUtil.escapeXmlEntities(initializerText));
-      buffer.append("...");
+  public static boolean canComputeArguments(@Nullable PsiExpressionList list) {
+    if (list == null) return false;
+    PsiExpression[] args = list.getExpressions();
+    JavaPsiFacade instance = JavaPsiFacade.getInstance(list.getProject());
+    PsiConstantEvaluationHelper helper = instance.getConstantEvaluationHelper();
+    for (PsiExpression arg : args) {
+      if (helper.computeConstantExpression(arg) == null) return false;
     }
-    else {
-      initializer.accept(new MyVisitor(buffer));
-    }
-    PsiExpression constantInitializer = calcInitializerExpression(variable);
-    if (constantInitializer != null) {
-      buffer.append(DocumentationMarkup.GRAYED_START);
-      appendExpressionValue(buffer, constantInitializer);
-      buffer.append(DocumentationMarkup.GRAYED_END);
-    }
+    return true;
+  }
+
+  public void generateExpressionText(PsiElement initializer, StringBuilder buffer) {
+    initializer.accept(new MyVisitor(buffer));
   }
 
   private static int newLineIndex(String text) {
@@ -1974,10 +2110,12 @@ public class JavaDocInfoGenerator {
         int pos = text.lastIndexOf("pre>");
         if (pos > 0) {
           switch (text.charAt(pos - 1)) {
-            case '<':
+            case '<' -> {
               return true;
-            case '/':
+            }
+            case '/' -> {
               return false;
+            }
           }
         }
       }
@@ -2363,7 +2501,10 @@ public class JavaDocInfoGenerator {
     appendMaybeUnresolvedLink(buffer, target, label, target.getProject(), false);
   }
 
-  private static @Nullable String generateLink(@NotNull PsiElement element, String label, boolean plainLink, boolean isRenderedDoc) {
+  private static @Nullable @NlsSafe String generateLink(@NotNull PsiElement element,
+                                                        String label,
+                                                        boolean plainLink,
+                                                        boolean isRenderedDoc) {
     String refText = JavaDocUtil.getReferenceText(element.getProject(), element);
     if (refText != null) {
       StringBuilder linkBuilder = new StringBuilder();

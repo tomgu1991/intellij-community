@@ -2,8 +2,11 @@ package com.intellij.workspaceModel.storage.entities.test.api
 
 import com.intellij.workspaceModel.storage.EntitySource
 import com.intellij.workspaceModel.storage.GeneratedCodeApiVersion
-import com.intellij.workspaceModel.storage.ModifiableWorkspaceEntity
+
 import com.intellij.workspaceModel.storage.WorkspaceEntity
+import kotlin.jvm.JvmName
+import kotlin.jvm.JvmOverloads
+import kotlin.jvm.JvmStatic
 import org.jetbrains.deft.ObjBuilder
 import org.jetbrains.deft.Type
 import org.jetbrains.deft.annotations.Abstract
@@ -15,29 +18,31 @@ import com.intellij.workspaceModel.storage.MutableEntityStorage
 interface ParentAbEntity : WorkspaceEntity {
   val children: List<@Child ChildAbstractBaseEntity>
 
-
   //region generated code
-  //@formatter:off
   @GeneratedCodeApiVersion(1)
-  interface Builder: ParentAbEntity, ModifiableWorkspaceEntity<ParentAbEntity>, ObjBuilder<ParentAbEntity> {
-      override var children: List<ChildAbstractBaseEntity>
-      override var entitySource: EntitySource
+  interface Builder : ParentAbEntity, WorkspaceEntity.Builder<ParentAbEntity>, ObjBuilder<ParentAbEntity> {
+    override var entitySource: EntitySource
+    override var children: List<ChildAbstractBaseEntity>
   }
-  
-  companion object: Type<ParentAbEntity, Builder>() {
-      operator fun invoke(entitySource: EntitySource, init: (Builder.() -> Unit)? = null): ParentAbEntity {
-          val builder = builder()
-          builder.entitySource = entitySource
-          init?.invoke(builder)
-          return builder
-      }
+
+  companion object : Type<ParentAbEntity, Builder>() {
+    @JvmOverloads
+    @JvmStatic
+    @JvmName("create")
+    operator fun invoke(entitySource: EntitySource, init: (Builder.() -> Unit)? = null): ParentAbEntity {
+      val builder = builder()
+      builder.entitySource = entitySource
+      init?.invoke(builder)
+      return builder
+    }
   }
-  //@formatter:on
   //endregion
 
 }
+
 //region generated code
-fun MutableEntityStorage.modifyEntity(entity: ParentAbEntity, modification: ParentAbEntity.Builder.() -> Unit) = modifyEntity(ParentAbEntity.Builder::class.java, entity, modification)
+fun MutableEntityStorage.modifyEntity(entity: ParentAbEntity, modification: ParentAbEntity.Builder.() -> Unit) = modifyEntity(
+  ParentAbEntity.Builder::class.java, entity, modification)
 //endregion
 
 @Abstract
@@ -46,26 +51,28 @@ interface ChildAbstractBaseEntity : WorkspaceEntity {
 
   val parentEntity: ParentAbEntity
 
-
   //region generated code
-  //@formatter:off
   @GeneratedCodeApiVersion(1)
-  interface Builder<T: ChildAbstractBaseEntity>: ChildAbstractBaseEntity, ModifiableWorkspaceEntity<T>, ObjBuilder<T> {
-      override var commonData: String
-      override var entitySource: EntitySource
-      override var parentEntity: ParentAbEntity
+  interface Builder<T : ChildAbstractBaseEntity> : ChildAbstractBaseEntity, WorkspaceEntity.Builder<T>, ObjBuilder<T> {
+    override var entitySource: EntitySource
+    override var commonData: String
+    override var parentEntity: ParentAbEntity
   }
-  
-  companion object: Type<ChildAbstractBaseEntity, Builder<ChildAbstractBaseEntity>>() {
-      operator fun invoke(commonData: String, entitySource: EntitySource, init: (Builder<ChildAbstractBaseEntity>.() -> Unit)? = null): ChildAbstractBaseEntity {
-          val builder = builder()
-          builder.commonData = commonData
-          builder.entitySource = entitySource
-          init?.invoke(builder)
-          return builder
-      }
+
+  companion object : Type<ChildAbstractBaseEntity, Builder<ChildAbstractBaseEntity>>() {
+    @JvmOverloads
+    @JvmStatic
+    @JvmName("create")
+    operator fun invoke(commonData: String,
+                        entitySource: EntitySource,
+                        init: (Builder<ChildAbstractBaseEntity>.() -> Unit)? = null): ChildAbstractBaseEntity {
+      val builder = builder()
+      builder.commonData = commonData
+      builder.entitySource = entitySource
+      init?.invoke(builder)
+      return builder
+    }
   }
-  //@formatter:on
   //endregion
 
 }
@@ -73,33 +80,38 @@ interface ChildAbstractBaseEntity : WorkspaceEntity {
 interface ChildFirstEntity : ChildAbstractBaseEntity {
   val firstData: String
 
-
   //region generated code
-  //@formatter:off
   @GeneratedCodeApiVersion(1)
-  interface Builder: ChildFirstEntity, ChildAbstractBaseEntity.Builder<ChildFirstEntity>, ModifiableWorkspaceEntity<ChildFirstEntity>, ObjBuilder<ChildFirstEntity> {
-      override var commonData: String
-      override var parentEntity: ParentAbEntity
-      override var firstData: String
-      override var entitySource: EntitySource
+  interface Builder : ChildFirstEntity, ChildAbstractBaseEntity.Builder<ChildFirstEntity>, WorkspaceEntity.Builder<ChildFirstEntity>, ObjBuilder<ChildFirstEntity> {
+    override var entitySource: EntitySource
+    override var commonData: String
+    override var parentEntity: ParentAbEntity
+    override var firstData: String
   }
-  
-  companion object: Type<ChildFirstEntity, Builder>(ChildAbstractBaseEntity) {
-      operator fun invoke(commonData: String, firstData: String, entitySource: EntitySource, init: (Builder.() -> Unit)? = null): ChildFirstEntity {
-          val builder = builder()
-          builder.commonData = commonData
-          builder.firstData = firstData
-          builder.entitySource = entitySource
-          init?.invoke(builder)
-          return builder
-      }
+
+  companion object : Type<ChildFirstEntity, Builder>(ChildAbstractBaseEntity) {
+    @JvmOverloads
+    @JvmStatic
+    @JvmName("create")
+    operator fun invoke(commonData: String,
+                        firstData: String,
+                        entitySource: EntitySource,
+                        init: (Builder.() -> Unit)? = null): ChildFirstEntity {
+      val builder = builder()
+      builder.commonData = commonData
+      builder.firstData = firstData
+      builder.entitySource = entitySource
+      init?.invoke(builder)
+      return builder
+    }
   }
-  //@formatter:on
   //endregion
 
 }
+
 //region generated code
-fun MutableEntityStorage.modifyEntity(entity: ChildFirstEntity, modification: ChildFirstEntity.Builder.() -> Unit) = modifyEntity(ChildFirstEntity.Builder::class.java, entity, modification)
+fun MutableEntityStorage.modifyEntity(entity: ChildFirstEntity, modification: ChildFirstEntity.Builder.() -> Unit) = modifyEntity(
+  ChildFirstEntity.Builder::class.java, entity, modification)
 //endregion
 
 interface ChildSecondEntity : ChildAbstractBaseEntity {
@@ -109,31 +121,36 @@ interface ChildSecondEntity : ChildAbstractBaseEntity {
 
   val secondData: String
 
-
   //region generated code
-  //@formatter:off
   @GeneratedCodeApiVersion(1)
-  interface Builder: ChildSecondEntity, ChildAbstractBaseEntity.Builder<ChildSecondEntity>, ModifiableWorkspaceEntity<ChildSecondEntity>, ObjBuilder<ChildSecondEntity> {
-      override var commonData: String
-      override var parentEntity: ParentAbEntity
-      override var secondData: String
-      override var entitySource: EntitySource
+  interface Builder : ChildSecondEntity, ChildAbstractBaseEntity.Builder<ChildSecondEntity>, WorkspaceEntity.Builder<ChildSecondEntity>, ObjBuilder<ChildSecondEntity> {
+    override var entitySource: EntitySource
+    override var commonData: String
+    override var parentEntity: ParentAbEntity
+    override var secondData: String
   }
-  
-  companion object: Type<ChildSecondEntity, Builder>(ChildAbstractBaseEntity) {
-      operator fun invoke(commonData: String, secondData: String, entitySource: EntitySource, init: (Builder.() -> Unit)? = null): ChildSecondEntity {
-          val builder = builder()
-          builder.commonData = commonData
-          builder.secondData = secondData
-          builder.entitySource = entitySource
-          init?.invoke(builder)
-          return builder
-      }
+
+  companion object : Type<ChildSecondEntity, Builder>(ChildAbstractBaseEntity) {
+    @JvmOverloads
+    @JvmStatic
+    @JvmName("create")
+    operator fun invoke(commonData: String,
+                        secondData: String,
+                        entitySource: EntitySource,
+                        init: (Builder.() -> Unit)? = null): ChildSecondEntity {
+      val builder = builder()
+      builder.commonData = commonData
+      builder.secondData = secondData
+      builder.entitySource = entitySource
+      init?.invoke(builder)
+      return builder
+    }
   }
-  //@formatter:on
   //endregion
 
 }
+
 //region generated code
-fun MutableEntityStorage.modifyEntity(entity: ChildSecondEntity, modification: ChildSecondEntity.Builder.() -> Unit) = modifyEntity(ChildSecondEntity.Builder::class.java, entity, modification)
+fun MutableEntityStorage.modifyEntity(entity: ChildSecondEntity, modification: ChildSecondEntity.Builder.() -> Unit) = modifyEntity(
+  ChildSecondEntity.Builder::class.java, entity, modification)
 //endregion

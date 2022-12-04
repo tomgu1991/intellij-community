@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.idea.inspections.dfa
 
 import com.intellij.codeInsight.PsiEquivalenceUtil
@@ -20,23 +20,28 @@ import com.intellij.codeInspection.dataFlow.value.DfaValueFactory
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiElementVisitor
 import com.intellij.psi.util.PsiTreeUtil
+import com.intellij.psi.util.siblings
 import com.intellij.util.ThreeState
 import org.jetbrains.kotlin.caches.resolve.KotlinCacheService
+import org.jetbrains.kotlin.descriptors.ClassDescriptor
+import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.PackageFragmentDescriptor
 import org.jetbrains.kotlin.diagnostics.Errors
 import org.jetbrains.kotlin.diagnostics.Severity
-import org.jetbrains.kotlin.idea.KotlinBundle
 import org.jetbrains.kotlin.idea.base.facet.platform.platform
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
+import org.jetbrains.kotlin.idea.base.util.module
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToCall
-import org.jetbrains.kotlin.idea.inspections.AbstractKotlinInspection
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.inspections.AbstractKotlinInspection
 import org.jetbrains.kotlin.idea.inspections.dfa.KotlinAnchor.*
 import org.jetbrains.kotlin.idea.inspections.dfa.KotlinProblem.*
 import org.jetbrains.kotlin.idea.intentions.loopToCallChain.isConstant
 import org.jetbrains.kotlin.idea.intentions.negate
 import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.idea.references.readWriteAccess
-import org.jetbrains.kotlin.idea.base.util.module
+import org.jetbrains.kotlin.idea.references.resolveMainReferenceToDescriptors
+import org.jetbrains.kotlin.lexer.KtSingleValueToken
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.platform.jvm.isJvm
 import org.jetbrains.kotlin.psi.*
@@ -44,6 +49,7 @@ import org.jetbrains.kotlin.psi.psiUtil.isNull
 import org.jetbrains.kotlin.resolve.bindingContextUtil.isUsedAsStatement
 import org.jetbrains.kotlin.resolve.constants.evaluate.ConstantExpressionEvaluator
 import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
+import org.jetbrains.kotlin.types.typeUtil.isNothing
 import org.jetbrains.kotlin.types.typeUtil.isNullableNothing
 
 class KotlinConstantConditionsInspection : AbstractKotlinInspection() {
@@ -188,20 +194,15 @@ class KotlinConstantConditionsInspection : AbstractKotlinInspection() {
                             if (cv == ConstantValue.FALSE) {
                                 holder.registerProblem(condition, message)
                             } else if (cv == ConstantValue.TRUE) {
-                                var next = condition
-                                while (true) {
-                                    next = PsiTreeUtil.getNextSiblingOfType(next, KtWhenCondition::class.java) ?: break
-                                    holder.registerProblem(next, message)
-                                }
-                                var nextEntry = condition.parent as? KtWhenEntry
-                                while (true) {
-                                    nextEntry = PsiTreeUtil.getNextSiblingOfType(nextEntry, KtWhenEntry::class.java) ?: break
-                                    if (!nextEntry.isElse) {
-                                        nextEntry.conditions.forEach {
-                                            holder.registerProblem(it, message)
-                                        }
-                                    }
-                                }
+                                condition.siblings(forward = true, withSelf = false)
+                                    .filterIsInstance<KtWhenCondition>()
+                                    .forEach { cond -> holder.registerProblem(cond, message) }
+                                val nextEntry = condition.parent as? KtWhenEntry ?: return@forEach
+                                nextEntry.siblings(forward = true, withSelf = false)
+                                    .filterIsInstance<KtWhenEntry>()
+                                    .filterNot { entry -> entry.isElse }
+                                    .flatMap { entry -> entry.conditions.asSequence() }
+                                    .forEach { cond -> holder.registerProblem(cond, message) }
                             }
                         }
                     }
@@ -291,9 +292,9 @@ class KotlinConstantConditionsInspection : AbstractKotlinInspection() {
 
     companion object {
         private fun areEquivalent(e1: KtElement, e2: KtElement): Boolean {
-            return PsiEquivalenceUtil.areElementsEquivalent(e1, e2,
-                                                            {ref1, ref2 -> ref1.element.text.compareTo(ref2.element.text)},
-                                                            null, null, false)
+            return PsiEquivalenceUtil.areEquivalent(e1, e2,
+                                                    {ref1, ref2 -> ref1.element.text.equals(ref2.element.text)},
+                                                    null, null, false)
         }
 
         private tailrec fun isOppositeCondition(candidate: KtExpression?, template: KtBinaryExpression, expression: KtExpression): Boolean {
@@ -315,13 +316,14 @@ class KotlinConstantConditionsInspection : AbstractKotlinInspection() {
             return isOppositeCondition(left, templateLeft, expression)
         }
 
-        private fun hasOppositeCondition(whenExpression: KtWhenExpression, topAnd: KtBinaryExpression, expression: KtExpression): Boolean {
+        private fun hasOppositeCondition(whenExpression: KtWhenExpression, topCondition: KtExpression, expression: KtExpression): Boolean {
             for (entry in whenExpression.entries) {
                 for (condition in entry.conditions) {
                     if (condition is KtWhenConditionWithExpression) {
                         val candidate = condition.expression
-                        if (candidate === topAnd) return false
-                        if (isOppositeCondition(candidate, topAnd, expression)) return true
+                        if (candidate === topCondition) return false
+                        if (topCondition is KtBinaryExpression && isOppositeCondition(candidate, topCondition, expression)) return true
+                        if (candidate != null && areEquivalent(expression.negate(false), candidate)) return true
                     }
                 }
             }
@@ -354,6 +356,12 @@ class KotlinConstantConditionsInspection : AbstractKotlinInspection() {
                     if (whenExpression != null && hasOppositeCondition(whenExpression, topAnd, expression)) {
                         return true
                     }
+                }
+            }
+            if (parent is KtWhenConditionWithExpression) {
+                val whenExpression = (parent.parent as? KtWhenEntry)?.parent as? KtWhenExpression
+                if (whenExpression != null && hasOppositeCondition(whenExpression, expression, expression)) {
+                    return true
                 }
             }
             return false
@@ -473,7 +481,6 @@ class KotlinConstantConditionsInspection : AbstractKotlinInspection() {
         }
 
         private fun shouldSuppress(value: ConstantValue, expression: KtExpression): Boolean {
-            // TODO: do something with always false branches in exhaustive when statements
             // TODO: return x && y.let {return...}
             var parent = expression.parent
             if (parent is KtDotQualifiedExpression && parent.selectorExpression == expression) {
@@ -505,11 +512,13 @@ class KotlinConstantConditionsInspection : AbstractKotlinInspection() {
             if (isAlsoChain(expression) || isLetConstant(expression) || isUpdateChain(expression)) return true
             when (value) {
                 ConstantValue.TRUE -> {
+                    if (isAndOrConditionWithNothingOperand(expression, KtTokens.OROR)) return true
                     if (isSmartCastNecessary(expression, true)) return true
                     if (isPairingConditionInWhen(expression)) return true
                     if (isAssertion(parent, true)) return true
                 }
                 ConstantValue.FALSE -> {
+                    if (isAndOrConditionWithNothingOperand(expression, KtTokens.ANDAND)) return true
                     if (isSmartCastNecessary(expression, false)) return true
                     if (isAssertion(parent, false)) return true
                 }
@@ -523,7 +532,10 @@ class KotlinConstantConditionsInspection : AbstractKotlinInspection() {
                         if (receiver is KtQualifiedExpression) {
                             receiver = receiver.selectorExpression
                         }
-                        if (receiver is KtSimpleNameExpression && receiver.mainReference.resolve() is KtEnumEntry) {
+                        if (receiver is KtSimpleNameExpression &&
+                            receiver.resolveMainReferenceToDescriptors()
+                                .any { desc -> desc is ClassDescriptor && desc.kind == ClassKind.ENUM_ENTRY }
+                        ) {
                             // ordinal() call on explicit enum constant
                             return true
                         }
@@ -576,6 +588,13 @@ class KotlinConstantConditionsInspection : AbstractKotlinInspection() {
                 return true
             }
             return expression.isUsedAsStatement(expression.analyze(BodyResolveMode.FULL))
+        }
+
+        // x || return y
+        private fun isAndOrConditionWithNothingOperand(expression: KtExpression, token: KtSingleValueToken): Boolean {
+            if (expression !is KtBinaryExpression || expression.operationToken != token) return false
+            val type = expression.right?.getKotlinType()
+            return type != null && type.isNothing()
         }
     }
 }

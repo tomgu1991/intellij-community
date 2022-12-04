@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.codeInsight
 
@@ -48,7 +48,7 @@ abstract class AbstractLineMarkersTestInLibrarySources : AbstractLineMarkersTest
             val project = myFixture.project
             for (file in libraryOriginal.walkTopDown().filter { !it.isDirectory }) {
                 myFixture.openFileInEditor(fileSystem.findFileByPath(file.absolutePath)!!)
-                val data = ExpectedHighlightingData(myFixture.editor.document, false, false, false)
+                val data = KotlinExpectedHighlightingData(myFixture.editor.document)
                 data.init()
 
                 val librarySourceFile = libraryClean!!.resolve(file.relativeTo(libraryOriginal).path)

@@ -30,6 +30,7 @@ public class StatementParser {
 
     JavaTokenType.STRING_LITERAL, JavaTokenType.INTEGER_LITERAL, JavaTokenType.DOUBLE_LITERAL,
     JavaTokenType.FLOAT_LITERAL, JavaTokenType.LONG_LITERAL, JavaTokenType.CHARACTER_LITERAL,
+    JavaTokenType.TEXT_BLOCK_LITERAL,
 
     JavaTokenType.IDENTIFIER, JavaTokenType.SWITCH_KEYWORD, JavaTokenType.NEW_KEYWORD,
 
@@ -488,7 +489,7 @@ public class StatementParser {
       }
       builder.remapCurrentToken(JavaTokenType.WHEN_KEYWORD);
       builder.advanceLexer();
-      PsiBuilder.Marker guardingExpression = myParser.getExpressionParser().parse(builder);
+      PsiBuilder.Marker guardingExpression = myParser.getExpressionParser().parse(builder, ExpressionParser.FORBID_LAMBDA_MASK);
       if (guardingExpression == null) {
         error(builder, JavaPsiBundle.message("expected.expression"));
       }

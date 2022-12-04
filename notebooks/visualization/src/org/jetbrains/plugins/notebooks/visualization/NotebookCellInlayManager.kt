@@ -23,10 +23,12 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
 import com.intellij.util.Processor
 import com.intellij.util.SmartList
-import com.intellij.util.castSafelyTo
+import com.intellij.util.asSafely
+import com.intellij.util.containers.SmartHashSet
 import com.intellij.util.ui.update.MergingUpdateQueue
 import com.intellij.util.ui.update.Update
 import org.jetbrains.annotations.TestOnly
+import org.jetbrains.plugins.notebooks.ui.visualization.notebookAppearance
 import java.awt.Graphics
 import javax.swing.JComponent
 import kotlin.math.max
@@ -64,9 +66,16 @@ class NotebookCellInlayManager private constructor(val editor: EditorImpl) {
     }
   }
 
-  fun update(lines: IntRange) {
-    // TODO Hypothetically, there can be a race between cell addition/deletion and updating of old cells.
-    updateQueue.queue(UpdateInlaysTask(this, lines))
+  fun updateAll() {
+    updateQueue.queue(UpdateInlaysTask(this, updateAll = true))
+  }
+
+  fun update(pointers: Collection<NotebookIntervalPointer>) {
+    updateQueue.queue(UpdateInlaysTask(this, pointers = pointers))
+  }
+
+  fun update(pointer: NotebookIntervalPointer) {
+    updateQueue.queue(UpdateInlaysTask(this, pointers = SmartList(pointer)))
   }
 
   private fun addViewportChangeListener() {
@@ -78,7 +87,7 @@ class NotebookCellInlayManager private constructor(val editor: EditorImpl) {
             controller.onViewportChange()
 
             // Many UI instances has overridden getPreferredSize relying on editor dimensions.
-            inlay.renderer?.castSafelyTo<JComponent>()?.updateUI()
+            inlay.renderer?.asSafely<JComponent>()?.updateUI()
           }
         }
       })
@@ -238,35 +247,47 @@ class NotebookCellInlayManager private constructor(val editor: EditorImpl) {
       }
     }
 
+    NotebookGutterLineMarkerManager().putHighlighters(editor)
+
     for ((_, controller) in allMatchingInlays) {
       Disposer.dispose(controller.inlay, false)
     }
     inlaysChanged()
   }
 
+  private data class NotebookCellDataProvider(
+    val editor: EditorImpl,
+    val component: JComponent,
+    val interval: NotebookCellLines.Interval,
+  ) : DataProvider {
+    override fun getData(key: String): Any? =
+      when (key) {
+        NOTEBOOK_CELL_LINES_INTERVAL_DATA_KEY.name -> interval
+        PlatformCoreDataKeys.CONTEXT_COMPONENT.name -> component
+        PlatformDataKeys.EDITOR.name -> editor
+        else -> null
+      }
+  }
+
   private fun rememberController(controller: NotebookCellInlayController, interval: NotebookCellLines.Interval) {
     val inlay = controller.inlay
-    inlay.renderer.castSafelyTo<JComponent>()?.let { component ->
-      DataManager.registerDataProvider(
-        component,
-        DataProvider { key ->
-          when (key) {
-            NOTEBOOK_CELL_LINES_INTERVAL_DATA_KEY.name -> interval
-            PlatformCoreDataKeys.CONTEXT_COMPONENT.name -> component
-            PlatformDataKeys.EDITOR.name -> editor
-            else -> null
-          }
-        },
-      )
+    inlay.renderer.asSafely<JComponent>()?.let { component ->
+      val oldProvider = DataManager.getDataProvider(component)
+      if (oldProvider != null && oldProvider !is NotebookCellDataProvider) {
+        LOG.error("Overwriting an existing CLIENT_PROPERTY_DATA_PROVIDER. Old provider: $oldProvider")
+      }
+      DataManager.removeDataProvider(component)
+      DataManager.registerDataProvider(component, NotebookCellDataProvider(editor, component, interval))
     }
     if (inlays.put(inlay, controller) !== controller) {
       val disposable = Disposable {
-        inlay.renderer.castSafelyTo<JComponent>()?.let { DataManager.removeDataProvider(it) }
+        inlay.renderer.asSafely<JComponent>()?.let { DataManager.removeDataProvider(it) }
         inlays.remove(inlay)
       }
       if (Disposer.isDisposed(inlay)) {
         disposable.dispose()
-      } else {
+      }
+      else {
         Disposer.register(inlay, disposable)
       }
     }
@@ -383,10 +404,21 @@ private object NotebookCellHighlighterRenderer : CustomHighlighterRenderer {
   }
 }
 
-private class UpdateInlaysTask(private val manager: NotebookCellInlayManager, lines: IntRange) : Update(Any()) {
-  private val linesList = SmartList(lines)
+private class UpdateInlaysTask(private val manager: NotebookCellInlayManager,
+                               pointers: Collection<NotebookIntervalPointer>? = null,
+                               private var updateAll: Boolean = false) : Update(Any()) {
+  private val pointersSet = pointers?.let { SmartHashSet(pointers) } ?: SmartHashSet()
 
   override fun run() {
+    if (updateAll) {
+      manager.updateAllImmediately()
+      return
+    }
+
+    val linesList = pointersSet.mapNotNullTo(mutableListOf()) { it.get()?.lines }
+    linesList.sortBy { it.first }
+    linesList.mergeAndJoinIntersections(listOf())
+
     for (lines in linesList) {
       manager.updateImmediately(lines)
     }
@@ -394,7 +426,11 @@ private class UpdateInlaysTask(private val manager: NotebookCellInlayManager, li
 
   override fun canEat(update: Update): Boolean {
     update as UpdateInlaysTask
-    linesList.mergeAndJoinIntersections(update.linesList)
+
+    updateAll = updateAll || update.updateAll
+    if (updateAll) return true
+
+    pointersSet.addAll(update.pointersSet)
     return true
   }
 }

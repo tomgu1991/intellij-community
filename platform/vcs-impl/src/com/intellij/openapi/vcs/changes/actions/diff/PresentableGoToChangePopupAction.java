@@ -154,7 +154,7 @@ public abstract class PresentableGoToChangePopupAction<T> extends GoToChangePopu
     protected void onDoubleClick() {
       myRef.get().cancel();
 
-      ChangesBrowserNode<?> selection = VcsTreeModelData.selected(myViewer).nodesStream().findFirst().orElse(null);
+      ChangesBrowserNode<?> selection = VcsTreeModelData.selected(myViewer).iterateNodes().first();
       GenericChangesBrowserNode node = ObjectUtils.tryCast(selection, GenericChangesBrowserNode.class);
       if (node == null) return;
 
@@ -235,7 +235,7 @@ public abstract class PresentableGoToChangePopupAction<T> extends GoToChangePopu
       super(project, grouping);
     }
 
-    public void setGenericNodes(@NotNull Collection<GenericChangesBrowserNode> nodes, @Nullable ChangesBrowserNode.Tag tag) {
+    public void setGenericNodes(@NotNull Collection<? extends GenericChangesBrowserNode> nodes, @Nullable ChangesBrowserNode.Tag tag) {
       ChangesBrowserNode<?> parentNode = createTagNode(tag);
 
       for (GenericChangesBrowserNode node : sorted(nodes, comparing(data -> data.getFilePath(), PATH_COMPARATOR))) {

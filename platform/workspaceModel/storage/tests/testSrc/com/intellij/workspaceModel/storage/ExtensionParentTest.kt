@@ -1,12 +1,10 @@
 package com.intellij.workspaceModel.storage
 
-import com.intellij.workspaceModel.storage.entities.test.api.AttachedEntityToParent
-import com.intellij.workspaceModel.storage.entities.test.api.MainEntityToParent
-import com.intellij.workspaceModel.storage.entities.test.api.MySource
-import com.intellij.workspaceModel.storage.entities.test.api.ref
-import com.intellij.workspaceModel.storage.entities.test.api.modifyEntity
+import com.intellij.workspaceModel.storage.entities.test.api.*
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ExtensionParentTest {
@@ -14,7 +12,7 @@ class ExtensionParentTest {
   fun `access by extension`() {
     val builder = createEmptyBuilder()
     builder.addEntity(AttachedEntityToParent("xyz", MySource) {
-      ref = MainEntityToParent(MySource, "123")
+      ref = MainEntityToParent("123", MySource)
     })
     val child: AttachedEntityToParent = builder.toSnapshot().entities(MainEntityToParent::class.java).single().child!!
     assertEquals("xyz", child.data)
@@ -26,7 +24,7 @@ class ExtensionParentTest {
   @Test
   fun `access by extension without builder`() {
     val entity = AttachedEntityToParent("xyz", MySource) {
-      ref = MainEntityToParent(MySource, "123")
+      ref = MainEntityToParent("123", MySource)
     }
 
     assertEquals("xyz", entity.data)
@@ -38,7 +36,7 @@ class ExtensionParentTest {
   @Test
   fun `access by extension opposite`() {
     val builder = createEmptyBuilder()
-    builder.addEntity(MainEntityToParent(MySource, "123") {
+    builder.addEntity(MainEntityToParent("123", MySource) {
       this.child = AttachedEntityToParent("xyz", MySource)
     })
     val child: AttachedEntityToParent = builder.toSnapshot().entities(MainEntityToParent::class.java).single().child!!
@@ -51,7 +49,7 @@ class ExtensionParentTest {
   @Test
   fun `access by extension opposite in builder`() {
     val builder = createEmptyBuilder()
-    val entity = MainEntityToParent(MySource, "123") {
+    val entity = MainEntityToParent("123", MySource) {
       this.child = AttachedEntityToParent("xyz", MySource)
     }
     builder.addEntity(entity)
@@ -61,7 +59,7 @@ class ExtensionParentTest {
   @Test
   fun `access by extension opposite in modification`() {
     val builder = createEmptyBuilder()
-    val entity = MainEntityToParent(MySource, "123") {
+    val entity = MainEntityToParent("123", MySource) {
       this.child = AttachedEntityToParent("xyz", MySource)
     }
     builder.addEntity(entity)
@@ -78,7 +76,7 @@ class ExtensionParentTest {
 
   @Test
   fun `access by extension opposite without builder`() {
-    val entity = MainEntityToParent(MySource, "123") {
+    val entity = MainEntityToParent("123", MySource) {
       this.child = AttachedEntityToParent("xyz", MySource)
     }
 
@@ -86,5 +84,27 @@ class ExtensionParentTest {
     val ref = entity.child!!
     val children = ref.ref
     assertEquals("123", children.x)
+  }
+
+  @Test
+  fun `check reference via extension property removes correctly`() {
+    val builder = createEmptyBuilder()
+    val entity = MainEntityToParent("123", MySource) {
+      this.childNullableParent = AttachedEntityToNullableParent("xyz", MySource)
+    }
+    builder.addEntity(entity)
+
+    var existingMainEntity = builder.entities(MainEntityToParent::class.java).single()
+    assertNotNull(existingMainEntity.childNullableParent)
+
+    val existingAttachedEntity = builder.entities(AttachedEntityToNullableParent::class.java).single()
+    assertNotNull(existingAttachedEntity.nullableRef)
+
+    builder.modifyEntity(existingAttachedEntity) {
+      this.nullableRef = null
+    }
+
+    existingMainEntity = builder.entities(MainEntityToParent::class.java).single()
+    assertNull(existingMainEntity.child)
   }
 }

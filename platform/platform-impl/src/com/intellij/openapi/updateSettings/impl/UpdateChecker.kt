@@ -10,7 +10,6 @@ import com.intellij.ide.plugins.marketplace.MarketplaceRequests
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.internal.statistic.eventLog.fus.MachineIdManager
 import com.intellij.notification.*
-import com.intellij.notification.impl.NotificationsConfigurationImpl
 import com.intellij.openapi.actionSystem.PlatformCoreDataKeys
 import com.intellij.openapi.application.*
 import com.intellij.openapi.application.ex.ApplicationInfoEx
@@ -328,7 +327,7 @@ object UpdateChecker {
     indicator: ProgressIndicator? = null,
   ): InternalPluginResults {
     indicator?.text = IdeBundle.message("updates.checking.plugins")
-    if (System.getProperty("idea.ignore.disabled.plugins") == null) {
+    if (!PluginEnabler.HEADLESS.isIgnoredDisabledPlugins) {
       val brokenPlugins = MarketplaceRequests.getInstance().getBrokenPlugins(ApplicationInfo.getInstance().build)
       if (brokenPlugins.isNotEmpty()) {
         PluginManagerCore.updateBrokenPlugins(brokenPlugins)
@@ -373,12 +372,14 @@ object UpdateChecker {
       }
     }
 
+    fun IdeaPluginDescriptor.isKotlinPlugin(): Boolean = pluginId.idString == "org.jetbrains.kotlin"
+
     val incompatible = if (buildNumber == null) emptyList() else {
       // collecting plugins that aren't going to be updated and are incompatible with the new build
       // (the map may contain updateable bundled plugins - those are expected to have a compatible version in IDE)
       updateable.values.asSequence()
         .filterNotNull()
-        .filter { it.isEnabled && !it.isBundled && !PluginManagerCore.isCompatible(it, buildNumber) }
+        .filter { !it.isKotlinPlugin() && it.isEnabled && !it.isBundled && !PluginManagerCore.isCompatible(it, buildNumber) }
         .toSet()
     }
 
@@ -442,12 +443,14 @@ object UpdateChecker {
                                                                                            buildNumber) > 0)) {
         runCatching { MarketplaceRequests.loadPluginDescriptor(id.idString, lastUpdate, indicator) }
           .onFailure { if (it !is HttpRequests.HttpStatusException || it.statusCode != HttpURLConnection.HTTP_NOT_FOUND) throw it }
+          .onSuccess { it.externalPluginIdForScreenShots = lastUpdate.externalPluginId }
           .onSuccess { prepareDownloader(state, it, buildNumber, toUpdate, toUpdateDisabled, indicator, null) }
       }
     }
     (toUpdate.keys.asSequence() + toUpdateDisabled.keys.asSequence()).forEach { updateable.remove(it) }
   }
 
+  @RequiresBackgroundThread
   private fun prepareDownloader(state: InstalledPluginsState,
                                 descriptor: PluginNode,
                                 buildNumber: BuildNumber?,
@@ -491,6 +494,7 @@ object UpdateChecker {
   @Throws(IOException::class)
   @JvmOverloads
   @JvmStatic
+  @RequiresBackgroundThread
   fun checkAndPrepareToInstall(
     originalDownloader: PluginDownloader,
     state: InstalledPluginsState,
@@ -661,8 +665,9 @@ object UpdateChecker {
   }
 
   private fun notificationsEnabled(): Boolean =
-    NotificationsConfigurationImpl.getInstanceImpl().SHOW_BALLOONS &&
-    NotificationsConfigurationImpl.getSettings(getNotificationGroup().displayId).displayType != NotificationDisplayType.NONE
+    NotificationsConfiguration.getNotificationsConfiguration().let {
+      it.areNotificationsEnabled() && it.getDisplayType(getNotificationGroup().displayId) != NotificationDisplayType.NONE
+    }
 
   private fun showNotification(project: Project?,
                                kind: NotificationKind,
@@ -685,8 +690,14 @@ object UpdateChecker {
 
   @JvmStatic
   fun saveDisabledToUpdatePlugins() {
-    runCatching { DisabledPluginsState.savePluginsList(disabledToUpdate, Path.of(PathManager.getConfigPath(), DISABLED_UPDATE)) }
-      .onFailure { LOG.error(it) }
+    runCatching {
+      PluginManagerCore.writePluginIdsToFile(
+        /* path = */ PathManager.getConfigDir().resolve(DISABLED_UPDATE),
+        /* pluginIds = */ disabledToUpdate,
+      )
+    }.onFailure {
+      LOG.error(it)
+    }
   }
 
   @JvmStatic

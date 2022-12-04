@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.wm.impl.status;
 
 import com.intellij.ide.util.EditorGotoLineNumberDialog;
@@ -7,10 +7,10 @@ import com.intellij.openapi.command.CommandProcessor;
 import com.intellij.openapi.editor.*;
 import com.intellij.openapi.editor.event.*;
 import com.intellij.openapi.fileEditor.FileEditorManagerEvent;
+import com.intellij.openapi.fileEditor.FileEditorManagerListener;
 import com.intellij.openapi.fileEditor.ex.IdeDocumentHistory;
 import com.intellij.openapi.keymap.KeymapUtil;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.NlsContexts;
 import com.intellij.openapi.util.registry.Registry;
@@ -20,6 +20,7 @@ import com.intellij.openapi.wm.StatusBarWidget;
 import com.intellij.ui.UIBundle;
 import com.intellij.util.Alarm;
 import com.intellij.util.Consumer;
+import com.intellij.util.ui.FocusUtil;
 import com.intellij.util.ui.update.MergingUpdateQueue;
 import com.intellij.util.ui.update.Update;
 import org.jetbrains.annotations.Nls;
@@ -54,13 +55,7 @@ public class PositionPanel extends EditorBasedWidget
   }
 
   @Override
-  public void selectionChanged(@NotNull FileEditorManagerEvent event) {
-    updatePosition(getEditor());
-  }
-
-  @Override
-  @NotNull
-  public String ID() {
+  public @NotNull String ID() {
     return StatusBar.StandardWidgets.POSITION_PANEL;
   }
 
@@ -75,8 +70,7 @@ public class PositionPanel extends EditorBasedWidget
   }
 
   @Override
-  @NotNull
-  public String getText() {
+  public @NotNull String getText() {
     return myText == null ? "" : myText;
   }
 
@@ -90,7 +84,7 @@ public class PositionPanel extends EditorBasedWidget
     String toolTip = UIBundle.message("go.to.line.command.name");
     String shortcut = getShortcutText();
 
-    if (!Registry.is("ide.helptooltip.enabled") && StringUtil.isNotEmpty(shortcut)) {
+    if (StringUtil.isNotEmpty(shortcut) && !Registry.is("ide.helptooltip.enabled")) {
       return toolTip + " (" + shortcut + ")";
     }
     return toolTip;
@@ -106,7 +100,9 @@ public class PositionPanel extends EditorBasedWidget
     return mouseEvent -> {
       Project project = getProject();
       Editor editor = getFocusedEditor();
-      if (editor == null) return;
+      if (editor == null) {
+        return;
+      }
 
       CommandProcessor.getInstance().executeCommand(
         project,
@@ -124,26 +120,31 @@ public class PositionPanel extends EditorBasedWidget
   @Override
   public void install(@NotNull StatusBar statusBar) {
     super.install(statusBar);
+
+    myConnection.subscribe(FileEditorManagerListener.FILE_EDITOR_MANAGER, new FileEditorManagerListener() {
+      @Override
+      public void selectionChanged(@NotNull FileEditorManagerEvent event) {
+        updatePosition(getEditor());
+      }
+    });
+
     myAlarm = new Alarm(Alarm.ThreadToUse.POOLED_THREAD, this);
     myQueue = new MergingUpdateQueue("PositionPanel", 100, true, null, this);
     EditorEventMulticaster multicaster = EditorFactory.getInstance().getEventMulticaster();
     multicaster.addCaretListener(this, this);
     multicaster.addSelectionListener(this, this);
     multicaster.addDocumentListener(this, this);
-    KeyboardFocusManager.getCurrentKeyboardFocusManager().addPropertyChangeListener(SWING_FOCUS_OWNER_PROPERTY, this);
-    Disposer.register(this,
-                      () -> KeyboardFocusManager.getCurrentKeyboardFocusManager().removePropertyChangeListener(SWING_FOCUS_OWNER_PROPERTY,
-                                                                                                               this));
+    FocusUtil.addFocusOwnerListener(this, this);
   }
 
   @Override
-  public void selectionChanged(@NotNull final SelectionEvent e) {
+  public void selectionChanged(final @NotNull SelectionEvent e) {
     Editor editor = e.getEditor();
     if (isFocusedEditor(editor)) updatePosition(editor);
   }
 
   @Override
-  public void caretPositionChanged(@NotNull final CaretEvent e) {
+  public void caretPositionChanged(final @NotNull CaretEvent e) {
     Editor editor = e.getEditor();
     // When multiple carets exist in editor, we don't show information about caret positions
     if (editor.getCaretModel().getCaretCount() == 1 && isFocusedEditor(editor)) updatePosition(editor);

@@ -7,7 +7,6 @@ import com.intellij.openapi.application.runWriteAction
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiManager
 import com.intellij.testFramework.runInEdtAndWait
-import org.jetbrains.kotlin.idea.codeInsight.gradle.GradleKotlinTestUtils.TestedKotlinGradlePluginVersions
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinPluginLayout
 import org.jetbrains.kotlin.idea.configuration.notifications.disableNewKotlinCompilerAvailableNotification
 import org.jetbrains.kotlin.idea.notification.catchNotificationText
@@ -20,7 +19,7 @@ class GradleMigrateTest : MultiplePluginVersionGradleImportingTestCase() {
     @Test
     @TargetVersions("6.9+")
     fun testMigrateStdlib() {
-        if (TestedKotlinGradlePluginVersions.ALL_PUBLIC.last() != kotlinPluginVersion) {
+        if (kotlinPluginVersion != KotlinGradlePluginVersions.lastStable) {
             if (IS_UNDER_TEAMCITY) return else throw AssumptionViolatedException("Ignored KGP version $kotlinPluginVersion")
         }
 
@@ -31,14 +30,14 @@ class GradleMigrateTest : MultiplePluginVersionGradleImportingTestCase() {
                     ${GradleKotlinTestUtils.listRepositories(false, gradleVersion)}                    
                 }
                 dependencies {
-                    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${TestedKotlinGradlePluginVersions.V_1_5_32}"
+                    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${KotlinGradlePluginVersions.V_1_5_32}"
                 }
             }
 
             apply plugin: 'kotlin'
 
             dependencies {
-                implementation "org.jetbrains.kotlin:kotlin-stdlib:${TestedKotlinGradlePluginVersions.V_1_5_32}"
+                implementation "org.jetbrains.kotlin:kotlin-stdlib:${KotlinGradlePluginVersions.V_1_5_32}"
             }
             """,
             afterText =
@@ -48,20 +47,21 @@ class GradleMigrateTest : MultiplePluginVersionGradleImportingTestCase() {
                     ${GradleKotlinTestUtils.listRepositories(false, gradleVersion)}                    
                 }
                 dependencies {
-                    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${TestedKotlinGradlePluginVersions.V_1_6_21}"
+                    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${KotlinGradlePluginVersions.V_1_6_21}"
                 }
             }
 
             apply plugin: 'kotlin'
 
             dependencies {
-                implementation "org.jetbrains.kotlin:kotlin-stdlib:${TestedKotlinGradlePluginVersions.V_1_6_21}"
+                implementation "org.jetbrains.kotlin:kotlin-stdlib:${KotlinGradlePluginVersions.V_1_6_21}"
             }
             """
         )
 
         assertEquals(
-            "Migrations for Kotlin code are available<br/><br/>Detected migration:<br/>&nbsp;&nbsp;Language version: 1.5 -> 1.6<br/>&nbsp;&nbsp;API version: 1.5 -> 1.6<br/>",
+            "Update your code to replace the use of deprecated language and library features with supported constructs<br/><br/>" +
+                    "Detected migration:<br/>&nbsp;&nbsp;Language version: 1.5 to 1.6<br/>&nbsp;&nbsp;API version: 1.5 to 1.6<br/>",
             notificationText,
         )
     }

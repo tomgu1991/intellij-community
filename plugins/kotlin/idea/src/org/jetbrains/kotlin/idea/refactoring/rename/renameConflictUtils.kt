@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring.rename
 
@@ -9,9 +9,10 @@ import com.intellij.usageView.UsageInfo
 import com.intellij.usageView.UsageViewUtil
 import org.jetbrains.kotlin.descriptors.*
 import org.jetbrains.kotlin.idea.FrontendInternals
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.base.codeInsight.KotlinNameSuggestionProvider
 import org.jetbrains.kotlin.idea.base.fe10.codeInsight.newDeclaration.Fe10KotlinNewDeclarationNameValidator
+import org.jetbrains.kotlin.idea.base.psi.KotlinPsiHeuristics
 import org.jetbrains.kotlin.idea.caches.resolve.analyzeInContext
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.caches.resolve.getResolutionFacade
@@ -28,8 +29,7 @@ import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.idea.resolve.ResolutionFacade
 import org.jetbrains.kotlin.idea.search.ideaExtensions.KotlinReferencesSearchOptions
 import org.jetbrains.kotlin.idea.search.ideaExtensions.KotlinReferencesSearchParameters
-import org.jetbrains.kotlin.idea.search.isPotentiallyOperator
-import org.jetbrains.kotlin.idea.search.useScope
+import org.jetbrains.kotlin.idea.base.util.useScope
 import org.jetbrains.kotlin.idea.util.IdeDescriptorRenderers
 import org.jetbrains.kotlin.idea.util.getAllAccessibleFunctions
 import org.jetbrains.kotlin.idea.util.getAllAccessibleVariables
@@ -124,7 +124,7 @@ internal fun checkRedeclarations(
                 typeParameters.filterTo(this) { it.name.asString() == newName }
                 val containingDeclaration = (containingDescriptor as? DeclarationDescriptorWithSource)?.source?.getPsi() as? KtDeclaration
                     ?: return emptyList()
-                val dummyVar = KtPsiFactory(containingDeclaration).createProperty("val foo: $newName")
+                val dummyVar = KtPsiFactory(containingDeclaration.project).createProperty("val foo: $newName")
                 val outerScope = containingDeclaration.getResolutionScope()
                 val context = dummyVar.analyzeInContext(outerScope, containingDeclaration)
                 addIfNotNull(context[BindingContext.VARIABLE, dummyVar]?.type?.constructor?.declarationDescriptor)
@@ -231,7 +231,7 @@ private fun checkUsagesRetargeting(
             if (Fe10KotlinNewDeclarationNameValidator(refElement.parent, refElement, KotlinNameSuggestionProvider.ValidatorTarget.VARIABLE)(name)) continue
         }
 
-        val psiFactory = KtPsiFactory(declaration)
+        val psiFactory = KtPsiFactory(declaration.project)
 
         val resolvedCall = refElement.getResolvedCall(context)
         if (resolvedCall == null) {
@@ -392,7 +392,9 @@ internal fun checkNewNameUsagesRetargeting(
 }
 
 internal fun PsiElement?.isOperator(): Boolean {
-    if (!isPotentiallyOperator()) return false
+    if (this !is KtNamedFunction || !KotlinPsiHeuristics.isPossibleOperator(this)) {
+        return false
+    }
 
     val resolveWithParents = resolveDeclarationWithParents(this as KtNamedFunction)
     return resolveWithParents.overriddenDescriptors.any {

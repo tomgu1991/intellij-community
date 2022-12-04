@@ -5,10 +5,11 @@ package org.jetbrains.kotlin.idea.intentions
 import com.intellij.codeInspection.CleanupLocalInspectionTool
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.util.TextRange
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.caches.resolve.analyzeAsReplacement
-import org.jetbrains.kotlin.idea.inspections.IntentionBasedInspection
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.intentions.SelfTargetingRangeIntention
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.inspections.IntentionBasedInspection
 import org.jetbrains.kotlin.psi.KtPsiFactory
 import org.jetbrains.kotlin.psi.KtQualifiedExpression
 import org.jetbrains.kotlin.psi.KtSuperExpression
@@ -38,7 +39,7 @@ class RemoveExplicitSuperQualifierIntention : SelfTargetingRangeIntention<KtSupe
         val bindingContext = selector.analyze(BodyResolveMode.PARTIAL_WITH_CFA)
         if (selector.getResolvedCall(bindingContext) == null) return null
 
-        val newQualifiedExpression = KtPsiFactory(element).createExpressionByPattern(
+        val newQualifiedExpression = KtPsiFactory(element.project).createExpressionByPattern(
             "$0.$1", toNonQualified(element, reformat = false), selector,
             reformat = false
         ) as KtQualifiedExpression
@@ -55,11 +56,11 @@ class RemoveExplicitSuperQualifierIntention : SelfTargetingRangeIntention<KtSupe
     }
 
     private fun toNonQualified(superExpression: KtSuperExpression, reformat: Boolean): KtSuperExpression {
-        val factory = KtPsiFactory(superExpression)
+        val psiFactory = KtPsiFactory(superExpression.project)
         val labelName = superExpression.getLabelNameAsName()
         return (if (labelName != null)
-            factory.createExpressionByPattern("super@$0", labelName, reformat = reformat)
+            psiFactory.createExpressionByPattern("super@$0", labelName, reformat = reformat)
         else
-            factory.createExpression("super")) as KtSuperExpression
+            psiFactory.createExpression("super")) as KtSuperExpression
     }
 }

@@ -6,7 +6,7 @@ import com.intellij.testFramework.TestDataPath;
 import org.jetbrains.kotlin.idea.test.JUnit3RunnerWithInners;
 import org.jetbrains.kotlin.idea.test.KotlinTestUtils;
 import org.jetbrains.kotlin.test.TestMetadata;
-import org.jetbrains.kotlin.idea.test.TestRoot;
+import org.jetbrains.kotlin.idea.base.test.TestRoot;
 import org.junit.runner.RunWith;
 import static org.jetbrains.kotlin.idea.base.plugin.artifacts.TestKotlinArtifacts.compilerTestData;
 
@@ -78,6 +78,11 @@ public class UltraLightFacadeClassTest15Generated extends AbstractUltraLightFaca
     @TestMetadata("properties.kt")
     public void testProperties() throws Exception {
         runTest(compilerTestData("compiler/testData/asJava/ultraLightFacades/properties.kt"));
+    }
+
+    @TestMetadata("script.kts")
+    public void testScript() throws Exception {
+        runTest(compilerTestData("compiler/testData/asJava/ultraLightFacades/script.kts"));
     }
 
     @TestMetadata("simpleFunctions.kt")

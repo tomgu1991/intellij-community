@@ -204,9 +204,16 @@ public class JavaReplaceHandler extends StructuralReplaceHandler {
         copyClassType(originalClass, queryClass, replacementClass);
         copyExtendsListIfNotReplaced(originalClass, queryClass, replacementClass);
         copyImplementsListIfNotReplaced(originalClass, queryClass, replacementClass);
-        copyTypeParameterListIfNotReplaced(originalClass, queryClass, replacementClass);
 
         copyUnmatchedMembers(originalClass, originalNamedElements, replacementClass);
+      }
+
+      if (originalNamedElement instanceof PsiTypeParameterListOwner &&
+          patternNamedElement instanceof PsiTypeParameterListOwner &&
+          replacementNamedElement instanceof PsiTypeParameterListOwner) {
+        copyTypeParameterListIfNotReplaced((PsiTypeParameterListOwner)originalNamedElement,
+                                           (PsiTypeParameterListOwner)patternNamedElement,
+                                           (PsiTypeParameterListOwner)replacementNamedElement);
       }
     }
   }
@@ -247,23 +254,12 @@ public class JavaReplaceHandler extends StructuralReplaceHandler {
       return;
     }
     final PsiElementFactory factory = JavaPsiFacade.getElementFactory(replacementClass.getProject());
-    final PsiClass aClass;
-    switch (type) {
-      case ANNOTATION:
-        aClass = factory.createAnnotationType("X");
-        break;
-      case ENUM:
-        aClass = factory.createEnum("X");
-        break;
-      case INTERFACE:
-        aClass = factory.createInterface("X");
-        break;
-      case RECORD:
-        aClass = factory.createRecord("X");
-        break;
-      default:
-        throw new AssertionError();
-    }
+    final PsiClass aClass = switch (type) {
+      case ANNOTATION -> factory.createAnnotationType("X");
+      case ENUM -> factory.createEnum("X");
+      case INTERFACE -> factory.createInterface("X");
+      case RECORD -> factory.createRecord("X");
+    };
     final PsiIdentifier identifier = aClass.getNameIdentifier();
     final PsiKeyword newKeyword = PsiTreeUtil.getPrevSiblingOfType(identifier, PsiKeyword.class);
     assert newKeyword != null;
@@ -656,7 +652,9 @@ public class JavaReplaceHandler extends StructuralReplaceHandler {
     }
   }
 
-  private static void copyTypeParameterListIfNotReplaced(PsiClass original, PsiClass query, PsiClass replacement) {
+  private static void copyTypeParameterListIfNotReplaced(PsiTypeParameterListOwner original,
+                                                         PsiTypeParameterListOwner query,
+                                                         PsiTypeParameterListOwner replacement) {
     final PsiTypeParameterList originalTypeParameterList = original.getTypeParameterList();
     final PsiTypeParameterList queryTypeParameterList = query.getTypeParameterList();
     final PsiTypeParameterList replacementTypeParameterList = replacement.getTypeParameterList();
@@ -666,7 +664,11 @@ public class JavaReplaceHandler extends StructuralReplaceHandler {
     if (originalTypeParameterList.getTypeParameters().length != 0 &&
         queryTypeParameterList.getTypeParameters().length == 0 &&
         replacementTypeParameterList.getTypeParameters().length == 0) {
-      replacementTypeParameterList.replace(originalTypeParameterList);
+      final PsiElement newElement = replacementTypeParameterList.replace(originalTypeParameterList);
+      final PsiElement prev = originalTypeParameterList.getPrevSibling();
+      if (prev instanceof PsiWhiteSpace) {
+        newElement.getParent().addBefore(prev, newElement);
+      }
     }
   }
 

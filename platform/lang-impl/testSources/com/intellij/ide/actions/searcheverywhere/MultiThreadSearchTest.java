@@ -207,20 +207,11 @@ public class MultiThreadSearchTest extends BasePlatformTestCase {
     };
   }
 
-  private static class Scenario {
-    private final Map<SearchEverywhereContributor<Object>, Integer> contributorsAndLimits;
-    private final Map<String, List<String>> results;
-    private final String description;
-
-    Scenario(Map<SearchEverywhereContributor<Object>, Integer> contributorsAndLimits,
-                    Map<String, List<String>> results, String description) {
-      this.contributorsAndLimits = contributorsAndLimits;
-      this.results = results;
-      this.description = description;
-    }
+  private record Scenario(Map<SearchEverywhereContributor<Object>, Integer> contributorsAndLimits, Map<String, List<String>> results,
+                          String description) {
   }
 
-  private static class SearchResultsCollector implements SESearcher.Listener {
+  private static class SearchResultsCollector implements SearchListener {
 
     private final Map<String, List<String>> myMap = new ConcurrentHashMap<>();
     private final AtomicBoolean myFinished = new AtomicBoolean(false);
@@ -259,6 +250,12 @@ public class MultiThreadSearchTest extends BasePlatformTestCase {
     }
 
     @Override
+    public void contributorWaits(@NotNull SearchEverywhereContributor<?> contributor) { }
+
+    @Override
+    public void contributorFinished(@NotNull SearchEverywhereContributor<?> contributor, boolean hasMore) { }
+
+    @Override
     public void searchFinished(@NotNull Map<SearchEverywhereContributor<?>, Boolean> hasMoreContributors) {
       hasMoreContributors.entrySet()
         .stream()
@@ -275,5 +272,8 @@ public class MultiThreadSearchTest extends BasePlatformTestCase {
 
       myPhaser.arrive();
     }
+
+    @Override
+    public void searchStarted(@NotNull Collection<? extends SearchEverywhereContributor<?>> contributors) { }
   }
 }

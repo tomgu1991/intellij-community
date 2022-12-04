@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.fir.analysis.providers.sessions
 
@@ -18,11 +18,13 @@ import org.jetbrains.kotlin.idea.fir.analysis.providers.TestProjectStructureRead
 import org.jetbrains.kotlin.idea.fir.analysis.providers.incModificationTracker
 import org.jetbrains.kotlin.idea.jsonUtils.getString
 import org.jetbrains.kotlin.idea.stubs.AbstractMultiModuleTest
-import org.jetbrains.kotlin.test.KotlinRoot
+import org.jetbrains.kotlin.idea.base.test.KotlinRoot
 import java.io.File
 import java.nio.file.Paths
 
 abstract class AbstractSessionsInvalidationTest : AbstractMultiModuleTest() {
+    override fun isFirPlugin(): Boolean = true
+
     override fun getTestDataDirectory(): File =
         KotlinRoot.DIR.resolve("fir-low-level-api-ide-impl").resolve("testData").resolve("sessionInvalidation")
 
@@ -63,7 +65,7 @@ abstract class AbstractSessionsInvalidationTest : AbstractMultiModuleTest() {
         val changedSessionsModulesNamesSorted = changedSessions
             .map { session ->
                 val moduleSession = session as LLFirModuleSession
-                val module = moduleSession.module as KtSourceModule
+                val module = moduleSession.ktModule as KtSourceModule
                 module.moduleName
             }
             .distinct()

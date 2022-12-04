@@ -21,6 +21,7 @@ import com.intellij.psi.util.MethodSignatureUtil;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.util.PsiUtil;
 import com.intellij.util.IncorrectOperationException;
+import com.intellij.util.ObjectUtils;
 import com.siyeh.ig.psiutils.CommentTracker;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -125,12 +126,12 @@ public class AddSingleMemberStaticImportAction extends BaseElementAtCaretIntenti
   }
 
   private static PsiImportStatementBase findExistingImport(PsiFile file, PsiClass aClass, String refName) {
-    if (file instanceof PsiJavaFile) {
+    if (file instanceof PsiJavaFile && aClass != null) {
       PsiImportList importList = ((PsiJavaFile)file).getImportList();
       if (importList != null) {
         for (PsiImportStaticStatement staticStatement : importList.getImportStaticStatements()) {
           if (staticStatement.isOnDemand()) {
-            if (staticStatement.resolveTargetClass() == aClass) {
+            if (aClass.isEquivalentTo(staticStatement.resolveTargetClass())) {
               return staticStatement;
             }
           }
@@ -138,7 +139,7 @@ public class AddSingleMemberStaticImportAction extends BaseElementAtCaretIntenti
 
         final PsiImportStatementBase importStatement = importList.findSingleImportStatement(refName);
         if (importStatement instanceof PsiImportStaticStatement &&
-            ((PsiImportStaticStatement)importStatement).resolveTargetClass() == aClass) {
+            aClass.isEquivalentTo(((PsiImportStaticStatement)importStatement).resolveTargetClass())) {
           return importStatement;
         }
       }
@@ -192,7 +193,8 @@ public class AddSingleMemberStaticImportAction extends BaseElementAtCaretIntenti
   }
 
   public static void invoke(PsiFile file, final PsiElement element) {
-    final PsiJavaCodeReferenceElement refExpr = (PsiJavaCodeReferenceElement)element.getParent();
+    final PsiJavaCodeReferenceElement refExpr = ObjectUtils.tryCast(element.getParent(), PsiJavaCodeReferenceElement.class);
+    if (refExpr == null) return;
     final String referenceName = refExpr.getReferenceName();
     final JavaResolveResult[] targets = refExpr.multiResolve(false);
     for (JavaResolveResult target : targets) {
@@ -272,7 +274,7 @@ public class AddSingleMemberStaticImportAction extends BaseElementAtCaretIntenti
                   catch (IncorrectOperationException e) {
                     LOG.error(e);
                   }
-                  if (!Comparing.equal(reference.resolve(), referent)) {
+                  if (referent == null ? reference.resolve() != null : !referent.isEquivalentTo(reference.resolve())) {
                     reference = rebind(reference, resolvedClass);
                   }
                 }

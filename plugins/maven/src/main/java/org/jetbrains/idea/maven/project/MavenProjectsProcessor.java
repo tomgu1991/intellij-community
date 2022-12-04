@@ -19,6 +19,7 @@ import com.intellij.internal.statistic.StructuredIdeActivity;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.ControlFlowException;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.externalSystem.issue.BuildIssueException;
 import com.intellij.openapi.externalSystem.statistics.ExternalSystemStatUtilKt;
 import com.intellij.openapi.externalSystem.statistics.ProjectImportCollector;
 import com.intellij.openapi.project.Project;
@@ -58,14 +59,20 @@ public class MavenProjectsProcessor {
   }
 
   public void scheduleTask(MavenProjectsProcessorTask task) {
+    boolean startProcessingInThisThread = false;
     synchronized (myQueue) {
-      if (!isProcessing && !MavenUtil.isMavenUnitTestModeEnabled()) {
+      if (!isProcessing && !MavenUtil.isNoBackgroundMode()) {
         isProcessing = true;
-        startProcessing(task);
-        return;
+        startProcessingInThisThread = true;
       }
-      if (myQueue.contains(task)) return;
-      myQueue.add(task);
+      else {
+        if (myQueue.contains(task)) return;
+        myQueue.add(task);
+      }
+    }
+
+    if (startProcessingInThisThread) {
+      startProcessing(task);
     }
   }
 
@@ -78,18 +85,18 @@ public class MavenProjectsProcessor {
   public void waitForCompletion() {
     if (isStopped) return;
 
-    if (MavenUtil.isMavenUnitTestModeEnabled()) {
+    if (MavenUtil.isNoBackgroundMode()) {
       while (true) {
         MavenProjectsProcessorTask task;
         synchronized (myQueue) {
           task = myQueue.poll();
-          if(task == null){
+          if (task == null) {
             return;
           }
         }
         startProcessing(task);
-        }
       }
+    }
 
     final Semaphore semaphore = new Semaphore();
     semaphore.down();
@@ -198,15 +205,20 @@ public class MavenProjectsProcessor {
     }
     ReadAction.run(() -> {
       if (myProject.isDisposed()) return;
-      MavenLog.LOG.error(e);
       MavenProjectsManager.getInstance(myProject).showServerException(e);
+      if (ExceptionUtil.causedBy(e, BuildIssueException.class)) {
+        MavenLog.LOG.info(e);
+      }
+      else {
+        MavenLog.LOG.error(e);
+      }
     });
   }
 
   private static class MavenProjectsProcessorWaitForCompletionTask implements MavenProjectsProcessorTask {
     private final Semaphore mySemaphore;
 
-    MavenProjectsProcessorWaitForCompletionTask(Semaphore semaphore) {mySemaphore = semaphore;}
+    MavenProjectsProcessorWaitForCompletionTask(Semaphore semaphore) { mySemaphore = semaphore; }
 
     @Override
     public void perform(Project project, MavenEmbeddersManager embeddersManager, MavenConsole console, MavenProgressIndicator indicator)

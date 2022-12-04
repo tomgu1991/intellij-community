@@ -12,6 +12,7 @@ class GeneratorPreferences(properties: Properties) : Preferences(properties) {
     val jpsPluginArtifactsMode: ArtifactMode by Preference(ArtifactMode::valueOf)
 
     val kotlincVersion: String by Preference()
+    val kotlinGradlePluginVersion: String by Preference()
     val kotlincArtifactsMode: ArtifactMode by Preference(ArtifactMode::valueOf)
 
     enum class ArtifactMode {
@@ -59,6 +60,8 @@ fun main(args: Array<String>) {
 
     processRoot(communityRoot, isCommunity = true)
     patchGitignore(communityRoot, preferences.kotlincArtifactsMode)
+    updateLatestGradlePluginVersion(communityRoot, preferences.kotlinGradlePluginVersion)
+    updateKGPVersionForKotlinNativeTests(communityRoot, preferences.kotlinGradlePluginVersion)
 }
 
 private fun regenerateProjectLibraries(dotIdea: File, libraries: List<JpsLibrary>) {
@@ -115,6 +118,41 @@ private fun cloneModuleStructure(monorepoRoot: File, communityRoot: File) {
     }
 
     communityModulesFile.writeText(newCommunityModulesXmlContent.render(addXmlDeclaration = true))
+}
+
+/**
+ * Updates the `KotlinGradlePluginVersions.kt` source file to contain the latest [kotlinGradlePluginVersion]
+ * in the source code. The `KotlinGradlePluginVersions` source file can't directly read the `model.properties` file directly, since
+ * the project model can be overwritten by the [main] args (see also [GeneratorPreferences.parse])
+ */
+private fun updateLatestGradlePluginVersion(communityRoot: File, kotlinGradlePluginVersion: String) {
+    val kotlinGradlePluginVersionsKt = communityRoot.resolve(
+        "plugins/kotlin/gradle/gradle-java/tests/test/org/jetbrains/kotlin/idea/codeInsight/gradle/KotlinGradlePluginVersions.kt"
+    )
+    updateFile(
+        kotlinGradlePluginVersionsKt,
+        """val latest = .*""",
+        "val latest = KotlinToolingVersion(\"$kotlinGradlePluginVersion\")"
+    )
+}
+
+private fun updateKGPVersionForKotlinNativeTests(communityRoot: File, kotlinGradlePluginVersion: String) {
+    val kotlinNativeVersionsKt = communityRoot.resolve(
+        "plugins/kotlin/base/plugin/test/org/jetbrains/kotlin/idea/artifacts/KotlinNativeVersion.kt"
+    )
+    updateFile(
+        kotlinNativeVersionsKt,
+        """private const val kotlinGradlePluginVersion: String =.*""",
+        "private const val kotlinGradlePluginVersion: String = \"$kotlinGradlePluginVersion\""
+    )
+}
+
+private fun updateFile(sourceFile: File, regexp: String, replacement: String) {
+    val updatedFileContent = sourceFile.readText().replace(
+        Regex(regexp), replacement
+    )
+
+    sourceFile.writeText(updatedFileContent)
 }
 
 private data class JpsModule(val name: String, val path: String, val dependencies: List<String>) {

@@ -49,10 +49,7 @@ internal class RunToolbarMainSlotActive : SegmentedCustomAction(),
         presentation.isEnabledAndVisible = presentation.isEnabledAndVisible && checkMainSlotVisibility(it)
       }
     }
-
-    val a = JPanel()
-    MigLayout("ins 0, fill, gap 0", "[200]")
-    a.add(JLabel(), "pushx")
+    presentation.isEnabled = presentation.isEnabled && e.isFromActionToolbar
 
     presentation.description = e.runToolbarData()?.let {
       RunToolbarData.prepareDescription(presentation.text,
@@ -69,7 +66,7 @@ internal class RunToolbarMainSlotActive : SegmentedCustomAction(),
 
   private class RunToolbarMainSlotActive(presentation: Presentation) : SegmentedCustomPanel(presentation), PopupControllerComponent {
     private val arrow = JLabel()
-    private val dragArea = DraggablePane()
+    private val dragArea = RunWidgetResizePane()
 
     private val setting = object : TrimmedMiddleLabel() {
       override fun getFont(): Font {
@@ -100,7 +97,9 @@ internal class RunToolbarMainSlotActive : SegmentedCustomAction(),
           isOpaque = false
           add(arrow)
           val d = preferredSize
-          d.width = FixWidthSegmentedActionToolbarComponent.ARROW_WIDTH
+          getProject()?.let {
+            d.width = RunWidgetWidthHelper.getInstance(it).arrow
+          }
 
           preferredSize = d
         })
@@ -174,7 +173,9 @@ internal class RunToolbarMainSlotActive : SegmentedCustomAction(),
 
     override fun getPreferredSize(): Dimension {
       val d = super.getPreferredSize()
-      d.width = FixWidthSegmentedActionToolbarComponent.CONFIG_WITH_ARROW_WIDTH
+      getProject()?.let {
+        d.width = RunWidgetWidthHelper.getInstance(it).configWithArrow
+      }
       return d
     }
   }

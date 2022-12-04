@@ -3,6 +3,7 @@ package com.intellij.openapi.roots.impl;
 
 import com.intellij.model.ModelBranch;
 import com.intellij.openapi.Disposable;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileTypes.FileTypeRegistry;
 import com.intellij.openapi.module.Module;
@@ -26,6 +27,8 @@ import com.intellij.util.Query;
 import com.intellij.util.SlowOperations;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.messages.MessageBusConnection;
+import com.intellij.workspaceModel.core.fileIndex.WorkspaceFileIndex;
+import com.intellij.workspaceModel.core.fileIndex.impl.WorkspaceFileIndexEx;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -46,12 +49,13 @@ public final class DirectoryIndexImpl extends DirectoryIndex implements Disposab
 
   private final Project myProject;
   private final MessageBusConnection myConnection;
+  private final WorkspaceFileIndexEx myWorkspaceFileIndex;
 
   private volatile boolean myDisposed;
   private volatile RootIndex myRootIndex;
-  private volatile boolean myInInitialState;
 
   public DirectoryIndexImpl(@NotNull Project project) {
+    myWorkspaceFileIndex = WorkspaceFileIndexEx.IS_ENABLED ? (WorkspaceFileIndexEx)WorkspaceFileIndex.getInstance(project) : null;
     myProject = project;
     myConnection = project.getMessageBus().connect();
     subscribeToFileChanges();
@@ -78,7 +82,7 @@ public final class DirectoryIndexImpl extends DirectoryIndex implements Disposab
           rootIndex.myPackageDirectoryCache.clear();
           for (VFileEvent event : events) {
             if (isIgnoredFileCreated(event)) {
-              reset(DirectoryIndexAnalyticsReporter.ResetReason.VFS_CHANGE);
+              reset();
               break;
             }
           }
@@ -87,7 +91,7 @@ public final class DirectoryIndexImpl extends DirectoryIndex implements Disposab
     });
   }
 
-  private static boolean shouldResetOnEvents(@NotNull List<? extends VFileEvent> events) {
+  public static boolean shouldResetOnEvents(@NotNull List<? extends VFileEvent> events) {
     for (VFileEvent event : events) {
       // VFileCreateEvent.getFile() is expensive
       if (event instanceof VFileCreateEvent) {
@@ -103,7 +107,7 @@ public final class DirectoryIndexImpl extends DirectoryIndex implements Disposab
     return false;
   }
 
-  private static boolean isIgnoredFileCreated(@NotNull VFileEvent event) {
+  public static boolean isIgnoredFileCreated(@NotNull VFileEvent event) {
     return event instanceof VFileMoveEvent && FileTypeRegistry.getInstance().isFileIgnored(((VFileMoveEvent)event).getNewParent()) ||
            event instanceof VFilePropertyChangeEvent &&
            ((VFilePropertyChangeEvent)event).getPropertyName().equals(VirtualFile.PROP_NAME) &&
@@ -117,12 +121,19 @@ public final class DirectoryIndexImpl extends DirectoryIndex implements Disposab
   @Override
   @NotNull
   public Query<VirtualFile> getDirectoriesByPackageName(@NotNull String packageName, boolean includeLibrarySources) {
+    if (myWorkspaceFileIndex != null) {
+      return myWorkspaceFileIndex.getDirectoriesByPackageName(packageName, includeLibrarySources);
+    }
     return getRootIndex().getDirectoriesByPackageName(packageName, includeLibrarySources);
   }
 
   @Override
   public Query<VirtualFile> getDirectoriesByPackageName(@NotNull String packageName,
                                                         @NotNull GlobalSearchScope scope) {
+    if (myWorkspaceFileIndex != null) {
+      return myWorkspaceFileIndex.getDirectoriesByPackageName(packageName, scope);
+    }
+    
     Collection<ModelBranch> branches = scope.getModelBranchesAffectingScope();
     if (branches.isEmpty()) {
       return super.getDirectoriesByPackageName(packageName, scope);
@@ -150,8 +161,8 @@ public final class DirectoryIndexImpl extends DirectoryIndex implements Disposab
     Pair<Long, RootIndex> pair = branch.getUserData(BRANCH_ROOT_INDEX);
     long modCount = branch.getBranchedVfsStructureModificationCount();
     if (pair == null || pair.first != modCount) {
-      pair = Pair.create(modCount, new RootIndex(branch.getProject(), RootFileSupplier.forBranch(branch),
-                                                 DirectoryIndexAnalyticsReporter.BuildRequestKind.BRANCH_BUILD));
+      pair = Pair.create(modCount, new RootIndex(branch.getProject(), RootFileSupplier.forBranch(branch)));
+      branch.putUserData(BRANCH_ROOT_INDEX, pair);
     }
     return pair.second;
   }
@@ -159,9 +170,7 @@ public final class DirectoryIndexImpl extends DirectoryIndex implements Disposab
   RootIndex getRootIndex() {
     RootIndex rootIndex = myRootIndex;
     if (rootIndex == null) {
-      myRootIndex = rootIndex = new RootIndex(myProject, myInInitialState ? DirectoryIndexAnalyticsReporter.BuildRequestKind.INITIAL
-                                                                          : DirectoryIndexAnalyticsReporter.BuildRequestKind.FULL_REBUILD);
-      myInInitialState = false;
+      myRootIndex = rootIndex = new RootIndex(myProject);
     }
     return rootIndex;
   }
@@ -196,6 +205,9 @@ public final class DirectoryIndexImpl extends DirectoryIndex implements Disposab
   @Override
   public String getPackageName(@NotNull VirtualFile dir) {
     checkAvailability();
+    if (myWorkspaceFileIndex != null) {
+      return myWorkspaceFileIndex.getPackageName(dir);
+    } 
 
     return getRootIndex(dir).getPackageName(dir);
   }
@@ -224,18 +236,14 @@ public final class DirectoryIndexImpl extends DirectoryIndex implements Disposab
   }
 
   private void checkAvailability() {
+    ApplicationManager.getApplication().assertReadAccessAllowed();
     if (myDisposed) {
       ProgressManager.checkCanceled();
       LOG.error("Directory index is already disposed for " + myProject);
     }
   }
 
-  void reset(DirectoryIndexAnalyticsReporter.ResetReason reason) {
-    boolean report = myRootIndex != null;
+  void reset() {
     myRootIndex = null;
-
-    if (report) {
-      DirectoryIndexAnalyticsReporter.reportReset(myProject, reason);
-    }
   }
 }

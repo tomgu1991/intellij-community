@@ -82,6 +82,8 @@ public final class TemplateState extends TemplateStateBase implements Disposable
 
   public static final Key<Boolean> TEMPLATE_RANGE_HIGHLIGHTER_KEY = Key.create("TemplateState.rangeHighlighterKey");
 
+  public static final Key<Boolean> FORCE_TEMPLATE_RUNNING = Key.create("TemplateState.forTemplateRunning");
+
   TemplateState(@NotNull Project project, @Nullable final Editor editor, @NotNull Document document,
                 @NotNull TemplateStateProcessor processor) {
     super(editor, document);
@@ -382,22 +384,19 @@ public final class TemplateState extends TemplateStateBase implements Disposable
           initTabStopHighlighters();
           initListeners();
         }
-        focusCurrentExpression();
-        fireCurrentVariableChanged(-1);
-
         if (requiresWriteAction()) {
           myEventPublisher.templateStarted(this);
         }
+
+        focusCurrentExpression();
+        fireCurrentVariableChanged(-1);
+
         if (!isInteractiveModeSupported()) {
           finishTemplate(false);
         }
       }
     };
-    if (requiresWriteAction()) {
-      ApplicationManager.getApplication().runWriteAction(action);
-    } else {
-      action.run();
-    }
+    performWrite(action);
   }
 
   private String getRangesDebugInfo() {
@@ -417,6 +416,10 @@ public final class TemplateState extends TemplateStateBase implements Disposable
       getSegments().setSegmentsGreedy(true);
       restoreEmptyVariables(indices);
     };
+    performWrite(action);
+  }
+
+  void performWrite(Runnable action) {
     if (requiresWriteAction()) {
       ApplicationManager.getApplication().runWriteAction(action);
     } else {
@@ -436,7 +439,7 @@ public final class TemplateState extends TemplateStateBase implements Disposable
   }
 
   private void shortenReferences() {
-    ApplicationManager.getApplication().runWriteAction(() -> {
+    performWrite(() -> {
       final PsiFile file = getPsiFile();
       if (file != null) {
         IntList indices = initEmptyVariables();
@@ -553,7 +556,7 @@ public final class TemplateState extends TemplateStateBase implements Disposable
 
   boolean requiresWriteAction() {
     PsiFile file = getPsiFile();
-    return file == null || file.isPhysical();
+    return file == null || file.isPhysical() || FORCE_TEMPLATE_RUNNING.isIn(file);
   }
 
   private LookupElement @NotNull [] getCurrentExpressionLookupItems() {
@@ -826,6 +829,10 @@ public final class TemplateState extends TemplateStateBase implements Disposable
     if (isFinished()) {
       return;
     }
+    if (getTemplate() == null) {
+      LOG.error("Template disposed: " + myPrevTemplate);
+      return;
+    }
 
     //some psi operations may block the document, unblock here
     unblockDocument();
@@ -922,12 +929,13 @@ public final class TemplateState extends TemplateStateBase implements Disposable
         int templateStartOffset = getTemplateStartOffset();
         int offset = templateStartOffset > 0 ? getTemplateStartOffset() - 1 : getTemplateStartOffset();
 
-        PsiDocumentManager.getInstance(project).commitAllDocuments();
-
         Editor editor = getEditor();
         if (editor == null) {
           return null;
         }
+
+        PsiDocumentManager.getInstance(project).commitDocument(editor.getDocument());
+
         PsiFile file = PsiDocumentManager.getInstance(project).getPsiFile(editor.getDocument());
         return file == null ? null : file.findElementAt(offset);
       }

@@ -49,9 +49,11 @@ val JKSymbol.isStaticMember
         is KtElement -> target.getStrictParentOfType<KtClassOrObject>()
             ?.safeAs<KtObjectDeclaration>()
             ?.isCompanion() == true
+
         is JKTreeElement ->
             target.safeAs<JKOtherModifiersOwner>()?.hasOtherModifier(OtherModifier.STATIC) == true
-                    || target.parentOfType<JKClass>()?.isObjectOrCompanionObject == true
+                    || target.parent.safeAs<JKClassBody>()?.parent.safeAs<JKClass>()?.isObjectOrCompanionObject == true
+
         else -> false
     }
 

@@ -4,9 +4,9 @@ import com.intellij.testFramework.LightPlatformCodeInsightTestCase
 import junit.framework.TestCase
 import org.intellij.plugins.markdown.lang.psi.impl.MarkdownHeader
 
-class MarkdownHeaderAnchorTextTest: LightPlatformCodeInsightTestCase() {
-  private val firstElement
-    get() = file.firstChild?.firstChild!!
+open class MarkdownHeaderAnchorTextTest: LightPlatformCodeInsightTestCase() {
+  protected val firstElement
+    get() = file.firstChild!!
 
   fun `test simple`() {
     // language=Markdown
@@ -98,7 +98,14 @@ class MarkdownHeaderAnchorTextTest: LightPlatformCodeInsightTestCase() {
     doTest(content, "--foo--bar--baz")
   }
 
-  private fun doTest(content: String, expected: String) {
+  fun `test unicode`() {
+    val content = """
+    # This header has Unicode in it 한글
+    """.trimIndent()
+    doTest(content, "this-header-has-unicode-in-it-한글")
+  }
+
+  protected open fun doTest(content: String, expected: String) {
     configureFromFileText("some.md", content)
     val header = firstElement as MarkdownHeader
     val anchorText = header.anchorText

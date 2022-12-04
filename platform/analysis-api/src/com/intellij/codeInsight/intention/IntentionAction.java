@@ -8,6 +8,7 @@ import com.intellij.openapi.application.Application;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Iconable;
+import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.util.IncorrectOperationException;
 import com.intellij.util.ObjectUtils;
@@ -89,32 +90,6 @@ public interface IntentionAction extends FileModifier {
   boolean startInWriteAction();
 
   /**
-   * Invokes this action on non-physical file to display the preview. This method is called outside write action
-   * in background thread, even if {@link #startInWriteAction()} returns true. It's not allowed to modify
-   * any physical PSI or spawn any actions in other threads within this method. This method may behave differently than
-   * {@link #invoke(Project, Editor, PsiFile)} method. In particular, changes in other files or user interactions
-   * like renaming the created variable should not be performed by this method.
-   * <p>
-   * Default implementation calls {@link #getFileModifierForPreview(PsiFile)} and {@link #invoke(Project, Editor, PsiFile)}
-   * on the result. This might fail if the original intention action is not prepared for preview. In this case,
-   * overriding {@code getFileModifierForPreview} or {@code invokeForPreview} is desired.
-   *
-   * @param project current project
-   * @param editor editor. Could be a simplified headless Editor implementation that lacks some features.
-   * @param file non-physical file to apply
-   * @return true if the action was applied successfully to the non-physical file.
-   * @deprecated do not call or override this method: this API will be changed.
-   */
-  @Deprecated(forRemoval = true)
-  default boolean invokeForPreview(@NotNull Project project, Editor editor, PsiFile file) {
-    if (!startInWriteAction()) return false;
-    var copy = ObjectUtils.tryCast(getFileModifierForPreview(file), IntentionAction.class);
-    if (copy == null || copy.getElementToMakeWritable(file) != file) return false;
-    copy.invoke(project, editor, file);
-    return true;
-  }
-
-  /**
    * Generates intention preview for this action. This method is called outside write action
    * in background thread, even if {@link #startInWriteAction()} returns true. It's not allowed to modify
    * any physical PSI or spawn any actions in other threads within this method.
@@ -132,14 +107,17 @@ public interface IntentionAction extends FileModifier {
    * overriding {@code getFileModifierForPreview} or {@code generatePreview} is desired.
    *
    * @param project current project
-   * @param editor editor. Could be a simplified headless Editor implementation that lacks some features.
-   * @param file non-physical file to apply
+   * @param editor editor where a file copy is opened. 
+   *               Could be a simplified headless Editor implementation that lacks some features.
+   * @param file a non-physical file to apply, which is a copy of the file that contains element returned from
+   *             {@link #getElementToMakeWritable(PsiFile)}, or copy of the current file if that method returns null
    * @return an object that describes the action preview to display
    */
   default @NotNull IntentionPreviewInfo generatePreview(@NotNull Project project, @NotNull Editor editor, @NotNull PsiFile file) {
-    if (!startInWriteAction()) return IntentionPreviewInfo.EMPTY;
     var copy = ObjectUtils.tryCast(getFileModifierForPreview(file), IntentionAction.class);
-    if (copy == null || copy.getElementToMakeWritable(file) != file) return IntentionPreviewInfo.FALLBACK_DIFF;
+    if (copy == null) return IntentionPreviewInfo.FALLBACK_DIFF;
+    PsiElement writable = copy.getElementToMakeWritable(file);
+    if (writable == null || writable.getContainingFile() != file) return IntentionPreviewInfo.FALLBACK_DIFF;
     copy.invoke(project, editor, file);
     return IntentionPreviewInfo.DIFF;
   }

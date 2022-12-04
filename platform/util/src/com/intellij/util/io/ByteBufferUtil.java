@@ -46,8 +46,7 @@ public final class ByteBufferUtil {
                                                      MethodType.methodType(long.class));
       }
     }
-    catch (Throwable t) {
-      getLogger().warn(t);
+    catch (Throwable ignored) {
     }
     return address;
   }
@@ -106,6 +105,15 @@ public final class ByteBufferUtil {
     ByteBuffer buf = src.duplicate();
     buf.position(index);
     buf.get(dst, dstIndex, length);
+  }
+
+  public static long getAddress(@NotNull ByteBuffer src) {
+    try {
+      return (long)address.invoke(src);
+    }
+    catch (Throwable e) {
+      throw new RuntimeException(e);
+    }
   }
 
   @NotNull

@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.uast.test.kotlin
 
 import com.intellij.mock.MockComponentManager
@@ -22,11 +22,11 @@ import org.jetbrains.kotlin.cli.jvm.compiler.NoScopeRecordCliBindingTrace
 import org.jetbrains.kotlin.cli.jvm.compiler.TopDownAnalyzerFacadeForJVM
 import org.jetbrains.kotlin.cli.jvm.plugins.PluginCliParser
 import org.jetbrains.kotlin.config.*
-import org.jetbrains.kotlin.idea.base.plugin.artifacts.KotlinArtifacts
+import org.jetbrains.kotlin.idea.base.plugin.artifacts.TestKotlinArtifacts
 import org.jetbrains.kotlin.parsing.KotlinParserDefinition
 import org.jetbrains.kotlin.resolve.jvm.extensions.AnalysisHandlerExtension
 import org.jetbrains.kotlin.idea.test.ConfigurationKind
-import org.jetbrains.kotlin.test.KotlinRoot
+import org.jetbrains.kotlin.idea.base.test.KotlinRoot
 import org.jetbrains.kotlin.idea.test.KotlinTestUtils
 import org.jetbrains.kotlin.test.TestJdkKind
 import org.jetbrains.kotlin.idea.test.testFramework.resetApplicationToNull
@@ -56,8 +56,6 @@ abstract class AbstractKotlinUastTest : AbstractUastTest() {
 
         initializeKotlinEnvironment()
 
-        enableNewTypeInferenceIfNeeded()
-
         val trace = NoScopeRecordCliBindingTrace()
 
         val environment = kotlinCoreEnvironment!!
@@ -71,26 +69,6 @@ abstract class AbstractKotlinUastTest : AbstractUastTest() {
         ideaProject.baseDir = vfs.findFileByPath(TEST_KOTLIN_MODEL_DIR.canonicalPath)
 
         return vfs.findFileByPath(testFile.canonicalPath)!!
-    }
-
-    private fun enableNewTypeInferenceIfNeeded() {
-        val currentLanguageVersionSettings = compilerConfiguration.languageVersionSettings
-        if (currentLanguageVersionSettings.supportsFeature(LanguageFeature.NewInference)) return
-
-        val extraLanguageFeatures = mutableMapOf<LanguageFeature, LanguageFeature.State>()
-        val extraAnalysisFlags = mutableMapOf<AnalysisFlag<*>, Any?>()
-
-        if (currentLanguageVersionSettings is CompilerTestLanguageVersionSettings) {
-            extraLanguageFeatures += currentLanguageVersionSettings.extraLanguageFeatures
-            extraAnalysisFlags += currentLanguageVersionSettings.analysisFlags
-        }
-
-        compilerConfiguration.languageVersionSettings = CompilerTestLanguageVersionSettings(
-            extraLanguageFeatures + (LanguageFeature.NewInference to LanguageFeature.State.ENABLED),
-            currentLanguageVersionSettings.apiVersion,
-            currentLanguageVersionSettings.languageVersion,
-            extraAnalysisFlags
-        )
     }
 
     private fun initializeKotlinEnvironment() {
@@ -113,7 +91,7 @@ abstract class AbstractKotlinUastTest : AbstractUastTest() {
         val appWasNull = ApplicationManager.getApplication() == null
         compilerConfiguration = createKotlinCompilerConfiguration(source)
         compilerConfiguration.put(JVMConfigurationKeys.USE_PSI_CLASS_FILES_READING, true)
-        compilerConfiguration.put(CLIConfigurationKeys.PATH_TO_KOTLIN_COMPILER_JAR, KotlinArtifacts.kotlinCompiler)
+        compilerConfiguration.put(CLIConfigurationKeys.PATH_TO_KOTLIN_COMPILER_JAR, TestKotlinArtifacts.kotlinCompiler)
 
         val parentDisposable = Disposer.newDisposable()
         val kotlinCoreEnvironment =
@@ -177,11 +155,11 @@ val TEST_KOTLIN_MODEL_DIR = KotlinRoot.DIR.resolve("uast/uast-kotlin/tests/testD
 
 private fun loadScriptingPlugin(configuration: CompilerConfiguration) {
     val pluginClasspath = listOf(
-        KotlinArtifacts.kotlinScriptingCompiler,
-        KotlinArtifacts.kotlinScriptingCompilerImpl,
-        KotlinArtifacts.kotlinScriptingCommon,
-        KotlinArtifacts.kotlinScriptingJvm
+        TestKotlinArtifacts.kotlinScriptingCompiler,
+        TestKotlinArtifacts.kotlinScriptingCompilerImpl,
+        TestKotlinArtifacts.kotlinScriptingCommon,
+        TestKotlinArtifacts.kotlinScriptingJvm
     )
 
-    PluginCliParser.loadPluginsSafe(pluginClasspath.map { it.absolutePath }, null, configuration)
+    PluginCliParser.loadPluginsSafe(pluginClasspath.map { it.absolutePath }, emptyList(), emptyList(), configuration)
 }

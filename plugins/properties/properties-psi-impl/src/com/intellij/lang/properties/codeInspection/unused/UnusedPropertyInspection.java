@@ -26,6 +26,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiElementVisitor;
 import com.intellij.psi.PsiFile;
+import com.intellij.psi.impl.source.resolve.FileContextUtil;
 import com.intellij.psi.search.DelegatingGlobalSearchScope;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.PsiSearchHelper;
@@ -59,32 +60,43 @@ public final class UnusedPropertyInspection extends PropertiesInspectionBase {
 
   @Override
   public @NotNull JComponent createOptionsPanel() {
-    Disposable disposable = Disposer.newDisposable();
-    InspectionOptionsPanel panel = new InspectionOptionsPanel() {
+    InspectionOptionsPanel panel = new InspectionOptionsPanel();
+    panel.add(new JBLabel(PropertiesBundle.message("label.analyze.only.property.files.whose.name.matches")));
+    JBTextField textField = new JBTextField(fileNameMask) {
+      Disposable disposable = null;
+      @Override
+      public void addNotify() {
+        super.addNotify();
+        if (disposable != null) {
+          throw new IllegalStateException();
+        }
+        disposable = Disposer.newDisposable();
+        ComponentValidator validator = new ComponentValidator(disposable).withValidator(() -> {
+          String text = getText();
+          fileNameMask = text.isEmpty() ? ".*" : text;
+          String errorMessage = null;
+          try {
+            Pattern.compile(text);
+          }
+          catch (PatternSyntaxException ex) {
+            errorMessage = StringUtil.substringBefore(ex.getMessage(), "\n");
+          }
+          boolean hasError = StringUtil.isNotEmpty(errorMessage);
+          return hasError ? new ValidationInfo(errorMessage, this) : null;
+        }).andRegisterOnDocumentListener(this).installOn(this);
+        validator.revalidate();
+      }
+
       @Override
       public void removeNotify() {
         super.removeNotify();
-        Disposer.dispose(disposable);
+        if (disposable != null) {
+          Disposer.dispose(disposable);
+          disposable = null;
+        }
       }
     };
-    panel.add(new JBLabel(PropertiesBundle.message("label.analyze.only.property.files.whose.name.matches")));
-    JBTextField textField = new JBTextField(fileNameMask);
     panel.add(textField, "growx");
-    
-    ComponentValidator validator = new ComponentValidator(disposable).withValidator(() -> {
-      String text = textField.getText();
-      fileNameMask = text.isEmpty() ? ".*" : text;
-      String errorMessage = null;
-      try {
-        Pattern.compile(text);
-      }
-      catch (PatternSyntaxException ex) {
-        errorMessage = StringUtil.substringBefore(ex.getMessage(), "\n");
-      }
-      boolean hasError = StringUtil.isNotEmpty(errorMessage);
-      return hasError ? new ValidationInfo(errorMessage, textField) : null;
-    }).andRegisterOnDocumentListener(textField).installOn(textField);
-    validator.revalidate();
     return panel;
   }
 
@@ -126,7 +138,8 @@ public final class UnusedPropertyInspection extends PropertiesInspectionBase {
     final Module module = ModuleUtilCore.findModuleForPsiElement(file);
     if (module == null) return PsiElementVisitor.EMPTY_VISITOR;
 
-    if (InjectedLanguageManager.getInstance(module.getProject()).isInjectedFragment(holder.getFile())) {
+    if (InjectedLanguageManager.getInstance(module.getProject()).isInjectedFragment(holder.getFile())
+        || holder.getFile().getUserData(FileContextUtil.INJECTED_IN_ELEMENT) != null) {
       // Properties inside injected fragments cannot be normally referenced
       return PsiElementVisitor.EMPTY_VISITOR;
     }

@@ -149,7 +149,7 @@ public final class ExternalSystemNotificationManager implements Disposable {
   private static boolean isInternalError(@NotNull Throwable error,
                                          @NotNull ProjectSystemId externalSystemId) {
     if (RemoteUtil.unwrap(error) instanceof BuildIssueException) return false;
-    return ExternalSystemNotificationExtension.EP_NAME.extensions()
+    return ExternalSystemNotificationExtension.EP_NAME.getExtensionList().stream()
       .anyMatch(extension -> externalSystemId.equals(extension.getTargetExternalSystemId()) && extension.isInternalError(error));
   }
 
@@ -238,7 +238,7 @@ public final class ExternalSystemNotificationManager implements Disposable {
     });
   }
 
-  @Deprecated(forRemoval = true)
+  @Deprecated
   public void clearNotifications(final @Nullable String groupName,
                                  final @NotNull NotificationSource notificationSource,
                                  final @NotNull ProjectSystemId externalSystemId) {
@@ -368,7 +368,7 @@ public final class ExternalSystemNotificationManager implements Disposable {
     }
   }
 
-  @Deprecated(forRemoval = true)
+  @Deprecated
   public @NotNull NewErrorTreeViewPanel prepareMessagesView(final @NotNull ProjectSystemId externalSystemId,
                                                             final @NotNull NotificationSource notificationSource,
                                                             boolean activateView) {
@@ -415,25 +415,15 @@ public final class ExternalSystemNotificationManager implements Disposable {
     return targetContent;
   }
 
-  @Deprecated(forRemoval = true)
+  @Deprecated
   public static @NotNull @Nls String getContentDisplayName(
     final @NotNull NotificationSource notificationSource,
     final @NotNull ProjectSystemId externalSystemId
   ) {
-    final String contentDisplayName;
-    switch (notificationSource) {
-      case PROJECT_SYNC:
-        contentDisplayName =
-          ExternalSystemBundle.message("notification.messages.project.sync.tab.name", externalSystemId.getReadableName());
-        break;
-      case TASK_EXECUTION:
-        contentDisplayName =
-          ExternalSystemBundle.message("notification.messages.task.execution.tab.name", externalSystemId.getReadableName());
-        break;
-      default:
-        throw new AssertionError("unsupported notification source found: " + notificationSource);
-    }
-    return contentDisplayName;
+    return ExternalSystemBundle.message(switch (notificationSource) {
+      case PROJECT_SYNC -> "notification.messages.project.sync.tab.name";
+      case TASK_EXECUTION -> "notification.messages.task.execution.tab.name";
+    }, externalSystemId.getReadableName());
   }
 
   @Override

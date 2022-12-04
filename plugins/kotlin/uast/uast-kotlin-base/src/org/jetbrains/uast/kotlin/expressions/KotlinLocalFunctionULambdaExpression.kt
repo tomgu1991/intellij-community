@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.uast.kotlin
 
 import com.intellij.psi.PsiType
@@ -13,6 +13,10 @@ class KotlinLocalFunctionULambdaExpression(
     givenParent: UElement?
 ) : KotlinAbstractUExpression(givenParent), ULambdaExpression {
     override val functionalInterfaceType: PsiType? = null
+
+    override fun getExpressionType(): PsiType? {
+        return baseResolveProviderService.getFunctionType(sourcePsi, uastParent)
+    }
 
     override val body by lz {
         sourcePsi.bodyExpression?.let { wrapExpressionBody(this, it) } ?: UastEmptyExpression(this)

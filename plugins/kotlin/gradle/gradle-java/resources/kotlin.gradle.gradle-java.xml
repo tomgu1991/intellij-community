@@ -2,7 +2,8 @@
   <dependencies>
     <plugin id="org.jetbrains.plugins.gradle"/>
     <module name="kotlin.gradle.gradle-tooling"/>
-    <module name="kotlin.gradle.gradle-idea"/>
+    <module name="kotlin.gradle.gradle"/>
+    <module name="kotlin.gradle.code-insight-common"/>
   </dependencies>
 
   <extensionPoints>
@@ -40,10 +41,11 @@
     <projectModelContributor implementation="org.jetbrains.kotlin.idea.gradleJava.scripting.importing.KotlinDslScriptModelContributor"/>
 
     <executionEnvironmentProvider implementation="org.jetbrains.kotlin.idea.gradleJava.execution.KotlinGradleAppEnvProvider"/>
+    <buildTasksProvider implementation="org.jetbrains.kotlin.idea.gradleJava.execution.KotlinMPPBuildTasksProvider"/>
   </extensions>
 
   <extensions defaultExtensionNs="com.intellij">
-    <applicationService serviceInterface="org.jetbrains.kotlin.idea.extensions.gradle.KotlinGradleFacade"
+    <applicationService serviceInterface="org.jetbrains.kotlin.idea.base.externalSystem.KotlinGradleFacade"
                         serviceImplementation="org.jetbrains.kotlin.idea.gradleJava.KotlinGradleFacadeImpl"/>
 
     <projectService serviceImplementation="org.jetbrains.kotlin.idea.gradleJava.scripting.legacy.GradleStandaloneScriptActionsManager"/>
@@ -75,11 +77,6 @@
     <runConfigurationProducer implementation="org.jetbrains.kotlin.idea.gradleJava.testing.common.KotlinMultiplatformCommonTestMethodGradleConfigurationProducer"/>
     <runConfigurationProducer implementation="org.jetbrains.kotlin.idea.gradleJava.testing.KotlinMultiplatformAllInDirectoryConfigurationProducer"/>
     <runConfigurationProducer implementation="org.jetbrains.kotlin.idea.gradleJava.testing.KotlinMultiplatformAllInPackageConfigurationProducer"/>
-
-    <projectTaskRunner
-            id="gradle.mpp"
-            order="first, before gradle"
-            implementation="org.jetbrains.kotlin.idea.gradleJava.execution.KotlinMPPGradleProjectTaskRunner"/>
 
     <registryKey
             key="kotlin.gradle.testing.enabled"
@@ -124,8 +121,10 @@
     <moduleInitialize implementation="org.jetbrains.kotlin.idea.gradleJava.configuration.kpm.KotlinBasicFragmentDataInitializer"/>
     <createRoots implementation="org.jetbrains.kotlin.idea.gradleJava.configuration.kpm.KotlinFragmentContentRootsCreator"/>
     <createRoots implementation="org.jetbrains.kotlin.idea.gradleJava.configuration.kpm.KotlinGradleModuleContentRootsCreator"/>
-    <extrasSerialization implementation="org.jetbrains.kotlin.idea.gradleJava.configuration.kpm.KotlinExtrasSerializationService"/>
+  </extensions>
 
+  <extensions defaultExtensionNs="org.jetbrains.kotlin.idea">
+    <extrasSerialization implementation="org.jetbrains.kotlin.idea.gradleJava.configuration.serialize.KotlinExtrasSerializationService"/>
   </extensions>
 
   <actions>

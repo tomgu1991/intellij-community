@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.gradle
 
 import org.jetbrains.kotlin.cli.common.arguments.*
@@ -177,7 +177,6 @@ class CompilerArgumentsCachingTest {
         noInline = Random.nextBoolean()
         skipMetadataVersionCheck = Random.nextBoolean()
         skipPrereleaseCheck = Random.nextBoolean()
-        newInference = Random.nextBoolean()
         allowKotlinPackage = Random.nextBoolean()
         reportOutputFiles = Random.nextBoolean()
         multiPlatform = Random.nextBoolean()
@@ -260,7 +259,6 @@ class CompilerArgumentsCachingTest {
         inheritMultifileParts = Random.nextBoolean()
         useTypeTable = Random.nextBoolean()
         useOldClassFilesReading = Random.nextBoolean()
-        singleModule = Random.nextBoolean()
         suppressMissingBuiltinsError = Random.nextBoolean()
         useJavac = Random.nextBoolean()
         compileJava = Random.nextBoolean()
@@ -328,7 +326,6 @@ class CompilerArgumentsCachingTest {
         typedArrays = Random.nextBoolean()
         friendModulesDisabled = Random.nextBoolean()
         metadataOnly = Random.nextBoolean()
-        enableJsScripting = Random.nextBoolean()
         fakeOverrideValidator = Random.nextBoolean()
         wasm = Random.nextBoolean()
 
@@ -446,7 +443,6 @@ class CompilerArgumentsCachingTest {
             "noInline",
             "skipMetadataVersionCheck",
             "skipPrereleaseCheck",
-            "newInference",
             "allowKotlinPackage",
             "reportOutputFiles",
             "multiPlatform",
@@ -535,7 +531,6 @@ class CompilerArgumentsCachingTest {
             "useTypeTable",
             "skipRuntimeVersionCheck",
             "useOldClassFilesReading",
-            "singleModule",
             "suppressMissingBuiltinsError",
             "useJavac",
             "compileJava",
@@ -608,7 +603,6 @@ class CompilerArgumentsCachingTest {
             "typedArrays",
             "friendModulesDisabled",
             "metadataOnly",
-            "enableJsScripting",
             "fakeOverrideValidator",
             "wasm"
         )

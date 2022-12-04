@@ -1,6 +1,7 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.codeInsight.daemon.impl.quickfix;
 
+import com.intellij.codeInsight.CodeInsightUtil;
 import com.intellij.codeInsight.CodeInsightUtilCore;
 import com.intellij.codeInsight.PsiEquivalenceUtil;
 import com.intellij.codeInsight.daemon.QuickFixBundle;
@@ -8,7 +9,6 @@ import com.intellij.codeInsight.intention.impl.BaseIntentionAction;
 import com.intellij.codeInsight.template.*;
 import com.intellij.codeInsight.template.impl.ConstantNode;
 import com.intellij.codeInsight.template.impl.TemplateState;
-import com.intellij.ide.DataManager;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.CaretModel;
@@ -45,6 +45,7 @@ public class CreateLocalVarFromInstanceofAction extends BaseIntentionAction {
     if (instanceOfExpression == null) return false;
     PsiTypeElement checkType = instanceOfExpression.getCheckType();
     if (checkType == null) return false;
+    if (instanceOfExpression.getPattern() != null) return false;
     PsiExpression operand = instanceOfExpression.getOperand();
     PsiType operandType = operand.getType();
     if (TypeConversionUtil.isPrimitiveAndNotNull(operandType)) return false;
@@ -200,16 +201,12 @@ public class CreateLocalVarFromInstanceofAction extends BaseIntentionAction {
       List<String> names = new VariableNameGenerator(initializer, VariableKind.LOCAL_VARIABLE).byExpression(initializer)
         .byType(localVariable.getType()).generateAll(true);
       PsiIdentifier identifier = Objects.requireNonNull(localVariable.getNameIdentifier());
-      if (!file.isPhysical()) {
-        identifier.replace(JavaPsiFacade.getElementFactory(project).createIdentifier(names.get(0)));
-        return;
-      }
-      
+
       TemplateBuilderImpl builder = new TemplateBuilderImpl(localVariable);
       builder.setEndVariableAfter(localVariable.getNameIdentifier());
 
       Template template = generateTemplate(project, names);
-      Editor newEditor = CreateFromUsageBaseFix.positionCursor(project, file, identifier);
+      Editor newEditor = CodeInsightUtil.positionCursor(project, file, identifier);
       if (newEditor == null) return;
       TextRange range = localVariable.getNameIdentifier().getTextRange();
       newEditor.getDocument().deleteString(range.getStartOffset(), range.getEndOffset());
@@ -255,7 +252,7 @@ public class CreateLocalVarFromInstanceofAction extends BaseIntentionAction {
 
         @Override
         public void templateFinished(@NotNull Template template, boolean brokenOff) {
-          ApplicationManager.getApplication().runWriteAction(() -> {
+          Runnable action = () -> {
             PsiDocumentManager.getInstance(project).commitDocument(editor.getDocument());
 
             CaretModel caretModel = editor.getCaretModel();
@@ -264,8 +261,13 @@ public class CreateLocalVarFromInstanceofAction extends BaseIntentionAction {
             if (declarationStatement != null) {
               caretModel.moveToOffset(declarationStatement.getTextRange().getEndOffset());
             }
-            new EnterAction().actionPerformed(editor, DataManager.getInstance().getDataContext());
-          });
+            new EnterAction().getHandler().execute(editor, null, null);
+          };
+          if (file.isPhysical()) {
+            ApplicationManager.getApplication().runWriteAction(action);
+          } else {
+            action.run();
+          }
         }
       });
     }

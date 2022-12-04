@@ -283,9 +283,10 @@ public final class InspectorWindow extends JDialog implements Disposable {
     DimensionService.getInstance().setLocation(getDimensionServiceKey(), getLocation(), null);
     Disposer.dispose(myInspectorTable);
     super.dispose();
+    // remove this object from the Disposer hierarchy manually here because this method could be called from Swing when it e.g., hides the popup and calls Window.dispose()
+    Disposer.dispose(this);
     DialogWrapper.cleanupRootPane(rootPane);
     DialogWrapper.cleanupWindowListeners(this);
-    Disposer.dispose(this);
   }
 
   public void close() {
@@ -423,6 +424,11 @@ public final class InspectorWindow extends JDialog implements Disposable {
     public void update(@NotNull AnActionEvent e) {
       e.getPresentation().setEnabled(myInfo != null || !myComponents.isEmpty());
     }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
+    }
   }
 
   private class RefreshAction extends MyTextAction {
@@ -438,6 +444,11 @@ public final class InspectorWindow extends JDialog implements Disposable {
     @Override
     public void update(@NotNull AnActionEvent e) {
       e.getPresentation().setEnabled(!myComponents.isEmpty());
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
     }
   }
 
@@ -458,6 +469,11 @@ public final class InspectorWindow extends JDialog implements Disposable {
       e.getPresentation().setText(isAccessibleEnable
                                   ? InternalActionsBundle.message("action.Anonymous.text.Visible")
                                   : InternalActionsBundle.message("action.Anonymous.text.Accessible"));
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.BGT;
     }
 
     private void switchHierarchy() {

@@ -6,8 +6,11 @@ import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToCall
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.KotlinQuickFixAction
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.PsiElementSuitabilityCheckers
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.QuickFixesPsiBasedFactory
 import org.jetbrains.kotlin.idea.util.IdeDescriptorRenderers
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.getParentOfType
@@ -37,7 +40,7 @@ class AddConversionCallFix(element: KtExpression, val targetType: String) : Kotl
 
     override fun invoke(project: Project, editor: Editor?, file: KtFile) {
         val expression = element ?: return
-        val convertExpression = KtPsiFactory(file).createExpressionByPattern("($0).to$1()", expression, targetType)
+        val convertExpression = KtPsiFactory(project).createExpressionByPattern("($0).to$1()", expression, targetType)
         expression.replace(convertExpression)
     }
 

@@ -44,9 +44,6 @@ import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * @author peter
- */
 public final class EventLogConsole {
   private static final Key<String> GROUP_ID = Key.create("GROUP_ID");
   private static final Key<String> NOTIFICATION_ID = Key.create("NOTIFICATION_ID");
@@ -270,6 +267,11 @@ public final class EventLogConsole {
       if (state) {
         NotificationsConfigurationImpl.getInstanceImpl().changeSettings(mySettings.withDisplayType(myType));
       }
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.BGT;
     }
   }
 
@@ -504,6 +506,11 @@ public final class EventLogConsole {
     public void update(@NotNull AnActionEvent e) {
       Editor editor = e.getData(CommonDataKeys.EDITOR);
       e.getPresentation().setEnabled(editor != null && editor.getDocument().getTextLength() > 0);
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.BGT;
     }
 
     @Override

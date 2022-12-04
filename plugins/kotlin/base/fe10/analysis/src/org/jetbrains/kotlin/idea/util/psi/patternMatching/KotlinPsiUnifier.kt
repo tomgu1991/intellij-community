@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.util.psi.patternMatching
 
@@ -786,7 +786,7 @@ class KotlinPsiUnifier(
                 }
                 if (!status) continue
                 targetSubstringInfo = ExtractableSubstringInfo(targetEntry, lastTargetEntry, targetPrefix, targetSuffix, pattern.type)
-                return status
+                return true
             }
 
             return false
@@ -828,7 +828,7 @@ class KotlinPsiUnifier(
             if (targetElementUnwrapped == targetElement && patternElementUnwrapped == patternElement) return false
 
             val status = doUnify(targetElementUnwrapped, patternElementUnwrapped)
-            if (status && allowWeakMatches) {
+            if (status) {
                 weakMatches[patternElement] = targetElement
             }
 

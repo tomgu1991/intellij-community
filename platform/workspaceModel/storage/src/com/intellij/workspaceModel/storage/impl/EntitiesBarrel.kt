@@ -2,7 +2,10 @@
 package com.intellij.workspaceModel.storage.impl
 
 import com.intellij.openapi.diagnostic.thisLogger
-import com.intellij.workspaceModel.storage.*
+import com.intellij.workspaceModel.storage.GeneratedCodeCompatibilityChecker
+import com.intellij.workspaceModel.storage.SymbolicEntityId
+import com.intellij.workspaceModel.storage.WorkspaceEntity
+import com.intellij.workspaceModel.storage.WorkspaceEntityWithSymbolicId
 
 internal open class ImmutableEntitiesBarrel internal constructor(
   override val entityFamilies: List<ImmutableEntityFamily<out WorkspaceEntity>?>
@@ -23,6 +26,10 @@ internal class MutableEntitiesBarrel private constructor(
 
   fun getEntityDataForModification(id: EntityId): WorkspaceEntityData<*> {
     return getMutableEntityFamily(id.clazz).getEntityDataForModification(id.arrayId)
+  }
+
+  fun getEntityDataForModificationOrNull(id: EntityId): WorkspaceEntityData<*>? {
+    return getMutableEntityFamily(id.clazz).getEntityDataForModificationOrNull(id.arrayId)
   }
 
   @Suppress("UNCHECKED_CAST")
@@ -103,16 +110,20 @@ internal class MutableEntitiesBarrel private constructor(
 internal sealed class EntitiesBarrel {
   internal abstract val entityFamilies: List<EntityFamily<out WorkspaceEntity>?>
 
+  fun exists(entityId: EntityId): Boolean {
+    return get(entityId.clazz)?.exists(entityId.arrayId) ?: false
+  }
+
   open operator fun get(clazz: Int): EntityFamily<out WorkspaceEntity>? = entityFamilies.getOrNull(clazz)
 
   fun size() = entityFamilies.size
 
   fun assertConsistency(abstractEntityStorage: AbstractEntityStorage) {
-    val persistentIds = HashSet<PersistentEntityId<*>>()
+    val symbolicIds = HashSet<SymbolicEntityId<*>>()
     entityFamilies.forEachIndexed { i, family ->
       if (family == null) return@forEachIndexed
       val clazz = i.findEntityClass<WorkspaceEntity>()
-      val hasPersistentId = WorkspaceEntityWithPersistentId::class.java.isAssignableFrom(clazz)
+      val hasSymbolicId = WorkspaceEntityWithSymbolicId::class.java.isAssignableFrom(clazz)
       family.assertConsistency { entityData ->
         // Assert correctness of the class
         val immutableClass = entityData.getEntityInterface()
@@ -124,11 +135,11 @@ internal sealed class EntitiesBarrel {
         }
 
         // Assert unique of persistent id
-        if (hasPersistentId) {
-          val persistentId = entityData.persistentId()
-          assert(persistentId != null) { "Persistent id expected for $clazz" }
-          assert(persistentId !in persistentIds) { "Duplicated persistent ids: $persistentId" }
-          persistentIds.add(persistentId!!)
+        if (hasSymbolicId) {
+          val symbolicId = entityData.symbolicId()
+          assert(symbolicId != null) { "Symbolic id expected for $clazz" }
+          assert(symbolicId !in symbolicIds) { "Duplicated symbolic ids: $symbolicId" }
+          symbolicIds.add(symbolicId!!)
         }
 
         if (entityData is WithAssertableConsistency) {

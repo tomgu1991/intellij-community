@@ -2,6 +2,7 @@
 package com.intellij.codeInspection;
 
 import com.intellij.codeInsight.daemon.impl.analysis.HighlightingFeature;
+import com.intellij.codeInsight.intention.preview.IntentionPreviewInfo;
 import com.intellij.codeInspection.util.IntentionFamilyName;
 import com.intellij.java.JavaBundle;
 import com.intellij.openapi.project.Project;
@@ -67,22 +68,12 @@ public class TrailingWhitespacesInTextBlockInspection extends AbstractBaseJavaLo
   private static @NotNull String replaceWhitespacesWithEscapes(@NotNull String contentLine) {
     int j;
     int len = contentLine.length();
-    for (j = len - 2; j >= 0; j--) {
-      char c = contentLine.charAt(j);
-      if (c != ' ' && c != '\t') break;
-    }
-    j++;
-    StringBuilder transformed = new StringBuilder(j + (len - j) * 4);
-    transformed.append(contentLine, 0, j);
-    for (; j < len; j++) {
-      if (contentLine.charAt(j) == ' ') {
-        transformed.append("\\040");
-      }
-      else {
-        transformed.append("\\t");
-      }
-    }
-    return transformed.toString();
+    char c = contentLine.charAt(len - 1);
+    return switch (c) {
+      case ' ' -> contentLine.substring(0, len - 1) + "\\s";
+      case '\t' -> contentLine.substring(0, len - 1) + "\\t";
+      default -> contentLine;
+    };
   }
 
   private static @NotNull String removeWhitespaces(@NotNull String contentLine) {
@@ -103,12 +94,19 @@ public class TrailingWhitespacesInTextBlockInspection extends AbstractBaseJavaLo
 
   private static class ReplaceTrailingWhiteSpacesFix implements LocalQuickFix {
     private final String myMessage;
+    @SafeFieldForPreview
     private final @NotNull Function<? super @NotNull String, ? extends @Nullable CharSequence> myTransformation;
 
     private ReplaceTrailingWhiteSpacesFix(@NotNull String message,
                                           @NotNull Function<? super @NotNull String, ? extends @Nullable CharSequence> transformation) {
       myMessage = message;
       myTransformation = transformation;
+    }
+
+    @Override
+    public @NotNull IntentionPreviewInfo generatePreview(@NotNull Project project, @NotNull ProblemDescriptor previewDescriptor) {
+      IntentionPreviewInfo info = LocalQuickFix.super.generatePreview(project, previewDescriptor);
+      return info == IntentionPreviewInfo.DIFF ? IntentionPreviewInfo.DIFF_NO_TRIM : info;
     }
 
     @Override

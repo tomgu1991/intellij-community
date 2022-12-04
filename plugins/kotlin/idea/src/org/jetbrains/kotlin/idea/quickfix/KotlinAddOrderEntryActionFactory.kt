@@ -1,9 +1,8 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.quickfix
 
 import com.intellij.codeInsight.daemon.impl.quickfix.OrderEntryFix
-import com.intellij.codeInsight.daemon.impl.quickfix.QuickFixActionRegistrarImpl
 import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
@@ -52,6 +51,6 @@ object KotlinAddOrderEntryActionFactory : KotlinIntentionActionsFactory() {
         }
 
         @Suppress("UNCHECKED_CAST")
-        return OrderEntryFix.registerFixes(QuickFixActionRegistrarImpl(null), reference) as List<IntentionAction>? ?: emptyList()
+        return OrderEntryFix.registerFixes(reference, mutableListOf()) as List<IntentionAction>? ?: emptyList()
     }
 }

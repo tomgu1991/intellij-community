@@ -2,28 +2,27 @@
 
 package org.jetbrains.kotlin.fir.testGenerator
 
+import org.jetbrains.kotlin.fir.testGenerator.codeinsight.generateK2CodeInsightTests
 import org.jetbrains.kotlin.idea.fir.analysis.providers.AbstractIdeKotlinAnnotationsResolverTest
 import org.jetbrains.kotlin.idea.fir.analysis.providers.sessions.AbstractSessionsInvalidationTest
 import org.jetbrains.kotlin.idea.fir.analysis.providers.trackers.AbstractProjectWideOutOfBlockKotlinModificationTrackerTest
-import org.jetbrains.kotlin.idea.fir.codeInsight.handlers.AbstractHLGotoSuperActionHandlerTest
-import org.jetbrains.kotlin.idea.fir.completion.AbstractFirKeywordCompletionTest
-import org.jetbrains.kotlin.idea.fir.completion.AbstractHighLevelJvmBasicCompletionTest
-import org.jetbrains.kotlin.idea.fir.completion.AbstractHighLevelMultiFileJvmBasicCompletionTest
+import org.jetbrains.kotlin.idea.fir.completion.*
 import org.jetbrains.kotlin.idea.fir.completion.test.handlers.AbstractFirKeywordCompletionHandlerTest
 import org.jetbrains.kotlin.idea.fir.completion.test.handlers.AbstractHighLevelBasicCompletionHandlerTest
+import org.jetbrains.kotlin.idea.fir.completion.test.handlers.AbstractHighLevelJavaCompletionHandlerTest
 import org.jetbrains.kotlin.idea.fir.completion.wheigher.AbstractHighLevelWeigherTest
+import org.jetbrains.kotlin.idea.fir.documentation.AbstractFirQuickDocTest
 import org.jetbrains.kotlin.idea.fir.findUsages.AbstractFindUsagesFirTest
 import org.jetbrains.kotlin.idea.fir.findUsages.AbstractFindUsagesWithDisableComponentSearchFirTest
 import org.jetbrains.kotlin.idea.fir.findUsages.AbstractKotlinFindUsagesWithLibraryFirTest
 import org.jetbrains.kotlin.idea.fir.findUsages.AbstractKotlinFindUsagesWithStdlibFirTest
-import org.jetbrains.kotlin.idea.fir.highlighter.AbstractFirHighlightingMetaInfoTest
 import org.jetbrains.kotlin.idea.fir.imports.AbstractFirJvmOptimizeImportsTest
-import org.jetbrains.kotlin.idea.fir.inspections.*
-import org.jetbrains.kotlin.idea.fir.intentions.AbstractHLIntentionTest
 import org.jetbrains.kotlin.idea.fir.low.level.api.AbstractFirLibraryModuleDeclarationResolveTest
 import org.jetbrains.kotlin.idea.fir.parameterInfo.AbstractFirParameterInfoTest
 import org.jetbrains.kotlin.idea.fir.quickfix.AbstractHighLevelQuickFixMultiFileTest
 import org.jetbrains.kotlin.idea.fir.quickfix.AbstractHighLevelQuickFixTest
+import org.jetbrains.kotlin.idea.fir.refactoring.rename.AbstractFirRenameTest
+import org.jetbrains.kotlin.idea.fir.refactoring.rename.AbstractFirSimpleRenameTest
 import org.jetbrains.kotlin.idea.fir.resolve.AbstractFirReferenceResolveTest
 import org.jetbrains.kotlin.idea.fir.search.AbstractHLImplementationSearcherTest
 import org.jetbrains.kotlin.idea.fir.shortenRefs.AbstractFirShortenRefsTest
@@ -37,15 +36,23 @@ import org.jetbrains.kotlin.testGenerator.model.Patterns.KT_WITHOUT_DOT_AND_FIR_
 import org.jetbrains.kotlin.testGenerator.model.Patterns.KT_WITHOUT_FIR_PREFIX
 
 fun main(@Suppress("UNUSED_PARAMETER") args: Array<String>) {
-    generateTests()
+    generateK2Tests()
 }
 
-internal fun generateTests(isUpToDateCheck: Boolean = false) {
+fun generateK2Tests(isUpToDateCheck: Boolean = false) {
     System.setProperty("java.awt.headless", "true")
     TestGenerator.write(assembleWorkspace(), isUpToDateCheck)
 }
 
 private fun assembleWorkspace(): TWorkspace = workspace {
+    generateK2CodeInsightTests()
+    generateK2Fe10BindingsTests()
+    generateK2NavigationTests()
+    generateK2DebuggerTests()
+    generateK2HighlighterTests()
+    generateK2RefactoringsTests()
+    generateK2SearchTests()
+
     testGroup("base/fir/analysis-api-providers") {
         testClass<AbstractProjectWideOutOfBlockKotlinModificationTrackerTest> {
             model("outOfBlockProjectWide", pattern = KT_WITHOUT_DOTS or Patterns.JAVA)
@@ -71,9 +78,6 @@ private fun assembleWorkspace(): TWorkspace = workspace {
             model("resolve/references", pattern = KT_WITHOUT_DOTS)
         }
 
-        testClass<AbstractFirHighlightingMetaInfoTest> {
-            model("highlighterMetaInfo")
-        }
 
         testClass<AbstractHighLevelQuickFixTest> {
             val pattern = Patterns.forRegex("^([\\w\\-_]+)\\.kt$")
@@ -111,27 +115,9 @@ private fun assembleWorkspace(): TWorkspace = workspace {
         }
 
         testClass<AbstractHighLevelQuickFixMultiFileTest> {
-            model("quickfix/autoImports", pattern = Patterns.forRegex("""^(\w+)\.((before\.Main\.\w+))$"""), testMethodName = "doTestWithExtraFile")
+            model("quickfix/autoImports", pattern = Patterns.forRegex("""^(\w+)\.((before\.Main\.\w+)|(test))$"""), testMethodName = "doTestWithExtraFile")
         }
 
-        testClass<AbstractHLInspectionTest> {
-            val pattern = Patterns.forRegex("^(inspections\\.test)$")
-            model("inspections/redundantUnitReturnType", pattern = pattern)
-        }
-
-        testClass<AbstractHLIntentionTest> {
-            val pattern = Patterns.forRegex("^([\\w\\-_]+)\\.(kt|kts)$")
-            model("intentions/addNameToArgument", pattern = pattern)
-            model("intentions/addNamesToCallArguments", pattern = pattern)
-            model("intentions/addNamesToFollowingArguments", pattern = pattern)
-            model("intentions/addPropertyAccessors", pattern = pattern)
-            model("intentions/specifyTypeExplicitly", pattern = pattern)
-            model("intentions/importAllMembers", pattern = pattern)
-            model("intentions/importMember", pattern = pattern)
-            model("intentions/convertToBlockBody", pattern = pattern)
-            model("intentions/addWhenRemainingBranches", pattern = pattern)
-            model("../../../fir/testData/intentions/useExpressionBody", pattern=pattern)
-        }
 
         testClass<AbstractFirShortenRefsTest> {
             model("shortenRefsFir", pattern = KT_WITHOUT_DOTS, testMethodName = "doTestWithMuting")
@@ -150,17 +136,7 @@ private fun assembleWorkspace(): TWorkspace = workspace {
         }
     }
 
-    testGroup("fir", testDataPath = "..") {
-        testClass<AbstractHLLocalInspectionTest> {
-            val pattern = Patterns.forRegex("^([\\w\\-_]+)\\.(kt|kts)$")
-            model("idea/tests/testData/inspectionsLocal/unusedVariable", pattern = pattern)
-            model("idea/tests/testData/inspectionsLocal/redundantVisibilityModifier", pattern = pattern)
-            model("idea/tests/testData/inspectionsLocal/implicitThis")
-            model("fir/testData/inspectionsLocal", pattern = pattern)
-        }
-    }
-
-    testGroup("fir", testDataPath = "../completion/tests/testData") {
+    testGroup("fir", testDataPath = "../completion/testData") {
         testClass<AbstractHighLevelJvmBasicCompletionTest> {
             model("basic/common", pattern = KT_WITHOUT_FIR_PREFIX)
             model("basic/java", pattern = KT_WITHOUT_FIR_PREFIX)
@@ -169,6 +145,10 @@ private fun assembleWorkspace(): TWorkspace = workspace {
 
         testClass<AbstractHighLevelBasicCompletionHandlerTest> {
             model("handlers/basic", pattern = KT_WITHOUT_DOT_AND_FIR_PREFIX)
+        }
+
+        testClass<AbstractHighLevelJavaCompletionHandlerTest> {
+            model("handlers/injava", pattern = Patterns.JAVA)
         }
 
         testClass<AbstractFirKeywordCompletionHandlerTest> {
@@ -183,6 +163,10 @@ private fun assembleWorkspace(): TWorkspace = workspace {
             model("basic/multifile", pattern = DIRECTORY, isRecursive = false)
         }
 
+        testClass<AbstractK2MultiPlatformCompletionTest> {
+            model("multiPlatform", isRecursive = false, pattern = DIRECTORY)
+        }
+
         testClass<AbstractFirKeywordCompletionTest> {
             model("keywords", isRecursive = false, pattern = KT_WITHOUT_FIR_PREFIX)
             model(
@@ -191,6 +175,15 @@ private fun assembleWorkspace(): TWorkspace = workspace {
                 isRecursive = false,
                 pattern = KT_WITHOUT_FIR_PREFIX
             )
+        }
+        testClass<AbstractFirWithLibBasicCompletionTest> {
+            model("basic/withLib", isRecursive = false, pattern = KT_WITHOUT_FIR_PREFIX)
+        }
+    }
+
+    testGroup("refactorings/rename.k2", testDataPath = "../../idea/tests/testData") {
+        testClass<AbstractFirRenameTest> {
+            model("refactoring/rename", pattern = Patterns.TEST, flatten = true)
         }
     }
 
@@ -215,50 +208,26 @@ private fun assembleWorkspace(): TWorkspace = workspace {
     }
 
     testGroup("fir") {
-        testClass<AbstractHLGotoSuperActionHandlerTest> {
-            model("codeInsight/handlers/gotoSuperActionHandler", pattern = KT_WITHOUT_DOTS)
-        }
-
         testClass<AbstractHLImplementationSearcherTest> {
             model("search/implementations", pattern = KT_WITHOUT_DOTS)
         }
-    }
-
-
-    testGroup("fir-fe10-binding", testDataPath = "../idea/tests") {
-        testClass<AbstractFe10BindingIntentionTest> {
-            val pattern = Patterns.forRegex("^([\\w\\-_]+)\\.(kt|kts)$")
-            model("testData/intentions/conventionNameCalls", pattern = pattern)
-        }
-    }
-
-    testGroup("fir-fe10-binding", testDataPath = "../idea/tests") {
-        testClass<AbstractFe10BindingLocalInspectionTest> {
-            val pattern = Patterns.forRegex("^([\\w\\-_]+)\\.(kt|kts)$")
-            model("testData/inspectionsLocal/addOperatorModifier", pattern = pattern)
-            model("testData/inspectionsLocal/booleanLiteralArgument", pattern = pattern)
-            model("testData/inspectionsLocal/convertSealedSubClassToObject", pattern = pattern)
-            model("testData/inspectionsLocal/cascadeIf", pattern = pattern)
-            model("testData/inspectionsLocal/collections/convertCallChainIntoSequence", pattern = pattern)
-        }
-    }
-
-    testGroup("fir-fe10-binding", testDataPath = "../idea/tests") {
-        testClass<AbstractFe10BindingQuickFixTest> {
-            val pattern = Patterns.forRegex("^([\\w\\-_]+)\\.kt$")
-            model("testData/quickfix/addVarianceModifier", pattern = pattern)
-            model("testData/quickfix/canBePrimaryConstructorProperty", pattern = pattern)
+        
+        testClass<AbstractFirQuickDocTest> {
+            model("quickDoc", pattern = Patterns.forRegex("""^([^_]+)\.(kt|java)$"""))
         }
     }
 
     testGroup("uast/uast-kotlin-fir") {
         testClass<AbstractFirUastDeclarationTest> {
             model("declaration")
-            model("legacy")
         }
 
         testClass<AbstractFirUastTypesTest> {
             model("type")
+        }
+
+        testClass<AbstractFirUastValuesTest> {
+            model("value")
         }
     }
 
@@ -283,4 +252,5 @@ private fun assembleWorkspace(): TWorkspace = workspace {
             model("")
         }
     }
+
 }

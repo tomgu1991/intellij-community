@@ -4,6 +4,7 @@ package com.intellij.codeInspection.ex;
 import com.intellij.codeInspection.CommonProblemDescriptor;
 import com.intellij.codeInspection.QuickFix;
 import com.intellij.codeInspection.reference.RefEntity;
+import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Iconable;
 import com.intellij.openapi.util.NlsActions;
@@ -18,12 +19,17 @@ import java.util.Set;
 public class LocalQuickFixesWrapper extends QuickFixAction {
   private final List<@NotNull LocalQuickFixWrapper> myFixActions = new ArrayList<>();
 
-  public LocalQuickFixesWrapper(@NlsActions.ActionText String name,
-                                @NotNull List<QuickFix<?>> fixes,
-                                @NotNull InspectionToolWrapper toolWrapper) {
-    super(name, fixes.get(0) instanceof Iconable ? ((Iconable)fixes.get(0)).getIcon(0) : null, null, toolWrapper);
+  LocalQuickFixesWrapper(@NlsActions.ActionText String name,
+                         @NotNull List<? extends QuickFix<?>> fixes,
+                         @NotNull InspectionToolWrapper toolWrapper) {
+    super(StringUtil.escapeMnemonics(name),
+          fixes.get(0) instanceof Iconable ? ((Iconable)fixes.get(0)).getIcon(0) : null, null, toolWrapper);
     fixes.forEach(f -> addFixAction(f, toolWrapper));
-    setText(StringUtil.escapeMnemonics(name));
+  }
+
+  @Override
+  public void update(@NotNull AnActionEvent e) {
+    e.getPresentation().setEnabledAndVisible(true);
   }
 
   public void setText(@NotNull @NlsActions.ActionText String text) {

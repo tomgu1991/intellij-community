@@ -40,6 +40,7 @@ import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
+import com.intellij.psi.util.PsiUtilBase;
 import com.intellij.ui.LightweightHint;
 import com.intellij.usageView.UsageInfo;
 import com.intellij.usages.*;
@@ -86,6 +87,10 @@ public final class FindUtil {
 
   public static void configureFindModel(boolean replace, @Nullable Editor editor, FindModel model, boolean firstSearch) {
     String selectedText = getSelectedText(editor);
+    configureFindModel(replace, model, firstSearch, selectedText);
+  }
+
+  public static void configureFindModel(boolean replace, FindModel model, boolean firstSearch, @Nullable String selectedText) {
     boolean multiline = selectedText != null && selectedText.contains("\n");
     String stringToFind = firstSearch || model.getStringToFind().contains("\n") ? "" : model.getStringToFind();
     boolean isSelectionUsed = false;
@@ -213,6 +218,7 @@ public final class FindUtil {
 
   public static void find(@NotNull final Project project, @NotNull final Editor editor) {
     ApplicationManager.getApplication().assertIsDispatchThread();
+    PsiUtilBase.assertEditorAndProjectConsistent(project, editor);
     final FindManager findManager = FindManager.getInstance(project);
     String s = getSelectedText(editor);
 

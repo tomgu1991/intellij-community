@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.util.indexing.roots
 
 import com.intellij.openapi.application.runReadAction
@@ -12,6 +12,7 @@ import com.intellij.openapi.roots.ModuleRootManager
 import com.intellij.openapi.roots.impl.ModuleFileIndexImpl
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileFilter
+import com.intellij.util.indexing.IndexableFilesIndex
 import com.intellij.util.indexing.IndexingBundle
 import com.intellij.util.indexing.roots.kind.ModuleRootOrigin
 import com.intellij.util.indexing.roots.origin.ModuleRootOriginImpl
@@ -30,6 +31,7 @@ internal class ModuleIndexableFilesIteratorImpl(private val module: Module,
                                                 private val printRootsInDebugName: Boolean) : ModuleIndexableFilesIterator {
   init {
     assert(roots.isNotEmpty())
+    assert(!IndexableFilesIndex.isIntegrationFullyEnabled()){"Shouldn't be created with IndexableFilesIndex enabled"}
   }
 
   companion object {
@@ -53,7 +55,7 @@ internal class ModuleIndexableFilesIteratorImpl(private val module: Module,
 
   override fun getDebugName(): String =
     if (printRootsInDebugName) {
-      val rootsDebugStr = if (roots.isEmpty()) "empty" else roots.map { it.name }.sorted().joinToString(", ")
+      val rootsDebugStr = if (roots.isEmpty()) "empty" else roots.map { it.name }.sorted().joinToString(", ", limit = 10)
       "Module '" + module.name + "' ($rootsDebugStr)"
     }
     else {

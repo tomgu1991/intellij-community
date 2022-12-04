@@ -5,6 +5,8 @@ import com.intellij.icons.AllIcons
 import com.intellij.ide.IdeBundle
 import com.intellij.ide.RecentProjectIconHelper
 import com.intellij.ide.RecentProjectIconHelper.Companion.createIcon
+import com.intellij.ide.RecentProjectsManager
+import com.intellij.ide.RecentProjectsManagerBase
 import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.fileChooser.FileChooserFactory
@@ -14,6 +16,7 @@ import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.wm.impl.welcomeScreen.WelcomeScreenUIManager
 import com.intellij.openapi.wm.impl.welcomeScreen.recentProjects.RecentProjectItem
+import com.intellij.ui.IconDeferrer
 import com.intellij.ui.components.AnActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.dialog
@@ -31,12 +34,15 @@ import java.nio.file.Paths
 import javax.swing.JComponent
 import javax.swing.JPanel
 import kotlin.io.path.Path
-import com.intellij.ide.RecentProjectsManagerBase.Companion.instanceEx as ProjectIcon
 
 /**
  * @author Konstantin Bulenkov
  */
 class ChangeProjectIconAction : RecentProjectsWelcomeScreenActionBase() {
+  init {
+    isEnabledInModalContext = true  // To allow the action to be run in the Manage Recent Projects modal dialog, see IDEA-302750
+  }
+
   override fun actionPerformed(event: AnActionEvent) {
     val reopenProjectAction = getSelectedItem(event) as RecentProjectItem
     val projectPath = reopenProjectAction.projectPath
@@ -76,6 +82,10 @@ class ChangeProjectIconAction : RecentProjectsWelcomeScreenActionBase() {
         FileUtil.delete(ui.pathToIcon())
         RecentProjectIconHelper.refreshProjectIcon(projectPath)
       }
+      // Actually we can try to drop the needed icon,
+      // but it is a very rare action and this whole cache drop will not have any performance impact
+      // Moreover, VCS changes will drop the cache also.
+      IconDeferrer.getInstance().clearCache()
     }
   }
 
@@ -106,7 +116,7 @@ class ChangeProjectIconAction : RecentProjectsWelcomeScreenActionBase() {
 
 class ProjectIconUI(val projectPath: @SystemIndependent String) {
   val setIconActionLink = AnActionLink(IdeBundle.message("link.change.project.icon"), ChangeProjectIcon(this))
-  val iconLabel = JBLabel(ProjectIcon.getProjectIcon(projectPath, false))
+  val iconLabel = JBLabel((RecentProjectsManager.getInstance() as RecentProjectsManagerBase).getProjectIcon(projectPath, true))
   var pathToIcon: VirtualFile? = null
   val removeIcon = createToolbar()
   var iconRemoved = false
@@ -115,12 +125,16 @@ class ProjectIconUI(val projectPath: @SystemIndependent String) {
     val removeIconAction = object : DumbAwareAction(AllIcons.Actions.GC) {
       override fun actionPerformed(e: AnActionEvent) {
         iconRemoved = true
-        iconLabel.icon = RecentProjectIconHelper.generateProjectIcon(projectPath)
+        iconLabel.icon = RecentProjectIconHelper.generateProjectIcon(projectPath, isProjectValid = true)
         pathToIcon = null
       }
 
       override fun update(e: AnActionEvent) {
         e.presentation.isEnabledAndVisible = pathToIcon != null || (Files.exists(pathToIcon()) && !iconRemoved)
+      }
+
+      override fun getActionUpdateThread(): ActionUpdateThread {
+        return ActionUpdateThread.BGT
       }
     }
     return ActionManager.getInstance().createActionToolbar("ProjectIconDialog", DefaultActionGroup(removeIconAction), true)

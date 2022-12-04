@@ -4,8 +4,8 @@ package org.jetbrains.kotlin.idea.intentions.branchedTransformations.intentions
 
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.util.TextRange
-import org.jetbrains.kotlin.idea.KotlinBundle
-import org.jetbrains.kotlin.idea.intentions.SelfTargetingRangeIntention
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.intentions.SelfTargetingRangeIntention
 import org.jetbrains.kotlin.idea.intentions.branchedTransformations.BranchedFoldingUtils
 import org.jetbrains.kotlin.psi.*
 
@@ -28,7 +28,7 @@ class FoldIfToReturnAsymmetricallyIntention : SelfTargetingRangeIntention<KtIfEx
         val thenBranch = element.then ?: return
         val elseBranch = KtPsiUtil.skipTrailingWhitespacesAndComments(element) as? KtReturnExpression ?: return
 
-        val psiFactory = KtPsiFactory(element)
+        val psiFactory = KtPsiFactory(element.project)
         val newIfExpression = psiFactory.createIf(condition, thenBranch, elseBranch)
 
         val thenReturn = BranchedFoldingUtils.getFoldableBranchedReturn(newIfExpression.then!!) ?: return

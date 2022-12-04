@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.inspections
 
@@ -11,15 +11,20 @@ import com.intellij.codeInspection.ProblemHighlightType.INFORMATION
 import com.intellij.codeInspection.ProblemsHolder
 import com.intellij.openapi.project.Project
 import com.intellij.profile.codeInspection.ProjectInspectionProfileManager
+import com.intellij.psi.PsiComment
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiWhiteSpace
+import com.intellij.psi.util.siblings
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
 import org.jetbrains.kotlin.builtins.StandardNames
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.safeAnalyzeNonSourceRootCode
 import org.jetbrains.kotlin.idea.core.canOmitDeclaredType
 import org.jetbrains.kotlin.idea.base.psi.replaced
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.inspections.AbstractKotlinInspection
+import org.jetbrains.kotlin.idea.codeinsight.utils.findExistingEditor
 import org.jetbrains.kotlin.idea.core.setType
-import org.jetbrains.kotlin.idea.core.util.isOneLiner
+import org.jetbrains.kotlin.idea.base.psi.isOneLiner
 import org.jetbrains.kotlin.idea.intentions.hasResultingIfWithoutElse
 import org.jetbrains.kotlin.idea.util.CommentSaver
 import org.jetbrains.kotlin.idea.util.resultingWhens
@@ -105,7 +110,7 @@ class UseExpressionBodyInspection(private val convertEmptyToUnit: Boolean) : Abs
     private fun KtBlockExpression.findValueStatement(): KtExpression? {
         val bodyStatements = statements
         if (bodyStatements.isEmpty()) {
-            return if (convertEmptyToUnit) KtPsiFactory(this).createExpression("Unit") else null
+            return if (convertEmptyToUnit) KtPsiFactory(project).createExpression("Unit") else null
         }
         val statement = bodyStatements.singleOrNull() ?: return null
         when (statement) {
@@ -158,10 +163,18 @@ class UseExpressionBodyInspection(private val convertEmptyToUnit: Boolean) : Abs
         simplify(declaration, deleteTypeHandler.takeIf { canDeleteTypeRef })
     }
 
+    private fun PsiElement?.isLineBreak() = this is PsiWhiteSpace && this.textContains('\n')
+
     private fun simplify(declaration: KtDeclarationWithBody, deleteTypeHandler: ((KtCallableDeclaration) -> Unit)?) {
         val block = declaration.blockExpression() ?: return
         val valueStatement = block.findValueStatement() ?: return
         val value = valueStatement.getValue()
+
+        val prevComments = block.lBrace
+            ?.siblings(withSelf = false)
+            ?.takeWhile { it is PsiWhiteSpace || it is PsiComment }
+            .orEmpty()
+        val newLineRequiredAfterEq = prevComments.firstOrNull().isLineBreak() && prevComments.any { it is PsiComment }
 
         if (!declaration.hasDeclaredReturnType() && declaration is KtNamedFunction && block.statements.isNotEmpty()) {
             val valueType = value.safeAnalyzeNonSourceRootCode().getType(value)
@@ -174,8 +187,11 @@ class UseExpressionBodyInspection(private val convertEmptyToUnit: Boolean) : Abs
 
         val commentSaver = CommentSaver(body)
 
-        val factory = KtPsiFactory(declaration)
+        val factory = KtPsiFactory(declaration.project)
         val eq = declaration.addBefore(factory.createEQ(), body)
+        if (newLineRequiredAfterEq) {
+            declaration.addBefore(factory.createNewLine(), body)
+        }
         declaration.addAfter(factory.createWhiteSpace(), eq)
 
         val newBody = body.replaced(value)

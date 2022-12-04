@@ -7,15 +7,16 @@ import org.jetbrains.kotlin.builtins.*
 import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.config.LanguageVersion
 import org.jetbrains.kotlin.descriptors.*
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.base.projectStructure.languageVersionSettings
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToCall
 import org.jetbrains.kotlin.idea.caches.resolve.safeAnalyzeNonSourceRootCode
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.intentions.SelfTargetingOffsetIndependentIntention
 import org.jetbrains.kotlin.idea.core.ShortenReferences
 import org.jetbrains.kotlin.idea.core.setType
 import org.jetbrains.kotlin.idea.imports.importableFqName
-import org.jetbrains.kotlin.idea.inspections.IntentionBasedInspection
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.inspections.IntentionBasedInspection
 import org.jetbrains.kotlin.idea.refactoring.fqName.fqName
 import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.idea.references.resolveToDescriptors
@@ -52,7 +53,6 @@ import org.jetbrains.kotlin.types.KotlinType
 import org.jetbrains.kotlin.types.isDynamic
 import org.jetbrains.kotlin.types.isError
 import org.jetbrains.kotlin.types.typeUtil.isTypeParameter
-import org.jetbrains.kotlin.types.typeUtil.isUnit
 import org.jetbrains.kotlin.utils.addToStdlib.safeAs
 
 @Suppress("DEPRECATION")
@@ -102,7 +102,8 @@ open class ConvertLambdaToReferenceIntention(textGetter: () -> String) : SelfTar
         // No references with type parameters
         if (calleeDescriptor.typeParameters.isNotEmpty() && lambdaExpression.parentValueArgument() == null) return false
         // No references to Java synthetic properties
-        if (calleeDescriptor is SyntheticJavaPropertyDescriptor) return false
+        if (!languageVersionSettings.supportsFeature(LanguageFeature.ReferencesToSyntheticJavaProperties) &&
+            calleeDescriptor is SyntheticJavaPropertyDescriptor) return false
 
         val descriptorHasReceiver = with(calleeDescriptor) {
             // No references to both member / extension
@@ -113,23 +114,9 @@ open class ConvertLambdaToReferenceIntention(textGetter: () -> String) : SelfTar
         if (noBoundReferences && descriptorHasReceiver && explicitReceiver == null) return false
 
         val callableArgumentsCount = (callableExpression as? KtCallExpression)?.valueArguments?.size ?: 0
-        val enableFunctionReferenceWithDefaultValueAsOtherType =
-            languageVersionSettings.supportsFeature(LanguageFeature.FunctionReferenceWithDefaultValueAsOtherType)
-        if (enableFunctionReferenceWithDefaultValueAsOtherType) {
-            if (calleeDescriptor.valueParameters.size != callableArgumentsCount &&
-                (lambdaExpression.parentValueArgument() == null || calleeDescriptor.valueParameters.none { it.declaresDefaultValue() })
-            ) return false
-        } else {
-            if (calleeDescriptor.valueParameters.size != callableArgumentsCount) return false
-            val lambdaMustReturnUnit =
-                if (lambdaParameterType?.isFunctionType == true) lambdaParameterType.getReturnTypeFromFunctionType().isUnit() else false
-            if (lambdaMustReturnUnit) {
-                calleeDescriptor.returnType.let {
-                    // If Unit required, no references to non-Unit callables
-                    if (it == null || !it.isUnit()) return false
-                }
-            }
-        }
+        if (calleeDescriptor.valueParameters.size != callableArgumentsCount &&
+            (lambdaExpression.parentValueArgument() == null || calleeDescriptor.valueParameters.none { it.declaresDefaultValue() })
+        ) return false
 
         if (!lambdaExpression.isArgument() && calleeDescriptor is FunctionDescriptor && calleeDescriptor.overloadedFunctions().size > 1) {
             val property = lambdaExpression.getStrictParentOfType<KtProperty>()
@@ -168,7 +155,7 @@ open class ConvertLambdaToReferenceIntention(textGetter: () -> String) : SelfTar
             if (lambdaValueParameterDescriptors.size < explicitReceiverShift + callableExpression.valueArguments.size) return false
             val resolvedCall = callableExpression.getResolvedCall(context) ?: return false
             resolvedCall.valueArguments.entries.forEach { (valueParameter, resolvedArgument) ->
-                if (resolvedArgument is DefaultValueArgument && enableFunctionReferenceWithDefaultValueAsOtherType) return@forEach
+                if (resolvedArgument is DefaultValueArgument) return@forEach
                 val argument = resolvedArgument.arguments.singleOrNull() ?: return false
                 if (resolvedArgument is VarargValueArgument && argument.getSpreadElement() == null) return false
                 val argumentExpression = argument.getArgumentExpression() as? KtNameReferenceExpression ?: return false
@@ -209,7 +196,7 @@ open class ConvertLambdaToReferenceIntention(textGetter: () -> String) : SelfTar
 
     override fun applyTo(element: KtLambdaExpression, editor: Editor?) {
         val referenceName = buildReferenceText(element) ?: return
-        val factory = KtPsiFactory(element)
+        val psiFactory = KtPsiFactory(element.project)
         val parent = element.parent
 
         val outerCallExpression = parent.getStrictParentOfType<KtCallExpression>()
@@ -229,7 +216,7 @@ open class ConvertLambdaToReferenceIntention(textGetter: () -> String) : SelfTar
                 }
             }
             // Without lambda argument syntax, just replace lambda with reference
-            val callableReferenceExpr = factory.createCallableReferenceExpression(referenceName) ?: return
+            val callableReferenceExpr = psiFactory.createCallableReferenceExpression(referenceName) ?: return
             (element.replace(callableReferenceExpr) as? KtElement)?.let { ShortenReferences.RETAIN_COMPANION.process(it) }
         } else {
             // Otherwise, replace the whole argument list for lambda argument-using call
@@ -241,7 +228,7 @@ open class ConvertLambdaToReferenceIntention(textGetter: () -> String) : SelfTar
             val useNamedArguments = valueParameters.any { it.hasDefaultValue() } && hadDefaultValues
                     || arguments.any { it.isNamed() }
 
-            val newArgumentList = factory.buildValueArgumentList {
+            val newArgumentList = psiFactory.buildValueArgumentList {
                 appendFixedText("(")
                 arguments.forEach { argument ->
                     val argumentName = argument.getArgumentName()

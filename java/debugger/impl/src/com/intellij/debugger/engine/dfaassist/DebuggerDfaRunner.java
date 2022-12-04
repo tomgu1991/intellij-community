@@ -8,11 +8,9 @@ import com.intellij.codeInspection.dataFlow.interpreter.StandardDataFlowInterpre
 import com.intellij.codeInspection.dataFlow.jvm.JvmDfaMemoryStateImpl;
 import com.intellij.codeInspection.dataFlow.jvm.SpecialField;
 import com.intellij.codeInspection.dataFlow.jvm.descriptors.AssertionDisabledDescriptor;
-import com.intellij.codeInspection.dataFlow.lang.DfaAnchor;
 import com.intellij.codeInspection.dataFlow.lang.ir.ControlFlow;
 import com.intellij.codeInspection.dataFlow.lang.ir.DataFlowIRProvider;
 import com.intellij.codeInspection.dataFlow.lang.ir.DfaInstructionState;
-import com.intellij.codeInspection.dataFlow.lang.ir.ExpressionPushingInstruction;
 import com.intellij.codeInspection.dataFlow.memory.DfaMemoryState;
 import com.intellij.codeInspection.dataFlow.types.DfType;
 import com.intellij.codeInspection.dataFlow.types.DfTypes;
@@ -223,7 +221,7 @@ public class DebuggerDfaRunner {
     private static Map<Value, JdiValueInfo> requestJdi(@NotNull StackFrameProxyEx proxy, @NotNull Map<Value, List<DfaVariableValue>> map)
       throws EvaluateException {
       ClassLoaderReference classLoader = proxy.getClassLoader();
-      Predicate<ClassLoaderReference> classLoaderFilter = new Predicate<ClassLoaderReference>() {
+      Predicate<ClassLoaderReference> classLoaderFilter = new Predicate<>() {
         private @Nullable List<ClassLoaderReference> myParentLoaders = null;
 
         @Override

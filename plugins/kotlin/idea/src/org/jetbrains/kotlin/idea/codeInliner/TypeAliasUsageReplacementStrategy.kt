@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.codeInliner
 
@@ -30,7 +30,7 @@ class TypeAliasUsageReplacementStrategy(val typeAlias: KtTypeAlias) : UsageRepla
         val typeAliasDescriptor = typeAlias.unsafeResolveToDescriptor() as TypeAliasDescriptor
         val typeToInline = typeAliasDescriptor.expandedType
         val typeConstructorsToInline = typeAliasDescriptor.typeConstructor.parameters.map { it.typeConstructor }
-        val psiFactory = KtPsiFactory(typeAlias)
+        val psiFactory = KtPsiFactory(typeAlias.project)
 
         fun inlineIntoType(usage: KtUserType): KtElement? {
             val context = usage.analyze(BodyResolveMode.PARTIAL)

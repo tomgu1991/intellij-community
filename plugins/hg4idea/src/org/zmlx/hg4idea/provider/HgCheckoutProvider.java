@@ -3,7 +3,6 @@ package org.zmlx.hg4idea.provider;
 
 import com.intellij.dvcs.DvcsUtil;
 import com.intellij.dvcs.ui.DvcsBundle;
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.progress.ProgressIndicator;
@@ -94,9 +93,7 @@ public class HgCheckoutProvider implements CheckoutProvider {
           return CloneStatus.FAILURE;
         }
         else {
-          ApplicationManager.getApplication().invokeLater(() -> {
-            DvcsUtil.addMappingIfSubRoot(project, targetDir, HgVcs.VCS_NAME);
-          });
+          DvcsUtil.addMappingIfSubRoot(project, targetDir, HgVcs.VCS_NAME);
           if (listener != null) {
             listener.directoryCheckedOut(new File(parentDirectory, directoryName), HgVcs.getKey());
             listener.checkoutCompleted();
@@ -111,8 +108,8 @@ public class HgCheckoutProvider implements CheckoutProvider {
   }
 
   @Override
-  public String getVcsName() {
-    return "_Mercurial";
+  public @NotNull String getVcsName() {
+    return HgBundle.message("hg4idea.vcs.name.with.mnemonic");
   }
 
   @NotNull

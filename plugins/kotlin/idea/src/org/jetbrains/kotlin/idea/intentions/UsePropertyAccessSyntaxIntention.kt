@@ -14,7 +14,7 @@ import org.jetbrains.kotlin.descriptors.CallableDescriptor
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
 import org.jetbrains.kotlin.diagnostics.Severity
 import org.jetbrains.kotlin.idea.FrontendInternals
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.analyzeInContext
 import org.jetbrains.kotlin.idea.caches.resolve.getResolutionFacade
 import org.jetbrains.kotlin.idea.caches.resolve.safeAnalyzeNonSourceRootCode
@@ -22,13 +22,13 @@ import org.jetbrains.kotlin.idea.configuration.ui.NotPropertyListPanel
 import org.jetbrains.kotlin.idea.core.NotPropertiesService
 import org.jetbrains.kotlin.idea.base.psi.copied
 import org.jetbrains.kotlin.idea.base.psi.replaced
-import org.jetbrains.kotlin.idea.inspections.IntentionBasedInspection
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.intentions.SelfTargetingOffsetIndependentIntention
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.inspections.IntentionBasedInspection
 import org.jetbrains.kotlin.idea.resolve.ResolutionFacade
 import org.jetbrains.kotlin.idea.resolve.dataFlowValueFactory
 import org.jetbrains.kotlin.idea.resolve.frontendService
 import org.jetbrains.kotlin.idea.resolve.languageVersionSettings
 import org.jetbrains.kotlin.idea.util.application.runWriteActionIfPhysical
-import org.jetbrains.kotlin.idea.util.application.withPsiAttachment
 import org.jetbrains.kotlin.idea.util.getResolutionScope
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.name.FqNameUnsafe
@@ -40,7 +40,6 @@ import org.jetbrains.kotlin.renderer.render
 import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.DelegatingBindingTrace
 import org.jetbrains.kotlin.resolve.bindingContextUtil.getDataFlowInfoBefore
-import org.jetbrains.kotlin.resolve.bindingContextUtil.isUsedAsExpression
 import org.jetbrains.kotlin.resolve.calls.CallResolver
 import org.jetbrains.kotlin.resolve.calls.context.BasicCallResolutionContext
 import org.jetbrains.kotlin.resolve.calls.context.CheckArgumentTypesMode
@@ -57,6 +56,7 @@ import org.jetbrains.kotlin.synthetic.SyntheticJavaPropertyDescriptor
 import org.jetbrains.kotlin.synthetic.canBePropertyAccessor
 import org.jetbrains.kotlin.types.KotlinType
 import org.jetbrains.kotlin.types.TypeUtils
+import org.jetbrains.kotlin.types.typeUtil.isBoolean
 import org.jetbrains.kotlin.types.typeUtil.isUnit
 import org.jetbrains.kotlin.util.shouldNotConvertToProperty
 import org.jetbrains.kotlin.utils.KotlinExceptionWithAttachments
@@ -68,7 +68,8 @@ class UsePropertyAccessSyntaxInspection : IntentionBasedInspection<KtCallExpress
 
     val fqNameList = NotPropertiesService.DEFAULT.map(::FqNameUnsafe).toMutableList()
 
-    @Suppress("CAN_BE_PRIVATE")
+    // Serialized setting
+    @Suppress("MemberVisibilityCanBePrivate")
     var fqNameStrings = NotPropertiesService.DEFAULT.toMutableList()
 
     override fun readSettings(node: Element) {
@@ -101,7 +102,6 @@ class UsePropertyAccessSyntaxInspection : IntentionBasedInspection<KtCallExpress
         return KotlinBundle.message("use.of.0.method.instead.of.property.access.syntax", accessor.toString())
     }
 }
-
 
 class NotPropertiesServiceImpl(private val project: Project) : NotPropertiesService {
     override fun getNotProperties(element: PsiElement): Set<FqNameUnsafe> {
@@ -140,7 +140,8 @@ class UsePropertyAccessSyntaxIntention : SelfTargetingOffsetIndependentIntention
         ) return null // cannot call extensions on "super"
 
         val callee = callExpression.calleeExpression as? KtNameReferenceExpression ?: return null
-        if (!canBePropertyAccessor(callee.getReferencedName())) return null
+        val methodName = callee.getReferencedName()
+        if (!methodName.isSuitableAsPropertyAccessor()) return null
 
         val resolutionFacade = callExpression.getResolutionFacade()
         val bindingContext = callExpression.safeAnalyzeNonSourceRootCode(resolutionFacade, BodyResolveMode.PARTIAL_FOR_COMPLETION)
@@ -175,24 +176,24 @@ class UsePropertyAccessSyntaxIntention : SelfTargetingOffsetIndependentIntention
             )
         ) return null
 
-        val isSetUsage = callExpression.valueArguments.size == 1
+        val isGetUsage = callExpression.valueArguments.size == 0
+        if (isGetUsage) {
+            if (methodName.startsWith("is") && function.returnType?.isBoolean() != true) {
+                return null
+            }
+            return property.name
+        }
 
         val valueArgumentExpression = callExpression.valueArguments.firstOrNull()?.getArgumentExpression()?.takeUnless {
             it is KtLambdaExpression || it is KtNamedFunction || it is KtCallableReferenceExpression
         }
+        if (valueArgumentExpression == null) return null
 
-        if (isSetUsage && valueArgumentExpression == null) {
+        if (callExpression.parent is KtQualifiedExpression && function.returnType?.isUnit() != true) {
             return null
         }
 
-        if (isSetUsage && qualifiedExpression.isUsedAsExpression(bindingContext)) {
-            // call to the setter used as expression can be converted in the only case when it's used as body expression for some declaration and its type is Unit
-            val parent = qualifiedExpression.parent
-            if (parent !is KtDeclarationWithBody || qualifiedExpression != parent.bodyExpression) return null
-            if (function.returnType?.isUnit() != true) return null
-        }
-
-        if (isSetUsage && property.type != function.valueParameters.single().type) {
+        if (property.type != function.valueParameters.single().type) {
             val qualifiedExpressionCopy = qualifiedExpression.copied()
             val callExpressionCopy =
                 ((qualifiedExpressionCopy as? KtQualifiedExpression)?.selectorExpression ?: qualifiedExpressionCopy) as KtCallExpression
@@ -212,6 +213,9 @@ class UsePropertyAccessSyntaxIntention : SelfTargetingOffsetIndependentIntention
 
         return property.name
     }
+
+    private fun String.isSuitableAsPropertyAccessor(): Boolean =
+        canBePropertyAccessor(this) && commonGetterLikePrefixes.none { prefix -> this.contains(prefix) }
 
     private fun checkWillResolveToProperty(
         resolvedCall: ResolvedCall<out CallableDescriptor>,
@@ -257,7 +261,7 @@ class UsePropertyAccessSyntaxIntention : SelfTargetingOffsetIndependentIntention
     }
 
     private fun replaceWithPropertyGet(callExpression: KtCallExpression, propertyName: Name): KtExpression {
-        val newExpression = KtPsiFactory(callExpression).createExpression(propertyName.render())
+        val newExpression = KtPsiFactory(callExpression.project).createExpression(propertyName.render())
         return callExpression.replaced(newExpression)
     }
 
@@ -276,6 +280,9 @@ class UsePropertyAccessSyntaxIntention : SelfTargetingOffsetIndependentIntention
 
         val qualifiedExpression = callToConvert.getQualifiedExpressionForSelector()
         val argument = callToConvert.valueArguments.single()
+
+        val psiFactory = KtPsiFactory(callToConvert.project)
+
         if (qualifiedExpression != null) {
             val pattern = when (qualifiedExpression) {
                 is KtDotQualifiedExpression -> "$0.$1=$2"
@@ -283,7 +290,7 @@ class UsePropertyAccessSyntaxIntention : SelfTargetingOffsetIndependentIntention
                 else -> error(qualifiedExpression) //TODO: make it sealed?
             }
 
-            val newExpression = KtPsiFactory(callToConvert).createExpressionByPattern(
+            val newExpression = psiFactory.createExpressionByPattern(
                 pattern,
                 qualifiedExpression.receiverExpression,
                 propertyName,
@@ -292,9 +299,14 @@ class UsePropertyAccessSyntaxIntention : SelfTargetingOffsetIndependentIntention
             )
             return qualifiedExpression.replaced(newExpression)
         } else {
-            val newExpression =
-                KtPsiFactory(callToConvert).createExpressionByPattern("$0=$1", propertyName, argument.getArgumentExpression()!!)
+            val newExpression = psiFactory.createExpressionByPattern("$0=$1", propertyName, argument.getArgumentExpression()!!)
             return callToConvert.replaced(newExpression)
         }
     }
 }
+
+private val commonGetterLikePrefixes: Set<Regex> = setOf(
+    "^getOr[A-Z]".toRegex(),
+    "^getAnd[A-Z]".toRegex(),
+    "^getIf[A-Z]".toRegex(),
+)

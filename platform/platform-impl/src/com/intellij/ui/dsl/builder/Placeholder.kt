@@ -21,9 +21,13 @@ interface Placeholder : CellBase<Placeholder> {
 
   override fun enabled(isEnabled: Boolean): Placeholder
 
+  @Deprecated("Use align method instead")
   override fun horizontalAlign(horizontalAlign: HorizontalAlign): Placeholder
 
+  @Deprecated("Use align method instead")
   override fun verticalAlign(verticalAlign: VerticalAlign): Placeholder
+
+  override fun align(align: Align): Placeholder
 
   override fun resizableColumn(): Placeholder
 
@@ -34,7 +38,10 @@ interface Placeholder : CellBase<Placeholder> {
   /**
    * Component placed in the cell. If the component is [DialogPanel] then all functionality related to
    * [DialogPanel.apply]/[DialogPanel.reset]/[DialogPanel.isModified] and validation mechanism is delegated from [component]
-   * to parent [DialogPanel] that contains this placeholder
+   * to parent [DialogPanel] that contains this placeholder.
+   *
+   * The property is not reset automatically when the component is removed from the panel by other methods like [java.awt.Container.remove]
+   * or by adding the component to another parent
    */
   var component: JComponent?
 }

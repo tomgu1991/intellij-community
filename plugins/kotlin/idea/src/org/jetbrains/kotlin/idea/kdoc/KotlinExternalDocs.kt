@@ -1,10 +1,11 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.idea.kdoc
 
 import com.intellij.codeInsight.documentation.AbstractExternalFilter
 import com.intellij.codeInsight.javadoc.JavaDocInfoGenerator
 import com.intellij.ide.BrowserUtil
 import com.intellij.lang.java.JavaDocumentationProvider
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.NlsSafe
 import com.intellij.openapi.util.io.FileUtil
@@ -13,7 +14,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.*
 import com.intellij.psi.util.PsiUtil
 import com.intellij.util.Urls
-import com.intellij.util.castSafelyTo
+import com.intellij.util.asSafely
 import org.intellij.lang.annotations.Language
 import org.jetbrains.annotations.Nls
 import org.jetbrains.annotations.VisibleForTesting
@@ -26,7 +27,6 @@ import org.jetbrains.kotlin.asJava.elements.KtLightField
 import org.jetbrains.kotlin.asJava.elements.KtLightMember
 import org.jetbrains.kotlin.asJava.elements.KtLightMethod
 import org.jetbrains.kotlin.idea.KotlinDocumentationProvider
-import org.jetbrains.kotlin.idea.util.application.runReadAction
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.uast.*
 import org.jsoup.Jsoup
@@ -173,7 +173,7 @@ object KotlinExternalDocUrlsProvider {
     private fun getContainingLightClassForKtDeclaration(declaration: KtDeclaration): PsiClass? {
         return when {
             declaration is KtFunction && declaration.isLocal -> null
-            else -> declaration.toUElementOfType<UMethod>()?.uastParent?.javaPsi?.castSafelyTo<PsiClass>()
+            else -> declaration.toUElementOfType<UMethod>()?.uastParent?.javaPsi?.asSafely<PsiClass>()
         }
     }
 }

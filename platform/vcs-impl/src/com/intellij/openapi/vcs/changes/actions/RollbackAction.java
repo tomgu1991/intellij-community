@@ -141,7 +141,7 @@ public class RollbackAction extends DumbAwareAction {
           changesList.addAll(clManager.getChangesIn(vf));
         }
         if (!changesList.isEmpty()) {
-          changes = changesList.toArray(new Change[0]);
+          changes = changesList.toArray(Change.EMPTY_CHANGE_ARRAY);
         }
       }
     }
@@ -176,7 +176,7 @@ public class RollbackAction extends DumbAwareAction {
     return null;
   }
 
-  private static void rollbackModifiedWithoutEditing(final Project project, final LinkedHashSet<VirtualFile> modifiedWithoutEditing) {
+  private static void rollbackModifiedWithoutEditing(final Project project, final Set<? extends VirtualFile> modifiedWithoutEditing) {
     final String operationName = StringUtil.decapitalize(removeMnemonic(getRollbackOperationName(project)));
     String message = (modifiedWithoutEditing.size() == 1)
                      ? VcsBundle.message("rollback.modified.without.editing.confirm.single",

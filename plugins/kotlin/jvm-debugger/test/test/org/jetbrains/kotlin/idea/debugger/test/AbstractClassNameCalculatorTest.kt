@@ -9,8 +9,8 @@ import org.jetbrains.kotlin.codegen.binding.CodegenBinding
 import org.jetbrains.kotlin.codegen.state.GenerationState
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.idea.caches.resolve.analyzeWithAllCompilerChecks
-import org.jetbrains.kotlin.idea.core.util.getLineNumber
-import org.jetbrains.kotlin.idea.debugger.ClassNameCalculator
+import org.jetbrains.kotlin.idea.base.psi.getLineNumber
+import org.jetbrains.kotlin.idea.debugger.base.util.ClassNameCalculator
 import org.jetbrains.kotlin.idea.test.KotlinLightCodeInsightFixtureTestCase
 import org.jetbrains.kotlin.idea.test.KotlinWithJdkAndRuntimeLightProjectDescriptor
 import org.jetbrains.kotlin.idea.util.application.executeWriteCommand
@@ -20,7 +20,7 @@ import org.jetbrains.kotlin.psi.KtLambdaExpression
 import org.jetbrains.kotlin.psi.KtPsiFactory
 
 abstract class AbstractClassNameCalculatorTest : KotlinLightCodeInsightFixtureTestCase() {
-    override fun getProjectDescriptor() = KotlinWithJdkAndRuntimeLightProjectDescriptor.INSTANCE
+    override fun getProjectDescriptor() = KotlinWithJdkAndRuntimeLightProjectDescriptor.getInstance()
 
     protected fun doTest(unused: String) {
         val testFile = dataFile()
@@ -44,7 +44,7 @@ abstract class AbstractClassNameCalculatorTest : KotlinLightCodeInsightFixtureTe
         myFixture.checkResultByFile(testFile)
     }
 
-    private fun checkConsistency(file: KtFile, allNames: Map<KtElement, String>) {
+    protected open fun checkConsistency(file: KtFile, allNames: Map<KtElement, String>) {
         val analysisResult = file.analyzeWithAllCompilerChecks()
         assert(!analysisResult.isError())
 

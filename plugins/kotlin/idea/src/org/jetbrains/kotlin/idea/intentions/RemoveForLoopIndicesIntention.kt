@@ -2,14 +2,15 @@
 
 package org.jetbrains.kotlin.idea.intentions
 
-import com.intellij.codeInspection.CleanupLocalInspectionTool
+import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.search.searches.ReferencesSearch
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToCall
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.inspections.IntentionBasedInspection
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.intentions.SelfTargetingRangeIntention
 import org.jetbrains.kotlin.idea.editor.fixers.range
-import org.jetbrains.kotlin.idea.inspections.IntentionBasedInspection
 import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
 import org.jetbrains.kotlin.psi.KtForExpression
 import org.jetbrains.kotlin.psi.KtPsiFactory
@@ -20,7 +21,7 @@ import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameUnsafe
 class RemoveForLoopIndicesInspection : IntentionBasedInspection<KtForExpression>(
     RemoveForLoopIndicesIntention::class,
     KotlinBundle.message("index.is.not.used.in.the.loop.body")
-), CleanupLocalInspectionTool
+)
 
 class RemoveForLoopIndicesIntention : SelfTargetingRangeIntention<KtForExpression>(
     KtForExpression::class.java,
@@ -30,6 +31,8 @@ class RemoveForLoopIndicesIntention : SelfTargetingRangeIntention<KtForExpressio
     private val WITH_INDEX_FQ_NAMES: Set<String> by lazy {
         sequenceOf("collections", "sequences", "text", "ranges").map { "kotlin.$it.$WITH_INDEX_NAME" }.toSet()
     }
+
+    override fun startInWriteAction(): Boolean = false
 
     override fun applicabilityRange(element: KtForExpression): TextRange? {
         val loopRange = element.loopRange as? KtDotQualifiedExpression ?: return null
@@ -50,9 +53,11 @@ class RemoveForLoopIndicesIntention : SelfTargetingRangeIntention<KtForExpressio
         val loopRange = element.loopRange as KtDotQualifiedExpression
 
         val elementVar = multiParameter.entries[1]
-        val loop = KtPsiFactory(element).createExpressionByPattern("for ($0 in _) {}", elementVar.text) as KtForExpression
-        element.loopParameter!!.replace(loop.loopParameter!!)
+        val loop = KtPsiFactory(element.project).createExpressionByPattern("for ($0 in _) {}", elementVar.text) as KtForExpression
+        runWriteAction {
+            element.loopParameter!!.replace(loop.loopParameter!!)
 
-        loopRange.replace(loopRange.receiverExpression)
+            loopRange.replace(loopRange.receiverExpression)
+        }
     }
 }

@@ -6,11 +6,11 @@ import com.intellij.find.FindInProjectSettings
 import com.intellij.find.FindManager
 import com.intellij.find.SearchTextArea
 import com.intellij.find.impl.FindInProjectSettingsBase
+import com.intellij.find.impl.FindPopupItem
 import com.intellij.find.impl.FindPopupPanel
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.impl.ActionButton
 import com.intellij.openapi.project.Project
-import com.intellij.usages.UsagePresentation
 import com.intellij.util.ui.UIUtil
 import org.assertj.swing.core.MouseClickInfo
 import org.assertj.swing.data.TableCell
@@ -58,6 +58,8 @@ class FindInFilesLesson(override val sampleFilePath: String)
     task {
       val wholeWordsButtonText = FindBundle.message("find.whole.words").dropMnemonic()
       text(LessonsBundle.message("find.in.files.whole.words",
+                                 code("apple"),
+                                 code("pineapple"),
                                  icon(AllIcons.Actions.Words),
                                  LessonUtil.rawKeyStroke(KeyStroke.getKeyStroke(KeyEvent.VK_W, InputEvent.ALT_DOWN_MASK))))
       highlightAndTriggerWhenButtonSelected(wholeWordsButtonText)
@@ -208,8 +210,8 @@ class FindInFilesLesson(override val sampleFilePath: String)
 
   private fun JTable.findLastRowIndexOfItemWithText(textToFind: String): Int {
     for (ind in (rowCount - 1) downTo 0) {
-      val item = getValueAt(ind, 0) as? UsagePresentation
-      if (item?.plainText?.contains(textToFind, true) == true) {
+      val item = getValueAt(ind, 0) as? FindPopupItem
+      if (item?.presentableText?.contains(textToFind, true) == true) {
         return ind
       }
     }
@@ -224,8 +226,6 @@ class FindInFilesLesson(override val sampleFilePath: String)
   }
 
   override val testScriptProperties = TaskTestContext.TestScriptProperties(10)
-
-  override val suitableTips = listOf("FindReplaceToggle", "FindInPath")
 
   override val helpLinks: Map<String, String> get() = mapOf(
     Pair(LessonsBundle.message("find.in.files.help.link"),

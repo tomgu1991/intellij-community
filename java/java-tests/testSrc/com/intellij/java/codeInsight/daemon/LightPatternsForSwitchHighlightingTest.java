@@ -30,7 +30,39 @@ public class LightPatternsForSwitchHighlightingTest extends LightJavaCodeInsight
   }
 
   public void testPatternsInSwitchIn11Java() {
-      IdeaTestUtil.withLevel(getModule(), LanguageLevel.JDK_11, this::doTest);
+    IdeaTestUtil.withLevel(getModule(), LanguageLevel.JDK_11, this::doTest);
+  }
+
+  public void testPatternsInSwitchIn19Java() {
+    IdeaTestUtil.withLevel(getModule(), LanguageLevel.JDK_19_PREVIEW, this::doTest);
+  }
+
+  public void testMismatchedDeconstructionIn19Java() {
+    IdeaTestUtil.withLevel(getModule(), LanguageLevel.JDK_19_PREVIEW, this::doTest);
+  }
+
+  public void testIllegalFallthroughIn19Java() {
+    IdeaTestUtil.withLevel(getModule(), LanguageLevel.JDK_19_PREVIEW, this::doTest);
+  }
+
+  public void testUnconditionalDestructuringAndDefaultIn19Java() {
+    IdeaTestUtil.withLevel(getModule(), LanguageLevel.JDK_19_PREVIEW, this::doTest);
+  }
+
+  public void testSwitchExhaustivenessIn19Java() {
+    IdeaTestUtil.withLevel(getModule(), LanguageLevel.JDK_19_PREVIEW, this::doTest);
+  }
+
+  public void testSwitchExhaustivenessWithSealedIntersection(){
+    IdeaTestUtil.withLevel(getModule(), LanguageLevel.JDK_19_PREVIEW, this::doTest);
+  }
+
+  public void testSwitchExhaustivenessWithGenericsIn19Java() {
+    IdeaTestUtil.withLevel(getModule(), LanguageLevel.JDK_19_PREVIEW, this::doTest);
+  }
+
+  public void testSwitchDominanceIn19Java() {
+    IdeaTestUtil.withLevel(getModule(), LanguageLevel.JDK_19_PREVIEW, this::doTest);
   }
 
   public void testPatternMatchingInSwitch() {
@@ -63,6 +95,10 @@ public class LightPatternsForSwitchHighlightingTest extends LightJavaCodeInsight
     doTest();
   }
 
+  public void testEffectivelyFinalWhen() {
+    IdeaTestUtil.withLevel(getModule(), LanguageLevel.JDK_19_PREVIEW, this::doTest);
+  }
+
   public void testSameVariableNameInPatternMatchingInSwitch() {
     doTest();
   }
@@ -73,6 +109,10 @@ public class LightPatternsForSwitchHighlightingTest extends LightJavaCodeInsight
 
   public void testGuardedPatterns() {
     doTest();
+  }
+
+  public void testWhenExpressions() {
+    IdeaTestUtil.withLevel(getModule(), LanguageLevel.JDK_19_PREVIEW, this::doTest);
   }
 
   public void testSwitchExprHasResult() {
@@ -123,6 +163,18 @@ public class LightPatternsForSwitchHighlightingTest extends LightJavaCodeInsight
 
   public void testBrokenSealedHierarchy() {
     doTest();
+  }
+
+  public void testRecordPatternsAndWhenGuardsInJava18() {
+    IdeaTestUtil.withLevel(getModule(), LanguageLevel.JDK_18_PREVIEW, this::doTest);
+  }
+
+  public void testRecordPatternsAndWhenGuardsInJava19() {
+    IdeaTestUtil.withLevel(getModule(), LanguageLevel.JDK_19_PREVIEW, this::doTest);
+  }
+
+  public void testWhenExpressionIsFalse() {
+    IdeaTestUtil.withLevel(getModule(), LanguageLevel.JDK_19_PREVIEW, this::doTest);
   }
 
   private void doTest() {

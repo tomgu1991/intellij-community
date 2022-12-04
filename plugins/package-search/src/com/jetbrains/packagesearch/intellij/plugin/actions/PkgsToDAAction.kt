@@ -16,6 +16,7 @@
 
 package com.jetbrains.packagesearch.intellij.plugin.actions
 
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DataKey
@@ -41,6 +42,8 @@ internal class PkgsToDAAction : AnAction(
     }
 
     override fun isDumbAware() = true
+
+    override fun getActionUpdateThread() = ActionUpdateThread.BGT
 
     override fun update(e: AnActionEvent) {
         val data = e.getData(PACKAGES_LIST_PANEL_DATA_KEY)
@@ -68,12 +71,11 @@ internal class PkgsToDAAction : AnAction(
                 dependencyAnalyzerSupportedUsages.forEach { usage ->
                     add(usage.projectModule.name) {
                         navigateToDA(
-                            group = usage.scope.scopeName,
-                            artifact = data.groupId,
-                            version = data.artifactId,
-                            scope = usage.getResolvedVersionOrFallback().versionName,
-                            module = usage.projectModule.nativeModule,
-                            systemId = usage.projectModule.buildSystemType.dependencyAnalyzerKey!!
+                          group = data.groupId,
+                          artifact = data.artifactId,
+                          version = usage.getDeclaredVersionOrFallback().versionName,
+                          module = usage.projectModule.nativeModule,
+                          systemId = usage.projectModule.buildSystemType.dependencyAnalyzerKey!!
                         )
                     }
                 }
@@ -94,24 +96,22 @@ internal class PkgsToDAAction : AnAction(
         } else {
             val usage = data.usageInfo.single()
             navigateToDA(
-                group = usage.scope.scopeName,
-                artifact = data.groupId,
-                version = data.artifactId,
-                scope = usage.getResolvedVersionOrFallback().versionName,
-                module = usage.projectModule.nativeModule,
-                systemId = usage.projectModule.buildSystemType.dependencyAnalyzerKey!!
+              group = data.groupId,
+              artifact = data.artifactId,
+              version = usage.getDeclaredVersionOrFallback().versionName,
+              module = usage.projectModule.nativeModule,
+              systemId = usage.projectModule.buildSystemType.dependencyAnalyzerKey!!
             )
         }
     }
 
     @Suppress("HardCodedStringLiteral")
-    private fun navigateToDA(group: String, artifact: String, version: String, scope: String, module: Module, systemId: ProjectSystemId) =
+    private fun navigateToDA(group: String, artifact: String, version: String, module: Module, systemId: ProjectSystemId) =
         DependencyAnalyzerManager.getInstance(module.project)
             .getOrCreate(systemId)
             .setSelectedDependency(
                 module = module,
-                data = DAArtifact(group, artifact, version),
-                scope = scope
+                data = DAArtifact(group, artifact, version)
             )
 }
 

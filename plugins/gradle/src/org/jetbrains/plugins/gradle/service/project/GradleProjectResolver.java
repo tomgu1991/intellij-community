@@ -305,7 +305,6 @@ public class GradleProjectResolver implements ExternalSystemProjectResolver<Grad
 
     resolverCtx.checkCancelled();
     if (useCustomSerialization) {
-      assert gradleVersion != null;
       allModels.initToolingSerializer();
     }
 
@@ -544,8 +543,11 @@ public class GradleProjectResolver implements ExternalSystemProjectResolver<Grad
           String rootProjectName = build.getName();
           BuildParticipant buildParticipant = new BuildParticipant();
           String projectPath = toCanonicalPath(build.getBuildIdentifier().getRootDir().getPath());
+          String parentPath = build.getParentBuildIdentifier() != null ?
+                              toCanonicalPath(build.getParentBuildIdentifier().getRootDir().getPath()) : null;
           buildParticipant.setRootProjectName(rootProjectName);
           buildParticipant.setRootPath(projectPath);
+          buildParticipant.setParentRootPath(parentPath);
           if (ideaProject != null) {
             for (IdeaModule module : ideaProject.getModules()) {
               String modulePath = toCanonicalPath(module.getGradleProject().getProjectDirectory().getPath());

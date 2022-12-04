@@ -7,7 +7,8 @@ import com.intellij.openapi.project.Project
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
 import org.jetbrains.kotlin.diagnostics.Diagnostic
 import org.jetbrains.kotlin.diagnostics.Errors
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.KotlinQuickFixAction
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.getParentOfType
@@ -26,10 +27,10 @@ class SurroundWithArrayOfWithSpreadOperatorInFunctionFix(
         val argumentName = argument.getArgumentName()?.asName ?: return
         val argumentExpression = argument.getArgumentExpression() ?: return
 
-        val factory = KtPsiFactory(argumentExpression)
+        val psiFactory = KtPsiFactory(project)
 
-        val surroundedWithArrayOf = factory.createExpressionByPattern("$wrapper($0)", argumentExpression)
-        val newArgument = factory.createArgument(surroundedWithArrayOf, argumentName, isSpread = true)
+        val surroundedWithArrayOf = psiFactory.createExpressionByPattern("$wrapper($0)", argumentExpression)
+        val newArgument = psiFactory.createArgument(surroundedWithArrayOf, argumentName, isSpread = true)
 
         argument.replace(newArgument)
     }

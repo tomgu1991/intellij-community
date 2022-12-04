@@ -3,11 +3,12 @@ package org.jetbrains.kotlin.idea.notification
 
 import com.intellij.notification.Notification
 import com.intellij.notification.Notifications
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.impl.NonBlockingReadActionImpl
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
-import org.jetbrains.kotlin.idea.KotlinBundle
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinPluginLayout
+import org.jetbrains.kotlin.idea.migration.KotlinMigrationBundle
 
 fun catchNotificationText(project: Project, action: () -> Unit): String? {
     val notifications = catchNotifications(project, action).ifEmpty { return null }
@@ -27,7 +28,7 @@ fun catchNotifications(project: Project, action: () -> Unit): List<Notification>
 
         action()
         connection.deliverImmediately()
-        NonBlockingReadActionImpl.waitForAsyncTaskCompletion()
+        ApplicationManager.getApplication().invokeAndWait { NonBlockingReadActionImpl.waitForAsyncTaskCompletion() }
         return notifications
     } finally {
         Disposer.dispose(myDisposable)
@@ -40,7 +41,7 @@ fun List<Notification>.asText(filterNotificationAboutNewKotlinVersion: Boolean =
         .filter {
             !filterNotificationAboutNewKotlinVersion ||
                     !it.content.contains(
-                        KotlinBundle.message(
+                        KotlinMigrationBundle.message(
                             "kotlin.external.compiler.updates.notification.content.0",
                             KotlinPluginLayout.standaloneCompilerVersion.kotlinVersion
                         )

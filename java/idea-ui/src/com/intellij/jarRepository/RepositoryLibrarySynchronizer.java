@@ -2,7 +2,6 @@
 package com.intellij.jarRepository;
 
 import com.intellij.ide.JavaUiBundle;
-import com.intellij.notification.Notification;
 import com.intellij.notification.NotificationType;
 import com.intellij.notification.Notifications;
 import com.intellij.openapi.application.ApplicationManager;
@@ -32,10 +31,7 @@ import java.util.function.Predicate;
 
 import static com.intellij.jarRepository.SyncLoadingKt.loadDependenciesSync;
 
-/**
- * @author gregsh
- */
-public class RepositoryLibrarySynchronizer implements StartupActivity.DumbAware {
+public final class RepositoryLibrarySynchronizer implements StartupActivity.DumbAware {
 
   static boolean isLibraryNeedToBeReloaded(LibraryEx library, RepositoryLibraryProperties properties) {
     String version = properties.getVersion();
@@ -144,7 +140,7 @@ public class RepositoryLibrarySynchronizer implements StartupActivity.DumbAware 
       libraryTable.addListener(globalLibSynchronizer, disposable);
     }
     globalLibSynchronizer.installOnExistingLibraries();
-    WorkspaceModelTopics.getInstance(project).subscribeAfterModuleLoading(project.getMessageBus().connect(disposable), synchronizer);
+    project.getMessageBus().connect(disposable).subscribe(WorkspaceModelTopics.CHANGED, synchronizer);
     synchronizationQueue.synchronizeAllLibraries();
   }
 

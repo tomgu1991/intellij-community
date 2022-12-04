@@ -4,12 +4,13 @@ package org.jetbrains.kotlin.idea.inspections
 
 import com.intellij.codeInsight.FileModificationService
 import com.intellij.codeInspection.*
+import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElementVisitor
 import org.jetbrains.kotlin.codegen.SamCodegenUtil
 import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.idea.FrontendInternals
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.base.projectStructure.languageVersionSettings
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.caches.resolve.getResolutionFacade
@@ -41,7 +42,9 @@ import org.jetbrains.kotlin.types.isNullable
 import org.jetbrains.kotlin.types.typeUtil.makeNotNullable
 import org.jetbrains.kotlin.utils.keysToMapExceptNulls
 
-class RedundantSamConstructorInspection : AbstractKotlinInspection(), CleanupLocalInspectionTool {
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.inspections.AbstractKotlinInspection
+
+class RedundantSamConstructorInspection : AbstractKotlinInspection() {
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean, session: LocalInspectionToolSession): PsiElementVisitor {
         return callExpressionVisitor(fun(expression) {
             if (expression.valueArguments.isEmpty()) return
@@ -103,7 +106,8 @@ class RedundantSamConstructorInspection : AbstractKotlinInspection(), CleanupLoc
         fun replaceSamConstructorCall(callExpression: KtCallExpression): KtLambdaExpression {
             val functionalArgument = callExpression.samConstructorValueArgument()?.getArgumentExpression()
                 ?: throw AssertionError("SAM-constructor should have a FunctionLiteralExpression as single argument: ${callExpression.getElementTextWithContext()}")
-            return callExpression.getQualifiedExpressionForSelectorOrThis().replace(functionalArgument) as KtLambdaExpression
+            val ktExpression = callExpression.getQualifiedExpressionForSelectorOrThis()
+            return runWriteAction { ktExpression.replace(functionalArgument) as KtLambdaExpression }
         }
 
         private fun canBeReplaced(
@@ -132,8 +136,7 @@ class RedundantSamConstructorInspection : AbstractKotlinInspection(), CleanupLoc
             if (!resolutionResults.isSuccess) return false
 
             val generatingAdditionalSamCandidateIsDisabled =
-                parentCall.languageVersionSettings.supportsFeature(LanguageFeature.SamConversionPerArgument) ||
-                        parentCall.languageVersionSettings.supportsFeature(LanguageFeature.ProhibitVarargAsArrayAfterSamArgument)
+                parentCall.languageVersionSettings.supportsFeature(LanguageFeature.ProhibitVarargAsArrayAfterSamArgument)
 
             val samAdapterOriginalDescriptor =
                 if (generatingAdditionalSamCandidateIsDisabled && resolutionResults.resultingCall is NewResolvedCallImpl<*>) {
@@ -152,7 +155,7 @@ class RedundantSamConstructorInspection : AbstractKotlinInspection(), CleanupLoc
             private val newArguments: List<ValueArgument>
 
             init {
-                val factory = KtPsiFactory(callElement)
+                val factory = KtPsiFactory(callElement.project)
                 newArguments = original.valueArguments.map { argument ->
                     val call = callArgumentMapToConvert[argument]
                     val newExpression = call?.samConstructorValueArgument()?.getArgumentExpression() ?: return@map argument
@@ -209,13 +212,7 @@ class RedundantSamConstructorInspection : AbstractKotlinInspection(), CleanupLoc
                 arg.toCallExpression()?.takeIf { call -> samConversionIsPossible(arg, call) }
             }
 
-            val haveToConvertAllArguments = !functionCall.languageVersionSettings.supportsFeature(LanguageFeature.SamConversionPerArgument)
-
-            val argumentsThatCanBeConverted = if (haveToConvertAllArguments) {
-                argumentsWithSamConstructors.takeIf { it.values.none(::containsLabeledReturnPreventingConversion) }.orEmpty()
-            } else {
-                argumentsWithSamConstructors.filterValues { !containsLabeledReturnPreventingConversion(it) }
-            }
+            val argumentsThatCanBeConverted = argumentsWithSamConstructors.filterValues { !containsLabeledReturnPreventingConversion(it) }
 
             return when {
                 argumentsThatCanBeConverted.isEmpty() -> emptyList()

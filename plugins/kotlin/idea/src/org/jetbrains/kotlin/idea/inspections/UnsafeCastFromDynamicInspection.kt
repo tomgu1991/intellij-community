@@ -1,11 +1,12 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.inspections
 
+import com.intellij.codeInsight.intention.FileModifier.SafeFieldForPreview
 import com.intellij.codeInspection.*
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElementVisitor
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.safeAnalyzeNonSourceRootCode
 import org.jetbrains.kotlin.psi.KtExpression
 import org.jetbrains.kotlin.psi.KtPsiFactory
@@ -19,7 +20,9 @@ import org.jetbrains.kotlin.types.TypeUtils
 import org.jetbrains.kotlin.types.isDynamic
 import org.jetbrains.kotlin.types.typeUtil.isNullableAny
 
-class UnsafeCastFromDynamicInspection : AbstractKotlinInspection(), CleanupLocalInspectionTool {
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.inspections.AbstractKotlinInspection
+
+class UnsafeCastFromDynamicInspection : AbstractKotlinInspection() {
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean, session: LocalInspectionToolSession): PsiElementVisitor =
         expressionVisitor(fun(expression) {
             val context = expression.safeAnalyzeNonSourceRootCode(BodyResolveMode.PARTIAL)
@@ -39,7 +42,7 @@ class UnsafeCastFromDynamicInspection : AbstractKotlinInspection(), CleanupLocal
         })
 }
 
-private class CastExplicitlyFix(private val type: KotlinType) : LocalQuickFix {
+private class CastExplicitlyFix(@SafeFieldForPreview private val type: KotlinType) : LocalQuickFix {
     override fun getName() = KotlinBundle.message("cast.explicitly.fix.text")
 
     override fun getFamilyName() = name
@@ -48,7 +51,7 @@ private class CastExplicitlyFix(private val type: KotlinType) : LocalQuickFix {
         val expression = descriptor.psiElement as? KtExpression ?: return
         val typeName = type.constructor.declarationDescriptor?.name ?: return
         val pattern = if (type.isMarkedNullable) "$0 as? $1" else "$0 as $1"
-        val newExpression = KtPsiFactory(expression).createExpressionByPattern(pattern, expression, typeName)
+        val newExpression = KtPsiFactory(project).createExpressionByPattern(pattern, expression, typeName)
         expression.replace(newExpression)
     }
 }

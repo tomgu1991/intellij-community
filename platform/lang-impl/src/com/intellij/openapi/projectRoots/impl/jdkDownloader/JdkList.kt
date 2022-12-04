@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
-import com.google.common.collect.ImmutableList
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.impl.ApplicationInfoImpl
 import com.intellij.openapi.components.Service
@@ -38,9 +37,9 @@ import kotlin.concurrent.write
 
 /** describes vendor + product part of the UI **/
 data class JdkProduct(
-  val vendor: String,
-  val product: String?,
-  val flavour: String?
+  val vendor: @NlsSafe String,
+  val product: @NlsSafe String?,
+  val flavour: @NlsSafe String?
 ) {
   val packagePresentationText: String
     get() = buildString {
@@ -131,7 +130,7 @@ data class JdkItem(
     return installDir.resolve(packageToBinJavaPrefix)
   }
 
-  val vendorPrefix
+  private val vendorPrefix
     get() = suggestedSdkName.split("-").dropLast(1).joinToString("-")
 
   fun matchesVendor(predicate: String) : Boolean {
@@ -183,18 +182,12 @@ data class JdkItem(
 
 enum class JdkPackageType(@NonNls val type: String) {
   ZIP("zip") {
-    override fun openDecompressor(archiveFile: Path): Decompressor {
-      val decompressor = Decompressor.Zip(archiveFile)
-      return when {
-        SystemInfo.isWindows -> decompressor
-        else -> decompressor.withZipExtensions()
-      }
-    }
+    override fun openDecompressor(archiveFile: Path): Decompressor = Decompressor.Zip(archiveFile).withZipExtensions()
   },
 
   @Suppress("SpellCheckingInspection")
   TAR_GZ("targz") {
-    override fun openDecompressor(archiveFile: Path) = Decompressor.Tar(archiveFile)
+    override fun openDecompressor(archiveFile: Path): Decompressor = Decompressor.Tar(archiveFile)
   };
 
   abstract fun openDecompressor(archiveFile: Path): Decompressor
@@ -229,22 +222,11 @@ data class JdkPredicate(
       val x86_64 = "x86_64"
       val defaultPlatform = JdkPlatform(currentOS, x86_64)
       val platforms = when {
-        (SystemInfo.isMac && CpuArch.isArm64()) || Registry.`is`("jdk.downloader.assume.m1") -> {
-          listOf(defaultPlatform, defaultPlatform.copy(arch = "aarch64"))
-        }
-
-        (SystemInfo.isLinux && CpuArch.isArm64()) || Registry.`is`("jdk.downloader.assume.linux.aarch64") -> {
-          listOf(defaultPlatform.copy(arch = "aarch64"))
-        }
-
-        SystemInfo.isWindows && forWsl -> {
-          listOf(defaultPlatform.copy(os = "linux"))
-        }
-
-        !SystemInfo.isWindows && forWsl -> {
-          listOf()
-        }
-
+        SystemInfo.isWindows && forWsl && CpuArch.isArm64() -> listOf(defaultPlatform.copy(os = "linux", arch = "aarch64"))
+        SystemInfo.isWindows && forWsl && !CpuArch.isArm64() -> listOf(defaultPlatform.copy(os = "linux"))
+        SystemInfo.isLinux && CpuArch.isArm64() -> listOf(defaultPlatform.copy(arch = "aarch64"))
+        (SystemInfo.isMac || SystemInfo.isWindows) && CpuArch.isArm64() -> listOf(defaultPlatform, defaultPlatform.copy(arch = "aarch64"))
+        !SystemInfo.isWindows && forWsl -> listOf()
         else -> listOf(defaultPlatform)
       }
 
@@ -259,8 +241,7 @@ data class JdkPredicate(
     }
 
     val currentArch = when {
-      (SystemInfo.isMac && CpuArch.isArm64()) || Registry.`is`("jdk.downloader.assume.m1") -> "aarch64"
-      (SystemInfo.isLinux && CpuArch.isArm64()) || Registry.`is`("jdk.downloader.assume.linux.aarch64") -> "aarch64"
+      CpuArch.isArm64() -> "aarch64"
       else -> "x86_64"
     }
   }
@@ -553,7 +534,7 @@ private class RawJdkListImpl(
   private fun parseJson(predicate: JdkPredicate) : () -> List<JdkItem> {
     val result = runCatching {
       try {
-        ImmutableList.copyOf(JdkListParser.parseJdkList(json, predicate))
+        java.util.List.copyOf(JdkListParser.parseJdkList(json, predicate))
       }
       catch (t: Throwable) {
         throw RuntimeException("Failed to process the downloaded list of available JDKs from $feedUrl. ${t.message}", t)

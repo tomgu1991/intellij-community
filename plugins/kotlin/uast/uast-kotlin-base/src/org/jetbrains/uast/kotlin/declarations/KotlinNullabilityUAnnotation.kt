@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.uast.kotlin
 
 import com.intellij.psi.JavaPsiFacade
@@ -9,15 +9,15 @@ import com.intellij.psi.search.GlobalSearchScope
 import org.jetbrains.annotations.ApiStatus
 import org.jetbrains.annotations.NotNull
 import org.jetbrains.annotations.Nullable
-import org.jetbrains.kotlin.types.typeUtil.TypeNullability
+import org.jetbrains.kotlin.analysis.api.types.KtTypeNullability
 import org.jetbrains.uast.*
 import org.jetbrains.uast.kotlin.internal.DelegatedMultiResolve
 
 @ApiStatus.Internal
 class KotlinNullabilityUAnnotation(
-    private val baseKotlinUastResolveProviderService: BaseKotlinUastResolveProviderService,
-    val annotatedElement: PsiElement,
-    override val uastParent: UElement?
+  private val baseKotlinUastResolveProviderService: BaseKotlinUastResolveProviderService,
+  private val annotatedElement: PsiElement,
+  override val uastParent: UElement?
 ) : UAnnotationEx, UAnchorOwner, DelegatedMultiResolve {
 
     override val uastAnchor: UIdentifier? = null
@@ -31,15 +31,15 @@ class KotlinNullabilityUAnnotation(
     override val sourcePsi: PsiElement?
         get() = null
 
-    private val nullability : TypeNullability? by lz {
+    private val nullability : KtTypeNullability? by lz {
         baseKotlinUastResolveProviderService.nullability(annotatedElement)
     }
 
     override val qualifiedName: String?
         get() = when (nullability) {
-            TypeNullability.NOT_NULL -> NotNull::class.qualifiedName
-            TypeNullability.NULLABLE -> Nullable::class.qualifiedName
-            TypeNullability.FLEXIBLE -> null
+            KtTypeNullability.NON_NULLABLE -> NotNull::class.qualifiedName
+            KtTypeNullability.NULLABLE -> Nullable::class.qualifiedName
+            KtTypeNullability.UNKNOWN -> null
             null -> null
         }
 

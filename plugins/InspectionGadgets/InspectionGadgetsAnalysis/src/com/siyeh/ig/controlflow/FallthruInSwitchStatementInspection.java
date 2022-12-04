@@ -48,7 +48,7 @@ public class FallthruInSwitchStatementInspection extends BaseInspection {
   @Override
   @Nullable
   protected InspectionGadgetsFix buildFix(Object... infos) {
-    return ((Boolean)infos[0]) ? new FallthruInSwitchStatementFix((String) infos[1]) : null;
+    return (Boolean)infos[0] ? new FallthruInSwitchStatementFix((String) infos[1]) : null;
   }
 
   @Override
@@ -76,7 +76,7 @@ public class FallthruInSwitchStatementInspection extends BaseInspection {
     }
 
     @Override
-    protected void doFix(Project project, ProblemDescriptor descriptor) {
+    protected void doFix(@NotNull Project project, @NotNull ProblemDescriptor descriptor) {
       final PsiSwitchLabelStatement labelStatement = (PsiSwitchLabelStatement)descriptor.getPsiElement();
       final JavaPsiFacade psiFacade = JavaPsiFacade.getInstance(project);
       final PsiElementFactory factory = psiFacade.getElementFactory();

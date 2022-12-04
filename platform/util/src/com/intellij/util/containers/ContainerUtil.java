@@ -1,19 +1,17 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.util.containers;
 
 import com.intellij.openapi.Disposable;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.*;
 import com.intellij.util.*;
 import gnu.trove.THashSet;
-import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Contract;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.*;
 
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.*;
 import java.util.WeakHashMap;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -26,7 +24,6 @@ import java.util.stream.Stream;
  * @see CollectionFactory
  * @see com.intellij.concurrency.ConcurrentCollectionFactory
  */
-
 @ApiStatus.NonExtendable
 public final class ContainerUtil {
   private static final int INSERTION_SORT_THRESHOLD = 10;
@@ -125,6 +122,19 @@ public final class ContainerUtil {
   @Contract(pure = true)
   public static @NotNull <E> ArrayList<E> newArrayList(E @NotNull ... array) {
     return new ArrayList<>(Arrays.asList(array));
+  }
+
+  /**
+   * @deprecated Use {@link ArrayList#ArrayList(Collection)} instead
+   *
+   * DO NOT REMOVE this method until {@link ContainerUtil#newArrayList(Iterable)} is removed.
+   * The former method is here to highlight incorrect usages of the latter.
+   */
+  @Deprecated
+  @Contract(pure = true)
+  public static @NotNull <E> ArrayList<E> newArrayList(@NotNull Collection<? extends E> iterable) {
+    Logger.getInstance(ContainerUtil.class).error("Use `new ArrayList(Collection)` instead. "+iterable.getClass());
+    return new ArrayList<>(iterable);
   }
 
   @Contract(pure = true)
@@ -232,10 +242,24 @@ public final class ContainerUtil {
 
   @Contract(pure = true)
   public static @NotNull <T> HashSet<T> newHashSet(@NotNull Iterable<? extends T> iterable) {
-    Iterator<? extends T> iterator = iterable.iterator();
     HashSet<T> set = new HashSet<>();
-    while (iterator.hasNext()) set.add(iterator.next());
+    for (T t : iterable) {
+      set.add(t);
+    }
     return set;
+  }
+
+  /**
+   * @deprecated use {@link HashSet#HashSet(Collection)}
+   *
+   * DO NOT remove this method until {@link #newHashSet(Iterable)} is removed
+   * The former method is here to highlight incorrect usages of the latter.
+   */
+  @Deprecated
+  @Contract(pure = true)
+  public static @NotNull <T> HashSet<T> newHashSet(@NotNull Collection<? extends T> iterable) {
+    Logger.getInstance(ContainerUtil.class).error("use HashSet#HashSet(Collection) instead");
+    return new HashSet<>(iterable);
   }
 
   public static @NotNull <T> HashSet<T> newHashSet(@NotNull Iterator<? extends T> iterator) {
@@ -270,6 +294,19 @@ public final class ContainerUtil {
       collection.add(element);
     }
     return collection;
+  }
+
+  /**
+   * @deprecated use {@link LinkedHashSet#LinkedHashSet(Collection)}
+   *
+   * DO NOT remove this method until {@link #newLinkedHashSet(Iterable)} is removed
+   * The former method is here to highlight incorrect usages of the latter.
+   */
+  @Deprecated
+  @Contract(pure = true)
+  public static @NotNull <T> LinkedHashSet<T> newLinkedHashSet(@NotNull Collection<? extends T> iterable) {
+    Logger.getInstance(ContainerUtil.class).error("use LinkedHashSet#LinkedHashSet(Collection) instead");
+    return new LinkedHashSet<>(iterable);
   }
 
   @SafeVarargs
@@ -426,6 +463,10 @@ public final class ContainerUtil {
 
     public @NotNull ImmutableMapBuilder<K, V> put(K key, V value) {
       myMap.put(key, value);
+      return this;
+    }
+    public @NotNull ImmutableMapBuilder<K, V> putAll(@NotNull Map<? extends K, ? extends V> fromMap) {
+      myMap.putAll(fromMap);
       return this;
     }
 
@@ -842,6 +883,10 @@ public final class ContainerUtil {
   public static <T, V> V @NotNull [] map2Array(@NotNull Collection<? extends T> collection, V @NotNull [] to, @NotNull Function<? super T, ? extends V> mapper) {
     return map2List(collection, mapper).toArray(to);
   }
+  @Contract(mutates = "param2")
+  public static <T, V> V @NotNull [] map2Array(T @NotNull [] collection, V @NotNull [] to, @NotNull Function<? super T, ? extends V> mapper) {
+    return map2List(collection, mapper).toArray(to);
+  }
 
   @Contract(pure = true)
   public static @NotNull <T> List<T> filter(T @NotNull [] collection, @NotNull Condition<? super T> condition) {
@@ -952,6 +997,10 @@ public final class ContainerUtil {
     return result;
   }
 
+  public static <T> boolean all(T @NotNull [] array, @NotNull Condition<? super T> condition) {
+    return and(array, condition);
+  }
+
   public static <T> boolean all(@NotNull Collection<? extends T> collection, @NotNull Condition<? super T> condition) {
     for (T t : collection) {
       if (!condition.value(t)) {
@@ -992,47 +1041,6 @@ public final class ContainerUtil {
       @Override
       public T next() {
         return enumeration.nextElement();
-      }
-
-      @Override
-      public void remove() {
-        throw new UnsupportedOperationException();
-      }
-    };
-  }
-
-  @Contract(pure = true)
-  public static @NotNull <T> Iterable<T> iterate(T @NotNull [] arrays, @NotNull Condition<? super T> condition) {
-    return iterate(Arrays.asList(arrays), condition);
-  }
-
-  @Contract(pure = true)
-  public static @NotNull <T> Iterable<T> iterate(@NotNull Collection<? extends T> collection, @NotNull Condition<? super T> condition) {
-    if (collection.isEmpty()) return Collections.emptyList();
-    return () -> new Iterator<T>() {
-      private final Iterator<? extends T> impl = collection.iterator();
-      private T next = findNext();
-
-      @Override
-      public boolean hasNext() {
-        return next != null;
-      }
-
-      @Override
-      public T next() {
-        T result = next;
-        next = findNext();
-        return result;
-      }
-
-      private @Nullable T findNext() {
-        while (impl.hasNext()) {
-          T each = impl.next();
-          if (condition.value(each)) {
-            return each;
-          }
-        }
-        return null;
       }
 
       @Override
@@ -1446,12 +1454,12 @@ public final class ContainerUtil {
   }
 
   @Contract(pure=true)
-  public static <T> T getFirstItem(@Nullable Collection<? extends T> items) {
+  public static <T> @UnknownNullability T getFirstItem(@Nullable Collection<? extends T> items) {
     return getFirstItem(items, null);
   }
 
   @Contract(pure=true)
-  public static <T> T getFirstItem(@Nullable List<? extends T> items) {
+  public static <T> @UnknownNullability T getFirstItem(@Nullable List<? extends T> items) {
     return items == null || items.isEmpty() ? null : items.get(0);
   }
 
@@ -1468,7 +1476,7 @@ public final class ContainerUtil {
    * @return the only collection element or null
    */
   @Contract(pure=true)
-  public static <T> T getOnlyItem(@Nullable Collection<? extends T> items) {
+  public static <T> @UnknownNullability T getOnlyItem(@Nullable Collection<? extends T> items) {
     return getOnlyItem(items, null);
   }
 
@@ -1503,6 +1511,18 @@ public final class ContainerUtil {
     }
 
     return res;
+  }
+  /**
+   * @deprecated use {@link #getLastItem(List)}
+   *
+   * DO NOT remove this method until {@link #iterateAndGetLastItem(Iterable)} is removed
+   * The former method is here to highlight incorrect usages of the latter.
+   */
+  @Deprecated
+  @Contract(pure = true)
+  public static <T> T iterateAndGetLastItem(@NotNull List<? extends T> items) {
+    Logger.getInstance(ContainerUtil.class).error("use getLastItem(List) instead");
+    return getLastItem(items);
   }
 
   @Contract(pure = true)
@@ -1578,7 +1598,7 @@ public final class ContainerUtil {
   }
 
   @Contract(pure=true)
-  public static <T> T getLastItem(@Nullable List<? extends T> list) {
+  public static <T>  @UnknownNullability T getLastItem(@Nullable List<? extends T> list) {
     return getLastItem(list, null);
   }
 
@@ -2181,43 +2201,26 @@ public final class ContainerUtil {
   }
 
   /**
-   * @return read-only list consisting of the elements from all collections in order
-   */
-  @Contract(pure = true)
-  public static @NotNull <E> List<E> flattenIterables(@NotNull Iterable<? extends Iterable<? extends E>> collections) {
-    int totalSize = 0;
-    for (Iterable<? extends E> list : collections) {
-      totalSize += list instanceof Collection ? ((Collection<?>)list).size() : 10;
-    }
-    List<E> result = new ArrayList<>(totalSize);
-    for (Iterable<? extends E> list : collections) {
-      for (E e : list) {
-        result.add(e);
-      }
-    }
-    return result.isEmpty() ? emptyList() : result;
-  }
-
-  /**
    * @return read-only list consisting of the elements from all collections returned by the mapping function,
    * or a read-only view of the list returned by the mapping function, if it only returned a single list that was not empty
    */
-  public static @NotNull <T, V> List<V> flatMap(@NotNull Iterable<? extends T> iterable, @NotNull Function<? super T, ? extends @NotNull List<V>> mapping) {
+  public static @NotNull <T, V> List<V> flatMap(@NotNull Iterable<? extends T> iterable, @NotNull Function<? super T, ? extends @NotNull List<? extends V>> mapping) {
     // GC optimization for critical clients
     List<V> result = null;
     boolean isOriginal = true;
 
     for (T each : iterable) {
-      List<V> toAdd = mapping.fun(each);
+      List<? extends V> toAdd = mapping.fun(each);
       if (toAdd.isEmpty()) continue;
 
       if (result == null) {
-        result = toAdd;
+        //noinspection unchecked
+        result = (List<V>)toAdd;
         continue;
       }
 
       if (isOriginal) {
-        List<V> original = result;
+        List<? extends V> original = result;
         result = new ArrayList<>(Math.max(10, result.size() + toAdd.size()));
         result.addAll(original);
         isOriginal = false;
@@ -2398,16 +2401,6 @@ public final class ContainerUtil {
   @Contract(value = " -> new", pure = true)
   public static @NotNull <V> ConcurrentIntObjectMap<@NotNull V> createConcurrentIntObjectMap() {
     return new ConcurrentIntObjectHashMap<>();
-  }
-
-  /**
-   * @deprecated Use {@link com.intellij.concurrency.ConcurrentCollectionFactory#createConcurrentIntObjectWeakValueMap()} instead
-   */
-  @ApiStatus.ScheduledForRemoval
-  @Deprecated
-  @Contract(value = " -> new", pure = true)
-  public static @NotNull <V> ConcurrentIntObjectMap<@NotNull V> createConcurrentIntObjectWeakValueMap() {
-    return new ConcurrentIntKeyWeakValueHashMap<>();
   }
 
   @Contract(value = " -> new", pure = true)
@@ -2598,6 +2591,20 @@ public final class ContainerUtil {
     return iterable instanceof Collection ? (Collection<T>)iterable : newArrayList(iterable);
   }
 
+  /**
+   * @deprecated use the argument instead
+   *
+   * DO NOT remove this method until {@link #toCollection(Iterable)} is removed
+   * The former method is here to highlight incorrect usages of the latter.
+   */
+  @Deprecated
+  @Contract(pure = true)
+  public static @NotNull <T> Collection<T> toCollection(@NotNull Collection<? extends T> iterable) {
+    Logger.getInstance(ContainerUtil.class).error("use the argument, Luke");
+    //noinspection unchecked
+    return (Collection<T>)iterable;
+  }
+
   public static @NotNull <T> List<T> toList(@NotNull Enumeration<? extends T> enumeration) {
     if (!enumeration.hasMoreElements()) {
       return Collections.emptyList();
@@ -2754,14 +2761,6 @@ public final class ContainerUtil {
     return new WeakHashMap<>();
   }
 
-  /**
-   * @deprecated use {@link java.util.WeakHashMap} instead
-   */
-  @Deprecated
-  public static @NotNull <K,V> Map<@NotNull K,V> createWeakMap(int initialCapacity) {
-    return new WeakHashMap<>(initialCapacity);
-  }
-
   @Contract(value = " -> new", pure = true)
   public static @NotNull <T> Set<@NotNull T> createWeakSet() {
     return new WeakHashSet<>();
@@ -2775,23 +2774,6 @@ public final class ContainerUtil {
   @Contract(value = " -> new", pure = true)
   public static @NotNull <T> ObjectIntMap<@NotNull T> createWeakKeyIntValueMap() {
     return new WeakKeyIntValueHashMap<>();
-  }
-
-  /**
-   * Creates an immutable copy of the {@code list},
-   * or returns {@link Collections#emptyList} if the {@code list} is empty.
-   * Modifications of the {@code list} have no effect on the returned copy.
-   */
-  @Contract(value = "_ -> new", pure = true)
-  public static @NotNull <T> List<T> immutableCopy(@NotNull List<? extends T> list) {
-    if (list.isEmpty()) {
-      return Collections.emptyList();
-    }
-    if (list.size() == 1) {
-      return Collections.singletonList(list.get(0));
-    }
-    //noinspection unchecked,SuspiciousArrayCast
-    return immutableList((T[])list.toArray());
   }
 
   public static <T> T reduce(@NotNull List<? extends T> list, T identity, @NotNull BinaryOperator<T> accumulator) {

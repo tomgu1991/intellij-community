@@ -14,7 +14,7 @@ import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.psi.util.parentOfType
 import com.intellij.refactoring.suggested.endOffset
 import com.intellij.refactoring.suggested.startOffset
-import com.intellij.util.castSafelyTo
+import com.intellij.util.asSafely
 import icons.JetgroovyIcons
 import org.jetbrains.plugins.groovy.ext.ginq.*
 import org.jetbrains.plugins.groovy.ext.ginq.ast.*
@@ -70,7 +70,7 @@ object GinqCompletionUtils {
         .withIcon(JetgroovyIcons.Groovy.Variable)
       addElement(PrioritizedLookupElement.withPriority(bindingItem, 1.0))
     }
-    if (ginq.select.projections.any { PsiTreeUtil.isAncestor(it.aggregatedExpression, position, false) }) {
+    if (ginq.select?.projections?.any { PsiTreeUtil.isAncestor(it.aggregatedExpression, position, false) } == true) {
       for ((windowName, signature) in windowFunctions) {
         val lookupElement = LookupElementBuilder.create(windowName)
           .withIcon(JetgroovyIcons.Groovy.Method)
@@ -118,8 +118,14 @@ object GinqCompletionUtils {
       if (orderByCondition(closestFragmentUp) && ginq.orderBy == null) {
         addElement(lookupElement(KW_ORDERBY))
       }
-      if ((orderByCondition(closestFragmentUp) || closestFragmentUp is GinqOrderByFragment) && ginq.limit == null) {
+      val limitCondition: (GinqQueryFragment) -> Boolean = {
+        orderByCondition(closestFragmentUp) || closestFragmentUp is GinqOrderByFragment
+      }
+      if (limitCondition(closestFragmentUp) && ginq.limit == null) {
         addElement(lookupElement(KW_LIMIT))
+      }
+      if ((limitCondition(closestFragmentUp) || closestFragmentUp is GinqLimitFragment) && ginq.select == null) {
+        addElement(lookupElement(KW_SELECT))
       }
     }
   }
@@ -138,11 +144,11 @@ object GinqCompletionUtils {
   }
 
   fun CompletionResultSet.addOverKeywords(ginq: GinqExpression, position: PsiElement) {
-    val overRoots = ginq.select.projections.flatMap { partition ->
+    val overRoots = ginq.select?.projections?.flatMap { partition ->
       partition.windows
-    }
+    } ?: return
     val overRoot = overRoots.find {
-      PsiTreeUtil.isAncestor(it.overKw.parent.parent.castSafelyTo<GrMethodCall>()?.argumentList, position, false)
+      PsiTreeUtil.isAncestor(it.overKw.parent.parent.asSafely<GrMethodCall>()?.argumentList, position, false)
     }
     if (overRoot != null) {
       if (overRoot.partitionKw == null) {

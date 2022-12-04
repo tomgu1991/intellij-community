@@ -37,7 +37,7 @@ internal object PluginEnvironment {
     val ideBuildNumber
         get() = ApplicationInfo.getInstance().build
 
-    val isTestEnvironment
+    private val isTestEnvironment
         get() = ApplicationManager.getApplication().isUnitTestMode || ApplicationManager.getApplication().isHeadlessEnvironment
 
     val isNonModalLoadingEnabled
@@ -46,7 +46,7 @@ internal object PluginEnvironment {
     object Caches {
 
         val version
-            get() = 2
+            get() = 3
 
         val maxAttempts
             get() = System.getProperty("idea.pkgs.caches.attempts")?.toInt() ?: 30

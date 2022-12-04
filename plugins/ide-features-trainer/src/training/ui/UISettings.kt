@@ -31,7 +31,7 @@ internal class UISettings {
   //FONTS
   val plainFont: Font
     get() = JBUI.Fonts.label()
-  val fontSize: Float
+  private val fontSize: Float
     get() = plainFont.size2D
   val modulesFont: Font
     get() = plainFont.deriveFont(Font.BOLD)
@@ -50,6 +50,7 @@ internal class UISettings {
   val codeBorderColor: Color = JBUI.CurrentTheme.Button.buttonOutlineColorEnd(false)
   val inactiveColor: Color = defaultTextColor.addAlpha(transparencyInactiveFactor)
   val moduleProgressColor: Color = JBColor.namedColor("Label.infoForeground", 0x808080, 0x8C8C8C)
+  val shortcutSeparatorColor: Color = moduleProgressColor
   val backgroundColor: Color = UIUtil.getTreeBackground()
   val completedColor: Color = UIUtil.getLabelSuccessForeground()
   val activeTaskBorder: Color = JBColor.namedColor("Component.focusColor", 0x97C3F3, 0x3D6185)
@@ -58,6 +59,8 @@ internal class UISettings {
   val tooltipBorderColor: Color = JBColor.namedColor("Tooltip.Learning.borderColor", 0x1071E8, 0x0E62CF)
   val tooltipButtonBackgroundColor: Color = JBColor.namedColor("Tooltip.Learning.spanBackground", 0x0D5CBD, 0x0250B0)
   val tooltipButtonForegroundColor: Color = JBColor.namedColor("Tooltip.Learning.spanForeground", 0xF5F5F5)
+  val tooltipShortcutBackgroundColor: Color = JBColor.namedColor("Tooltip.Learning.spanBackground", 0x0D5CBD, 0x0250B0)
+  val tooltipShortcutTextColor: Color = JBColor.namedColor("Tooltip.Learning.spanForeground", 0xF5F5F5)
   val tooltipTextColor: Color = JBColor.namedColor("Tooltip.Learning.foreground", 0xF5F5F5)
 
   val activeTaskNumberColor: Color = JBColor.namedColor("Lesson.stepNumberForeground", 0x808080, 0xFEFEFE)
@@ -82,9 +85,6 @@ internal class UISettings {
 
   val taskParagraphAbove: Int get() = JBUI.scale(24)
   val taskInternalParagraphAbove: Int get() = JBUI.scale(12)
-
-  val illustrationAbove: Int get() = JBUI.scale(12)
-  val illustrationBelow: Int get() = JBUI.scale(0)
 
   val checkIndent: Int get() = JBUI.scale(40)
 

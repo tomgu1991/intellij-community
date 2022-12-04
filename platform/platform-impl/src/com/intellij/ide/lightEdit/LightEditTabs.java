@@ -149,6 +149,11 @@ final class LightEditTabs extends JBEditorTabs implements LightEditorListener, C
       e.getPresentation().setText(IdeBundle.messagePointer("action.presentation.LightEditTabs.text"));
     }
 
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.BGT;
+    }
+
     private Icon getIcon() {
       return myEditorInfo.isSaveRequired() ? myUnsavedIcon : AllIcons.Actions.Close;
     }
@@ -273,19 +278,7 @@ final class LightEditTabs extends JBEditorTabs implements LightEditorListener, C
     return null;
   }
 
-  private static class TabEditorData {
-    private final @NotNull LightEditorInfo editorInfo;
-    private final @NotNull EditorComposite editorComposite;
-
-    private TabEditorData(@NotNull LightEditorInfo editorInfo, @NotNull EditorComposite editorComposite) {
-      this.editorInfo = editorInfo;
-      this.editorComposite = editorComposite;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-      return obj instanceof TabEditorData && ((TabEditorData)obj).editorInfo.equals(editorInfo);
-    }
+  private record TabEditorData(@NotNull LightEditorInfo editorInfo, @NotNull EditorComposite editorComposite) {
   }
 
   @Nullable
@@ -354,7 +347,7 @@ final class LightEditTabs extends JBEditorTabs implements LightEditorListener, C
   }
 
   @Override
-  public void fileStatusChanged(@NotNull Collection<LightEditorInfo> editorInfos) {
+  public void fileStatusChanged(@NotNull Collection<? extends LightEditorInfo> editorInfos) {
     ApplicationManager.getApplication().invokeLater(() -> {
       List<Pair.NonNull<TabInfo, LightEditorInfo>> tabEditorPairs = ContainerUtil.mapNotNull(editorInfos, editorInfo -> {
         TabInfo info = findTabInfo(editorInfo);

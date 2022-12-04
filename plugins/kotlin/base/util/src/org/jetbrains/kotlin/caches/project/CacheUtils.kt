@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.caches.project
 
@@ -15,6 +15,7 @@ fun <T> Module.cacheByClass(classForKey: Class<*>, vararg dependencies: Any, pro
     return CachedValuesManager.getManager(project).cache(this, dependencies, classForKey, provider)
 }
 
+@Deprecated("consider to use WorkspaceModelChangeListener")
 fun <T> Module.cacheByClassInvalidatingOnRootModifications(classForKey: Class<*>, provider: () -> T): T {
     return cacheByClass(classForKey, ProjectRootModificationTracker.getInstance(project), provider = provider)
 }
@@ -24,6 +25,7 @@ fun <T> Module.cacheByClassInvalidatingOnRootModifications(classForKey: Class<*>
  * by the one and the same key.
  * It is encouraged to use explicit class, just for the sake of readability.
  */
+@Deprecated("consider to use WorkspaceModelChangeListener")
 fun <T> Module.cacheInvalidatingOnRootModifications(provider: () -> T): T {
     return cacheByClassInvalidatingOnRootModifications(provider::class.java, provider)
 }
@@ -42,6 +44,7 @@ fun <T> Project.cacheByClassInvalidatingOnRootModifications(classForKey: Class<*
  * by the one and the same key.
  * It is encouraged to use explicit class, just for the sake of readability.
  */
+@Suppress("DEPRECATION")
 @Deprecated("consider to use WorkspaceModelChangeListener")
 fun <T> Project.cacheInvalidatingOnRootModifications(provider: () -> T): T {
     return cacheByClassInvalidatingOnRootModifications(provider::class.java, provider)

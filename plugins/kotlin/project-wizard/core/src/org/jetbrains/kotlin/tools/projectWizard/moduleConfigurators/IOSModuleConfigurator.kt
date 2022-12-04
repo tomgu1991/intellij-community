@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.tools.projectWizard.moduleConfigurators
 
@@ -83,7 +83,7 @@ abstract class IOSSinglePlatformModuleConfiguratorBase : SinglePlatformModuleCon
     @NonNls
     override val suggestedModuleName = "ios"
 
-    override val moduleKind: ModuleKind = ModuleKind.singlePlatformJvm
+    override val moduleKind: ModuleKind = ModuleKind.ios
     override val greyText = KotlinNewProjectWizardBundle.message("module.configurator.ios.requires.xcode")
     override val text = KotlinNewProjectWizardBundle.message("module.configurator.ios")
 

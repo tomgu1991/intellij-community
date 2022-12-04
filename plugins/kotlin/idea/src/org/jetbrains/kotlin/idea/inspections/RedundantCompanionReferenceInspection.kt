@@ -2,14 +2,13 @@
 
 package org.jetbrains.kotlin.idea.inspections
 
-import com.intellij.codeInspection.CleanupLocalInspectionTool
 import com.intellij.codeInspection.LocalQuickFix
 import com.intellij.codeInspection.ProblemDescriptor
 import com.intellij.codeInspection.ProblemsHolder
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElementVisitor
 import org.jetbrains.kotlin.descriptors.*
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.caches.resolve.analyzeAsReplacement
 import org.jetbrains.kotlin.idea.intentions.isReferenceToBuiltInEnumFunction
@@ -38,7 +37,9 @@ import org.jetbrains.kotlin.types.typeUtil.isTypeParameter
 import org.jetbrains.kotlin.types.typeUtil.makeNotNullable
 import org.jetbrains.kotlin.types.typeUtil.supertypes
 
-class RedundantCompanionReferenceInspection : AbstractKotlinInspection(), CleanupLocalInspectionTool {
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.inspections.AbstractKotlinInspection
+
+class RedundantCompanionReferenceInspection : AbstractKotlinInspection() {
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean): PsiElementVisitor {
         return referenceExpressionVisitor(fun(expression) {
             if (isRedundantCompanionReference(expression)) {
@@ -89,7 +90,7 @@ class RedundantCompanionReferenceInspection : AbstractKotlinInspection(), Cleanu
             ?.let { if (it != containingClassDescriptor) return false }
 
         if (selectorExpression is KtCallExpression && referenceText == selectorExpression.calleeExpression?.text) {
-            val newExpression = KtPsiFactory(reference).createExpressionByPattern("$0", selectorExpression)
+            val newExpression = KtPsiFactory(reference.project).createExpressionByPattern("$0", selectorExpression)
             val newContext = newExpression.analyzeAsReplacement(parent, context)
             val descriptor = newExpression.getResolvedCall(newContext)?.resultingDescriptor as? FunctionDescriptor
             if (descriptor?.isOperator == true) return false

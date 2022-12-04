@@ -9,9 +9,13 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.ui.dsl.builder.AlignX
+import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.EventDispatcher
 import java.awt.event.ActionEvent
-import javax.swing.*
+import javax.swing.Action
+import javax.swing.JComponent
+import javax.swing.JFileChooser
 
 class FullSettingsDialog(
   private val project: Project,
@@ -42,8 +46,7 @@ class FullSettingsDialog(
   }
 
   override fun createCenterPanel(): JComponent {
-    return JPanel().apply {
-      layout = BoxLayout(this, BoxLayout.Y_AXIS)
+    return panel {
       val value = properties.getValue(configStateKey)
       val previousState = try {
         if (value == null) ConfigFactory.defaultConfig(project.basePath!!)
@@ -52,7 +55,9 @@ class FullSettingsDialog(
       catch (e: Throwable) {
         ConfigFactory.defaultConfig(project.basePath!!)
       }
-      configurators.forEach { add(it.createPanel(previousState)) }
+      configurators.forEach {
+        row { cell(it.createPanel(previousState)).align(AlignX.FILL) }
+      }
     }
   }
 

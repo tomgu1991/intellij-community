@@ -8,8 +8,7 @@ import com.intellij.openapi.roots.SourceFolder
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.pointers.VirtualFilePointer
 import com.intellij.workspaceModel.storage.bridgeEntities.addJavaSourceRootEntity
-import com.intellij.workspaceModel.storage.bridgeEntities.api.SourceRootEntity
-import com.intellij.workspaceModel.storage.bridgeEntities.asCustomSourceRoot
+import com.intellij.workspaceModel.storage.bridgeEntities.SourceRootEntity
 import com.intellij.workspaceModel.storage.bridgeEntities.asJavaResourceRoot
 import com.intellij.workspaceModel.storage.bridgeEntities.asJavaSourceRoot
 import com.intellij.workspaceModel.storage.url.VirtualFileUrl
@@ -19,7 +18,7 @@ import org.jetbrains.jps.model.module.JpsModuleSourceRoot
 import org.jetbrains.jps.model.module.JpsModuleSourceRootType
 import org.jetbrains.jps.model.module.UnknownSourceRootType
 import org.jetbrains.jps.model.serialization.JpsModelSerializerExtension
-import com.intellij.workspaceModel.storage.bridgeEntities.api.modifyEntity
+import com.intellij.workspaceModel.storage.bridgeEntities.modifyEntity
 
 internal abstract class ContentFolderBridge(private val entry: ContentEntryBridge, private val contentFolderUrl: VirtualFileUrl) : ContentFolder {
   override fun getContentEntry(): ContentEntryBridge = entry
@@ -73,8 +72,8 @@ internal class SourceFolderBridge(private val entry: ContentEntryBridge, val sou
     if (javaResourceRoot?.generated != otherJavaResourceRoot?.generated) return false
     if (javaResourceRoot?.relativeOutputPath != otherJavaResourceRoot?.relativeOutputPath) return false
 
-    val customRoot = sourceRootEntity.asCustomSourceRoot()
-    val otherCustomRoot = other.sourceRootEntity.asCustomSourceRoot()
+    val customRoot = sourceRootEntity.customSourceRootProperties
+    val otherCustomRoot = other.sourceRootEntity.customSourceRootProperties
     if (customRoot?.propertiesXmlTag != otherCustomRoot?.propertiesXmlTag) return false
 
     return true
@@ -110,12 +109,7 @@ internal class SourceFolderBridge(private val entry: ContentEntryBridge, val sou
   }
 
   private fun getSourceRootType(entity: SourceRootEntity): JpsModuleSourceRootType<out JpsElement> {
-    JpsModelSerializerExtension.getExtensions().forEach { extensions ->
-      extensions.moduleSourceRootPropertiesSerializers.forEach {
-        if (it.typeId == entity.rootType) return it.type
-      }
-    }
-    return UnknownSourceRootType.getInstance(entity.rootType)
+    return SourceRootTypeRegistry.getInstance().findTypeById(entity.rootType) ?: UnknownSourceRootType.getInstance(entity.rootType)
   }
 
   companion object {

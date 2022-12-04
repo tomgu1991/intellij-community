@@ -8,7 +8,8 @@ import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.diagnostics.Diagnostic
 import org.jetbrains.kotlin.diagnostics.Errors
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.KotlinQuickFixAction
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtPsiFactory
 
@@ -29,6 +30,6 @@ class AddSpreadOperatorForArrayAsVarargAfterSamFix(element: PsiElement) : Kotlin
     override fun invoke(project: Project, editor: Editor?, file: KtFile) {
         val element = element ?: return
 
-        element.addBefore(KtPsiFactory(file).createStar(), element.firstChild)
+        element.addBefore(KtPsiFactory(project).createStar(), element.firstChild)
     }
 }

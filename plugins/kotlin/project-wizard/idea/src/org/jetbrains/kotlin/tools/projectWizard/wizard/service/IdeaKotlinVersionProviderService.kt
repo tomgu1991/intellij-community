@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.tools.projectWizard.wizard.service
 
@@ -23,10 +23,6 @@ private const val SNAPSHOT_TAG = "snapshot"
 
 class IdeaKotlinVersionProviderService : KotlinVersionProviderService(), IdeaWizardService {
     override fun getKotlinVersion(projectKind: ProjectKind): WizardKotlinVersion {
-        if (projectKind == ProjectKind.COMPOSE) {
-            val version = Versions.KOTLIN_VERSION_FOR_COMPOSE
-            return kotlinVersionWithDefaultValues(version)
-        }
         val version = getPatchedKotlinVersion()
             ?: getKotlinVersionFromCompiler()
             ?: VersionsDownloader.downloadLatestEapOrStableKotlinVersion()

@@ -9,7 +9,10 @@ import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.KotlinPsiOnlyQuickFixAction
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.PsiElementSuitabilityCheckers
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.QuickFixesPsiBasedFactory
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.getParentOfType
 
@@ -29,7 +32,7 @@ class ReplaceWithArrayCallInAnnotationFix(argument: KtExpression) : KotlinPsiOnl
 
     private fun surroundWithArrayLiteral(argument: KtValueArgument) {
         val argumentExpression = argument.getArgumentExpression() ?: return
-        val factory = KtPsiFactory(argumentExpression)
+        val factory = KtPsiFactory(argumentExpression.project)
         val surrounded = factory.createExpressionByPattern("[$0]", argumentExpression)
 
         argumentExpression.replace(surrounded)

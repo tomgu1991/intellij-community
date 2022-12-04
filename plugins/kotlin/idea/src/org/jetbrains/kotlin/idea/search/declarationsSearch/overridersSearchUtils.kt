@@ -2,33 +2,29 @@
 
 package org.jetbrains.kotlin.idea.search.declarationsSearch
 
-import com.intellij.psi.PsiClass
+import com.intellij.openapi.application.runReadAction
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiMethod
-import com.intellij.psi.PsiNamedElement
 import com.intellij.psi.search.SearchScope
-import com.intellij.psi.search.searches.ClassInheritorsSearch
+import com.intellij.psi.search.searches.FunctionalExpressionSearch
 import com.intellij.psi.search.searches.OverridingMethodsSearch
 import com.intellij.util.Processor
 import com.intellij.util.containers.ContainerUtil
-import org.jetbrains.kotlin.asJava.classes.KtLightClass
-import org.jetbrains.kotlin.asJava.elements.KtLightMethod
+import org.jetbrains.kotlin.asJava.classes.KtFakeLightMethod
 import org.jetbrains.kotlin.asJava.unwrapped
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
 import org.jetbrains.kotlin.descriptors.CallableMemberDescriptor
 import org.jetbrains.kotlin.descriptors.ClassDescriptor
 import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
 import org.jetbrains.kotlin.descriptors.isOverridable
-import org.jetbrains.kotlin.asJava.classes.KtFakeLightMethod
 import org.jetbrains.kotlin.idea.base.util.excludeKotlinSources
+import org.jetbrains.kotlin.idea.base.util.useScope
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToDescriptorIfAny
 import org.jetbrains.kotlin.idea.caches.resolve.unsafeResolveToDescriptor
 import org.jetbrains.kotlin.idea.codeInsight.DescriptorToSourceUtilsIde
 import org.jetbrains.kotlin.idea.core.getDeepestSuperDeclarations
 import org.jetbrains.kotlin.idea.core.getDirectlyOverriddenDeclarations
 import org.jetbrains.kotlin.idea.refactoring.resolveToExpectedDescriptorIfPossible
-import org.jetbrains.kotlin.idea.search.useScope
-import org.jetbrains.kotlin.idea.util.application.runReadAction
 import org.jetbrains.kotlin.idea.util.getTypeSubstitution
 import org.jetbrains.kotlin.idea.util.toSubstitutor
 import org.jetbrains.kotlin.psi.*
@@ -56,29 +52,41 @@ fun forEachKotlinOverride(
             val substitutor = getTypeSubstitution(baseClassDescriptor.defaultType, inheritorDescriptor.defaultType)?.toSubstitutor()
                 ?: return@runReadAction true
 
-            baseDescriptors.forEach { baseDescriptor ->
-                val superMember = baseDescriptor.source.getPsi()!!
-                val overridingDescriptor = (baseDescriptor.substitute(substitutor) as? CallableMemberDescriptor)?.let { memberDescriptor ->
-                    inheritorDescriptor.findCallableMemberBySignature(memberDescriptor)
+            baseDescriptors.asSequence()
+                .mapNotNull { baseDescriptor ->
+                    val superMember = baseDescriptor.source.getPsi()!!
+                    val overridingDescriptor =
+                        (baseDescriptor.substitute(substitutor) as? CallableMemberDescriptor)?.let { memberDescriptor ->
+                            inheritorDescriptor.findCallableMemberBySignature(memberDescriptor)
+                        }
+                    overridingDescriptor?.source?.getPsi()?.let { overridingMember -> superMember to overridingMember }
                 }
-                val overridingMember = overridingDescriptor?.source?.getPsi()
-                if (overridingMember != null) {
-                    if (!processor(superMember, overridingMember)) return@runReadAction false
-                }
-            }
-            true
+                .all { (superMember, overridingMember) -> processor(superMember, overridingMember) }
         }
     })
 
     return true
 }
 
+fun PsiMethod.forEachImplementation(
+    scope: SearchScope = runReadAction { useScope() },
+    processor: (PsiElement) -> Boolean
+): Boolean = forEachOverridingMethod(scope, processor) && FunctionalExpressionSearch.search(
+    this,
+    scope.excludeKotlinSources(project)
+).forEach(Processor { processor(it) })
+
 fun PsiMethod.forEachOverridingMethod(
     scope: SearchScope = runReadAction { useScope() },
     processor: (PsiMethod) -> Boolean
 ): Boolean {
     if (this !is KtFakeLightMethod) {
-        if (!OverridingMethodsSearch.search(this, scope.excludeKotlinSources(project), true).forEach(Processor { processor(it) })) return false
+        if (!OverridingMethodsSearch.search(
+                /* method = */ this,
+                /* scope = */ runReadAction { scope.excludeKotlinSources(project) },
+                /* checkDeep = */ true,
+            ).forEach(Processor { processor(it) })
+        ) return false
     }
 
     val ktMember = this.unwrapped as? KtNamedDeclaration ?: return true
@@ -98,6 +106,7 @@ fun findDeepestSuperMethodsNoWrapping(method: PsiElement): List<PsiElement> {
                 it.source.getPsi() ?: DescriptorToSourceUtilsIde.getAnyDeclaration(element.project, it)
             }
         }
+
         else -> emptyList()
     }
 }
@@ -140,6 +149,7 @@ fun findSuperMethodsNoWrapping(method: PsiElement): List<PsiElement> {
                 it.source.getPsi() ?: DescriptorToSourceUtilsIde.getAnyDeclaration(element.project, it)
             }
         }
+
         else -> emptyList()
     }
 }

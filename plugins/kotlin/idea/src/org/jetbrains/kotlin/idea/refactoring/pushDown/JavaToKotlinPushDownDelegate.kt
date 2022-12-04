@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring.pushDown
 
@@ -54,7 +54,7 @@ class JavaToKotlinPushDownDelegate : JavaPushDownDelegate() {
         val superClassDescriptor = superClass.getJavaClassDescriptor(resolutionFacade) ?: return
         val subClassDescriptor = subClass.unsafeResolveToDescriptor() as ClassDescriptor
         val substitutor = getTypeSubstitution(superClassDescriptor.defaultType, subClassDescriptor.defaultType)?.toSubstitutor().orEmpty()
-        val psiFactory = KtPsiFactory(subClass)
+        val psiFactory = KtPsiFactory(subClass.project)
         var hasAbstractMembers = false
         members@ for (memberInfo in pushDownData.membersToMove) {
             val member = memberInfo.member

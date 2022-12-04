@@ -1,12 +1,16 @@
 package com.intellij.workspaceModel.storage.entities.test.api
 
 import com.intellij.workspaceModel.storage.*
+import com.intellij.workspaceModel.storage.WorkspaceEntity
+import com.intellij.workspaceModel.storage.impl.containers.toMutableWorkspaceList
+import kotlin.jvm.JvmName
+import kotlin.jvm.JvmOverloads
+import kotlin.jvm.JvmStatic
 import org.jetbrains.deft.ObjBuilder
 import org.jetbrains.deft.Type
 import org.jetbrains.deft.annotations.Child
 import com.intellij.workspaceModel.storage.EntitySource
 import com.intellij.workspaceModel.storage.GeneratedCodeApiVersion
-import com.intellij.workspaceModel.storage.ModifiableWorkspaceEntity
 import com.intellij.workspaceModel.storage.MutableEntityStorage
 
 
@@ -14,61 +18,64 @@ import com.intellij.workspaceModel.storage.MutableEntityStorage
 
 // ------------------------------ Persistent Id ---------------
 
-data class NameId(private val name: String) : PersistentEntityId<NamedEntity> {
+data class NameId(private val name: String) : SymbolicEntityId<NamedEntity> {
   override val presentableName: String
     get() = name
 
   override fun toString(): String = name
 }
 
-data class AnotherNameId(private val name: String) : PersistentEntityId<NamedEntity> {
+data class AnotherNameId(private val name: String) : SymbolicEntityId<NamedEntity> {
   override val presentableName: String
     get() = name
 
   override fun toString(): String = name
 }
 
-data class ComposedId(val name: String, val link: NameId) : PersistentEntityId<ComposedIdSoftRefEntity> {
+data class ComposedId(val name: String, val link: NameId) : SymbolicEntityId<ComposedIdSoftRefEntity> {
   override val presentableName: String
     get() = "$name - ${link.presentableName}"
 }
 
 // ------------------------------ Entity With Persistent Id ------------------
 
-interface NamedEntity : WorkspaceEntityWithPersistentId {
+interface NamedEntity : WorkspaceEntityWithSymbolicId {
   val myName: String
   val additionalProperty: String?
 
   val children: List<@Child NamedChildEntity>
 
-  override val persistentId: NameId
+  override val symbolicId: NameId
     get() = NameId(myName)
 
   //region generated code
-  //@formatter:off
   @GeneratedCodeApiVersion(1)
-  interface Builder: NamedEntity, ModifiableWorkspaceEntity<NamedEntity>, ObjBuilder<NamedEntity> {
-      override var myName: String
-      override var entitySource: EntitySource
-      override var additionalProperty: String?
-      override var children: List<NamedChildEntity>
+  interface Builder : NamedEntity, WorkspaceEntity.Builder<NamedEntity>, ObjBuilder<NamedEntity> {
+    override var entitySource: EntitySource
+    override var myName: String
+    override var additionalProperty: String?
+    override var children: List<NamedChildEntity>
   }
-  
-  companion object: Type<NamedEntity, Builder>() {
-      operator fun invoke(myName: String, entitySource: EntitySource, init: (Builder.() -> Unit)? = null): NamedEntity {
-          val builder = builder()
-          builder.myName = myName
-          builder.entitySource = entitySource
-          init?.invoke(builder)
-          return builder
-      }
+
+  companion object : Type<NamedEntity, Builder>() {
+    @JvmOverloads
+    @JvmStatic
+    @JvmName("create")
+    operator fun invoke(myName: String, entitySource: EntitySource, init: (Builder.() -> Unit)? = null): NamedEntity {
+      val builder = builder()
+      builder.myName = myName
+      builder.entitySource = entitySource
+      init?.invoke(builder)
+      return builder
+    }
   }
-  //@formatter:on
   //endregion
 
 }
+
 //region generated code
-fun MutableEntityStorage.modifyEntity(entity: NamedEntity, modification: NamedEntity.Builder.() -> Unit) = modifyEntity(NamedEntity.Builder::class.java, entity, modification)
+fun MutableEntityStorage.modifyEntity(entity: NamedEntity, modification: NamedEntity.Builder.() -> Unit) = modifyEntity(
+  NamedEntity.Builder::class.java, entity, modification)
 //endregion
 
 
@@ -98,29 +105,32 @@ interface NamedChildEntity : WorkspaceEntity {
   val parentEntity: NamedEntity
 
   //region generated code
-  //@formatter:off
   @GeneratedCodeApiVersion(1)
-  interface Builder: NamedChildEntity, ModifiableWorkspaceEntity<NamedChildEntity>, ObjBuilder<NamedChildEntity> {
-      override var childProperty: String
-      override var entitySource: EntitySource
-      override var parentEntity: NamedEntity
+  interface Builder : NamedChildEntity, WorkspaceEntity.Builder<NamedChildEntity>, ObjBuilder<NamedChildEntity> {
+    override var entitySource: EntitySource
+    override var childProperty: String
+    override var parentEntity: NamedEntity
   }
-  
-  companion object: Type<NamedChildEntity, Builder>() {
-      operator fun invoke(childProperty: String, entitySource: EntitySource, init: (Builder.() -> Unit)? = null): NamedChildEntity {
-          val builder = builder()
-          builder.childProperty = childProperty
-          builder.entitySource = entitySource
-          init?.invoke(builder)
-          return builder
-      }
+
+  companion object : Type<NamedChildEntity, Builder>() {
+    @JvmOverloads
+    @JvmStatic
+    @JvmName("create")
+    operator fun invoke(childProperty: String, entitySource: EntitySource, init: (Builder.() -> Unit)? = null): NamedChildEntity {
+      val builder = builder()
+      builder.childProperty = childProperty
+      builder.entitySource = entitySource
+      init?.invoke(builder)
+      return builder
+    }
   }
-  //@formatter:on
   //endregion
 
 }
+
 //region generated code
-fun MutableEntityStorage.modifyEntity(entity: NamedChildEntity, modification: NamedChildEntity.Builder.() -> Unit) = modifyEntity(NamedChildEntity.Builder::class.java, entity, modification)
+fun MutableEntityStorage.modifyEntity(entity: NamedChildEntity, modification: NamedChildEntity.Builder.() -> Unit) = modifyEntity(
+  NamedChildEntity.Builder::class.java, entity, modification)
 //endregion
 
 
@@ -142,28 +152,31 @@ interface WithSoftLinkEntity : WorkspaceEntity {
   val link: NameId
 
   //region generated code
-  //@formatter:off
   @GeneratedCodeApiVersion(1)
-  interface Builder: WithSoftLinkEntity, ModifiableWorkspaceEntity<WithSoftLinkEntity>, ObjBuilder<WithSoftLinkEntity> {
-      override var link: NameId
-      override var entitySource: EntitySource
+  interface Builder : WithSoftLinkEntity, WorkspaceEntity.Builder<WithSoftLinkEntity>, ObjBuilder<WithSoftLinkEntity> {
+    override var entitySource: EntitySource
+    override var link: NameId
   }
-  
-  companion object: Type<WithSoftLinkEntity, Builder>() {
-      operator fun invoke(link: NameId, entitySource: EntitySource, init: (Builder.() -> Unit)? = null): WithSoftLinkEntity {
-          val builder = builder()
-          builder.link = link
-          builder.entitySource = entitySource
-          init?.invoke(builder)
-          return builder
-      }
+
+  companion object : Type<WithSoftLinkEntity, Builder>() {
+    @JvmOverloads
+    @JvmStatic
+    @JvmName("create")
+    operator fun invoke(link: NameId, entitySource: EntitySource, init: (Builder.() -> Unit)? = null): WithSoftLinkEntity {
+      val builder = builder()
+      builder.link = link
+      builder.entitySource = entitySource
+      init?.invoke(builder)
+      return builder
+    }
   }
-  //@formatter:on
   //endregion
 
 }
+
 //region generated code
-fun MutableEntityStorage.modifyEntity(entity: WithSoftLinkEntity, modification: WithSoftLinkEntity.Builder.() -> Unit) = modifyEntity(WithSoftLinkEntity.Builder::class.java, entity, modification)
+fun MutableEntityStorage.modifyEntity(entity: WithSoftLinkEntity, modification: WithSoftLinkEntity.Builder.() -> Unit) = modifyEntity(
+  WithSoftLinkEntity.Builder::class.java, entity, modification)
 //endregion
 
 fun MutableEntityStorage.addWithSoftLinkEntity(link: NameId, source: EntitySource = MySource): WithSoftLinkEntity {
@@ -176,28 +189,31 @@ interface ComposedLinkEntity : WorkspaceEntity {
   val link: ComposedId
 
   //region generated code
-  //@formatter:off
   @GeneratedCodeApiVersion(1)
-  interface Builder: ComposedLinkEntity, ModifiableWorkspaceEntity<ComposedLinkEntity>, ObjBuilder<ComposedLinkEntity> {
-      override var link: ComposedId
-      override var entitySource: EntitySource
+  interface Builder : ComposedLinkEntity, WorkspaceEntity.Builder<ComposedLinkEntity>, ObjBuilder<ComposedLinkEntity> {
+    override var entitySource: EntitySource
+    override var link: ComposedId
   }
-  
-  companion object: Type<ComposedLinkEntity, Builder>() {
-      operator fun invoke(link: ComposedId, entitySource: EntitySource, init: (Builder.() -> Unit)? = null): ComposedLinkEntity {
-          val builder = builder()
-          builder.link = link
-          builder.entitySource = entitySource
-          init?.invoke(builder)
-          return builder
-      }
+
+  companion object : Type<ComposedLinkEntity, Builder>() {
+    @JvmOverloads
+    @JvmStatic
+    @JvmName("create")
+    operator fun invoke(link: ComposedId, entitySource: EntitySource, init: (Builder.() -> Unit)? = null): ComposedLinkEntity {
+      val builder = builder()
+      builder.link = link
+      builder.entitySource = entitySource
+      init?.invoke(builder)
+      return builder
+    }
   }
-  //@formatter:on
   //endregion
 
 }
+
 //region generated code
-fun MutableEntityStorage.modifyEntity(entity: ComposedLinkEntity, modification: ComposedLinkEntity.Builder.() -> Unit) = modifyEntity(ComposedLinkEntity.Builder::class.java, entity, modification)
+fun MutableEntityStorage.modifyEntity(entity: ComposedLinkEntity, modification: ComposedLinkEntity.Builder.() -> Unit) = modifyEntity(
+  ComposedLinkEntity.Builder::class.java, entity, modification)
 //endregion
 
 fun MutableEntityStorage.addComposedLinkEntity(link: ComposedId, source: EntitySource = MySource): ComposedLinkEntity {
@@ -206,39 +222,46 @@ fun MutableEntityStorage.addComposedLinkEntity(link: ComposedId, source: EntityS
   return composedLinkEntity
 }
 
-// ------------------------- Entity with persistentId and the list of soft links ------------------
+// ------------------------- Entity with SymbolicId and the list of soft links ------------------
 
 
-interface WithListSoftLinksEntity : WorkspaceEntityWithPersistentId {
+interface WithListSoftLinksEntity : WorkspaceEntityWithSymbolicId {
   val myName: String
   val links: List<NameId>
-  override val persistentId: AnotherNameId get() = AnotherNameId(myName)
+  override val symbolicId: AnotherNameId get() = AnotherNameId(myName)
 
   //region generated code
-  //@formatter:off
   @GeneratedCodeApiVersion(1)
-  interface Builder: WithListSoftLinksEntity, ModifiableWorkspaceEntity<WithListSoftLinksEntity>, ObjBuilder<WithListSoftLinksEntity> {
-      override var myName: String
-      override var entitySource: EntitySource
-      override var links: List<NameId>
+  interface Builder : WithListSoftLinksEntity, WorkspaceEntity.Builder<WithListSoftLinksEntity>, ObjBuilder<WithListSoftLinksEntity> {
+    override var entitySource: EntitySource
+    override var myName: String
+    override var links: MutableList<NameId>
   }
-  
-  companion object: Type<WithListSoftLinksEntity, Builder>() {
-      operator fun invoke(myName: String, entitySource: EntitySource, links: List<NameId>, init: (Builder.() -> Unit)? = null): WithListSoftLinksEntity {
-          val builder = builder()
-          builder.myName = myName
-          builder.entitySource = entitySource
-          builder.links = links
-          init?.invoke(builder)
-          return builder
-      }
+
+  companion object : Type<WithListSoftLinksEntity, Builder>() {
+    @JvmOverloads
+    @JvmStatic
+    @JvmName("create")
+    operator fun invoke(myName: String,
+                        links: List<NameId>,
+                        entitySource: EntitySource,
+                        init: (Builder.() -> Unit)? = null): WithListSoftLinksEntity {
+      val builder = builder()
+      builder.myName = myName
+      builder.links = links.toMutableWorkspaceList()
+      builder.entitySource = entitySource
+      init?.invoke(builder)
+      return builder
+    }
   }
-  //@formatter:on
   //endregion
 
 }
+
 //region generated code
-fun MutableEntityStorage.modifyEntity(entity: WithListSoftLinksEntity, modification: WithListSoftLinksEntity.Builder.() -> Unit) = modifyEntity(WithListSoftLinksEntity.Builder::class.java, entity, modification)
+fun MutableEntityStorage.modifyEntity(entity: WithListSoftLinksEntity,
+                                      modification: WithListSoftLinksEntity.Builder.() -> Unit) = modifyEntity(
+  WithListSoftLinksEntity.Builder::class.java, entity, modification)
 //endregion
 
 
@@ -247,7 +270,7 @@ fun MutableEntityStorage.addWithListSoftLinksEntity(
   links: List<NameId>,
   source: EntitySource = MySource
 ): WithListSoftLinksEntity {
-  val withListSoftLinksEntity = WithListSoftLinksEntity(name, source, links)
+  val withListSoftLinksEntity = WithListSoftLinksEntity(name, links, source)
   this.addEntity(withListSoftLinksEntity)
   return withListSoftLinksEntity
 }
@@ -255,36 +278,43 @@ fun MutableEntityStorage.addWithListSoftLinksEntity(
 // --------------------------- Entity with composed persistent id via soft reference ------------------
 
 
-interface ComposedIdSoftRefEntity : WorkspaceEntityWithPersistentId {
+interface ComposedIdSoftRefEntity : WorkspaceEntityWithSymbolicId {
   val myName: String
   val link: NameId
-  override val persistentId: ComposedId get() = ComposedId(myName, link)
+  override val symbolicId: ComposedId get() = ComposedId(myName, link)
 
   //region generated code
-  //@formatter:off
   @GeneratedCodeApiVersion(1)
-  interface Builder: ComposedIdSoftRefEntity, ModifiableWorkspaceEntity<ComposedIdSoftRefEntity>, ObjBuilder<ComposedIdSoftRefEntity> {
-      override var myName: String
-      override var entitySource: EntitySource
-      override var link: NameId
+  interface Builder : ComposedIdSoftRefEntity, WorkspaceEntity.Builder<ComposedIdSoftRefEntity>, ObjBuilder<ComposedIdSoftRefEntity> {
+    override var entitySource: EntitySource
+    override var myName: String
+    override var link: NameId
   }
-  
-  companion object: Type<ComposedIdSoftRefEntity, Builder>() {
-      operator fun invoke(myName: String, entitySource: EntitySource, link: NameId, init: (Builder.() -> Unit)? = null): ComposedIdSoftRefEntity {
-          val builder = builder()
-          builder.myName = myName
-          builder.entitySource = entitySource
-          builder.link = link
-          init?.invoke(builder)
-          return builder
-      }
+
+  companion object : Type<ComposedIdSoftRefEntity, Builder>() {
+    @JvmOverloads
+    @JvmStatic
+    @JvmName("create")
+    operator fun invoke(myName: String,
+                        link: NameId,
+                        entitySource: EntitySource,
+                        init: (Builder.() -> Unit)? = null): ComposedIdSoftRefEntity {
+      val builder = builder()
+      builder.myName = myName
+      builder.link = link
+      builder.entitySource = entitySource
+      init?.invoke(builder)
+      return builder
+    }
   }
-  //@formatter:on
   //endregion
 
 }
+
 //region generated code
-fun MutableEntityStorage.modifyEntity(entity: ComposedIdSoftRefEntity, modification: ComposedIdSoftRefEntity.Builder.() -> Unit) = modifyEntity(ComposedIdSoftRefEntity.Builder::class.java, entity, modification)
+fun MutableEntityStorage.modifyEntity(entity: ComposedIdSoftRefEntity,
+                                      modification: ComposedIdSoftRefEntity.Builder.() -> Unit) = modifyEntity(
+  ComposedIdSoftRefEntity.Builder::class.java, entity, modification)
 //endregion
 
 fun MutableEntityStorage.addComposedIdSoftRefEntity(
@@ -292,7 +322,7 @@ fun MutableEntityStorage.addComposedIdSoftRefEntity(
   link: NameId,
   source: EntitySource = MySource
 ): ComposedIdSoftRefEntity {
-  val composedIdSoftRefEntity = ComposedIdSoftRefEntity(name, source, link)
+  val composedIdSoftRefEntity = ComposedIdSoftRefEntity(name, link, source)
   this.addEntity(composedIdSoftRefEntity)
   return composedIdSoftRefEntity
 }

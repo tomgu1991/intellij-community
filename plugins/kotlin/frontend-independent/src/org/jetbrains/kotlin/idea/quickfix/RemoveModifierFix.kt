@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.quickfix
 
@@ -11,7 +11,10 @@ import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiNameIdentifierOwner
 import com.intellij.psi.util.PsiTreeUtil
 import org.jetbrains.annotations.Nls
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.QuickFixesPsiBasedFactory
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.coMap
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.quickFixesPsiBasedFactory
 import org.jetbrains.kotlin.lexer.KtModifierKeywordToken
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
@@ -57,11 +60,6 @@ open class RemoveModifierFixBase(
         val removeNonRedundantModifier: QuickFixesPsiBasedFactory<PsiElement> = createRemoveModifierFactory(isRedundant = false)
         val removeAbstractModifier: QuickFixesPsiBasedFactory<PsiElement> =
             createRemoveModifierFromListOwnerPsiBasedFactory(KtTokens.ABSTRACT_KEYWORD)
-        val removeRedundantOpenModifier: QuickFixesPsiBasedFactory<KtModifierListOwner> =
-            createRemoveModifierFromListOwnerFactoryByModifierListOwner(
-                modifier = KtTokens.OPEN_KEYWORD,
-                isRedundant = true
-            )
         val removeOpenModifier: QuickFixesPsiBasedFactory<PsiElement> = createRemoveModifierFromListOwnerPsiBasedFactory(KtTokens.OPEN_KEYWORD)
         val removePrivateModifier: QuickFixesPsiBasedFactory<PsiElement> = createRemoveModifierFromListOwnerPsiBasedFactory(KtTokens.PRIVATE_KEYWORD)
 
@@ -75,7 +73,7 @@ open class RemoveModifierFixBase(
             ).coMap { PsiTreeUtil.getParentOfType(it, KtModifierListOwner::class.java, false) }
 
 
-        fun createRemoveModifierFromListOwnerFactoryByModifierListOwner(
+        private fun createRemoveModifierFromListOwnerFactoryByModifierListOwner(
             modifier: KtModifierKeywordToken,
             isRedundant: Boolean = false
         ) = quickFixesPsiBasedFactory<KtModifierListOwner> {

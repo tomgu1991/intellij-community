@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.quickfix
 
@@ -13,20 +13,22 @@ import org.jetbrains.kotlin.descriptors.CallableDescriptor
 import org.jetbrains.kotlin.diagnostics.Diagnostic
 import org.jetbrains.kotlin.diagnostics.Errors
 import org.jetbrains.kotlin.diagnostics.rendering.DefaultErrorMessages
+import org.jetbrains.kotlin.idea.base.projectStructure.languageVersionSettings
+import org.jetbrains.kotlin.idea.base.util.module
+import org.jetbrains.kotlin.idea.caches.resolve.analyzeAsReplacement
 import org.jetbrains.kotlin.idea.caches.resolve.analyzeWithContent
 import org.jetbrains.kotlin.idea.caches.resolve.findModuleDescriptor
 import org.jetbrains.kotlin.idea.caches.resolve.getResolutionFacade
-import org.jetbrains.kotlin.idea.intentions.branches
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.KotlinQuickFixAction
 import org.jetbrains.kotlin.idea.intentions.reflectToRegularFunctionType
 import org.jetbrains.kotlin.idea.util.approximateWithResolvableType
 import org.jetbrains.kotlin.idea.util.getResolutionScope
-import org.jetbrains.kotlin.idea.base.util.module
-import org.jetbrains.kotlin.idea.base.projectStructure.languageVersionSettings
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.collectDescendantsOfType
 import org.jetbrains.kotlin.psi.psiUtil.getQualifiedExpressionForSelectorOrThis
 import org.jetbrains.kotlin.psi.psiUtil.getStrictParentOfType
+import org.jetbrains.kotlin.psi.psiUtil.isNull
 import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.DescriptorToSourceUtils.descriptorToDeclaration
 import org.jetbrains.kotlin.resolve.bindingContextUtil.getTargetFunction
@@ -56,7 +58,11 @@ class QuickFixFactoryForTypeMismatchError : KotlinIntentionActionsFactory() {
 
         val diagnosticElement = diagnostic.psiElement
         if (diagnosticElement !is KtExpression) {
-            LOG.error("Unexpected element: " + diagnosticElement.text)
+            // INCOMPATIBLE_TYPES may be reported not only on expressions, but also on types.
+            // We ignore such cases here.
+            if (diagnostic.factory != Errors.INCOMPATIBLE_TYPES) {
+                LOG.error("Unexpected element: " + diagnosticElement.text)
+            }
             return emptyList()
         }
 
@@ -105,6 +111,11 @@ class QuickFixFactoryForTypeMismatchError : KotlinIntentionActionsFactory() {
                 expectedType = diagnosticWithParameters.a
                 expressionType = diagnosticWithParameters.b
             }
+            Errors.INCOMPATIBLE_TYPES -> {
+                val diagnosticWithParameters = Errors.INCOMPATIBLE_TYPES.cast(diagnostic)
+                expectedType = diagnosticWithParameters.b
+                expressionType = diagnosticWithParameters.a
+            }
             else -> {
                 LOG.error("Unexpected diagnostic: " + DefaultErrorMessages.render(diagnostic))
                 return emptyList()
@@ -113,6 +124,13 @@ class QuickFixFactoryForTypeMismatchError : KotlinIntentionActionsFactory() {
         if (expressionType == null) {
             LOG.error("No type inferred: " + diagnosticElement.text)
             return emptyList()
+        }
+
+        if (diagnosticElement is KtStringTemplateExpression &&
+            expectedType.isChar() &&
+            ConvertStringToCharLiteralFix.isApplicable(diagnosticElement)
+        ) {
+            actions.add(ConvertStringToCharLiteralFix(diagnosticElement))
         }
 
         if (expressionType.isSignedOrUnsignedNumberType() && expectedType.isSignedOrUnsignedNumberType()) {
@@ -230,7 +248,7 @@ class QuickFixFactoryForTypeMismatchError : KotlinIntentionActionsFactory() {
             if (QuickFixBranchUtil.canEvaluateTo(initializer, diagnosticElement)
                 || getter != null && QuickFixBranchUtil.canFunctionOrGetterReturnExpression(getter, diagnosticElement)
             ) {
-                val returnType = property.returnType(diagnosticElement, expressionType, context)
+                val returnType = property.returnType(expressionType, context)
                 addChangeTypeFix(property, returnType, ::ChangeVariableTypeFix)
             }
         }
@@ -243,7 +261,7 @@ class QuickFixFactoryForTypeMismatchError : KotlinIntentionActionsFactory() {
         else
             PsiTreeUtil.getParentOfType(diagnosticElement, KtFunction::class.java, true)
         if (function is KtFunction && QuickFixBranchUtil.canFunctionOrGetterReturnExpression(function, diagnosticElement)) {
-            val returnType = function.returnType(diagnosticElement, expressionType, context)
+            val returnType = function.returnType(expressionType, context)
             addChangeTypeFix(function, returnType, ChangeCallableReturnTypeFix::ForEnclosing)
         }
 
@@ -322,11 +340,7 @@ class QuickFixFactoryForTypeMismatchError : KotlinIntentionActionsFactory() {
         return actions
     }
 
-    private fun KtCallableDeclaration.returnType(
-        diagnosticElement: KtExpression,
-        candidateType: KotlinType,
-        context: BindingContext
-    ): KotlinType {
+    private fun KtCallableDeclaration.returnType(candidateType: KotlinType, context: BindingContext): KotlinType {
         val (initializers, functionOrGetter) = when (this) {
             is KtNamedFunction -> listOfNotNull(this.initializer) to this
             is KtProperty -> listOfNotNull(this.initializer, this.getter?.initializer) to this.getter
@@ -340,20 +354,21 @@ class QuickFixFactoryForTypeMismatchError : KotlinIntentionActionsFactory() {
                 .plus(initializers)
         } else {
             initializers
-        }.mapNotNull { KtPsiUtil.deparenthesize(it) }
+        }.map { KtPsiUtil.safeDeparenthesize(it) }
 
-        return if (returnedExpressions.singleOrNull() == diagnosticElement) {
-            candidateType
-        } else {
-            val returnTypes = returnedExpressions.flatMap {
-                when (it) {
-                    is KtIfExpression -> it.branches
-                    is KtWhenExpression -> it.entries.map { entry -> entry.expression }
-                    else -> listOf(it)
-                }
-            }.mapNotNull { it?.getType(context) }.ifEmpty { listOf(candidateType) }
-            returnTypes.singleOrNull() ?: CommonSupertypes.commonSupertype(returnTypes)
+        returnedExpressions.singleOrNull()?.let {
+            if (it.isNull() || this.typeReference == null) return candidateType
         }
+
+        val returnTypes = returnedExpressions.map { it.getActualType(this, context) ?: candidateType }.distinct()
+        return returnTypes.singleOrNull() ?: CommonSupertypes.commonSupertype(returnTypes)
+    }
+
+    private fun KtExpression.getActualType(declaration: KtCallableDeclaration, context: BindingContext): KotlinType? {
+        if (declaration.typeReference == null) return getType(context)
+        val property = KtPsiFactory(project).createDeclarationByPattern<KtProperty>("val x = $0", this)
+        val newContext = property.analyzeAsReplacement(this, context)
+        return property.initializer?.getType(newContext)
     }
 
     companion object {

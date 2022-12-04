@@ -25,11 +25,8 @@ import com.intellij.openapi.vcs.changes.ui.*
 import com.intellij.openapi.vcs.changes.ui.ChangesGroupingSupport.Companion.REPOSITORY_GROUPING
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.wm.IdeFocusManager
-import com.intellij.ui.ExpandableItemsHandler
-import com.intellij.ui.OnePixelSplitter
-import com.intellij.ui.PopupHandler
+import com.intellij.ui.*
 import com.intellij.ui.ScrollPaneFactory.createScrollPane
-import com.intellij.ui.SideBorder
 import com.intellij.ui.components.panels.Wrapper
 import com.intellij.ui.switcher.QuickActionProvider
 import com.intellij.util.EditSourceOnDoubleClickHandler
@@ -39,9 +36,8 @@ import com.intellij.util.Processor
 import com.intellij.util.concurrency.annotations.RequiresEdt
 import com.intellij.util.ui.*
 import com.intellij.util.ui.JBUI.Borders.empty
-import com.intellij.util.ui.JBUI.Panels.simplePanel
+import com.intellij.util.ui.components.BorderLayoutPanel
 import com.intellij.util.ui.tree.TreeUtil
-import com.intellij.vcs.commit.CommitChecksResult
 import com.intellij.vcs.commit.CommitStatusPanel
 import com.intellij.vcs.commit.CommitWorkflowListener
 import com.intellij.vcs.commit.EditedCommitNode
@@ -71,12 +67,11 @@ import java.awt.BorderLayout
 import java.awt.event.InputEvent
 import java.beans.PropertyChangeListener
 import java.util.*
-import java.util.stream.Collectors
 import javax.swing.JPanel
 
 internal class GitStagePanel(private val tracker: GitStageTracker,
-                             isVertical: Boolean,
-                             isEditorDiffPreview: Boolean,
+                             private val isVertical: () -> Boolean,
+                             private val isEditorDiffPreview: () -> Boolean,
                              disposableParent: Disposable,
                              private val activate: () -> Unit) :
   JPanel(BorderLayout()), DataProvider, Disposable {
@@ -85,13 +80,15 @@ internal class GitStagePanel(private val tracker: GitStageTracker,
 
   private val _tree: MyChangesTree
   val tree: ChangesTree get() = _tree
-  private val treeMessageSplitter: Splitter
-  private val commitPanel: GitStageCommitPanel
-  private val commitWorkflowHandler: GitStageCommitWorkflowHandler
   private val progressStripe: ProgressStripe
-  private val commitDiffSplitter: OnePixelSplitter
   private val toolbar: ActionToolbar
+  private val commitPanel: GitStageCommitPanel
   private val changesStatusPanel: Wrapper
+
+  private val treeMessageSplitter: Splitter
+  private val commitDiffSplitter: OnePixelSplitter
+
+  private val commitWorkflowHandler: GitStageCommitWorkflowHandler
 
   private var diffPreviewProcessor: GitStageDiffPreview? = null
   private var editorTabPreview: GitStageEditorDiffPreview? = null
@@ -111,7 +108,7 @@ internal class GitStagePanel(private val tracker: GitStageTracker,
       !commitPanel.commitProgressUi.isDumbMode &&
       IdeFocusManager.getInstance(project).getFocusedDescendantFor(this) != null
     }
-    commitPanel.commitActionsPanel.setupShortcuts(this, this)
+    commitPanel.commitActionsPanel.createActions().forEach { it.registerCustomShortcutSet(this, this) }
     commitPanel.addEditedCommitListener(_tree::editedCommitChanged, this)
     commitPanel.setIncludedRoots(_tree.getIncludedRoots())
     _tree.addIncludedRootsListener(object : IncludedRootsListener {
@@ -124,9 +121,6 @@ internal class GitStagePanel(private val tracker: GitStageTracker,
 
     val toolbarGroup = DefaultActionGroup()
     toolbarGroup.add(ActionManager.getInstance().getAction("Git.Stage.Toolbar"))
-    toolbarGroup.addSeparator()
-    toolbarGroup.add(ActionManager.getInstance().getAction(ChangesTree.GROUP_BY_ACTION_GROUP))
-    toolbarGroup.addSeparator()
     toolbarGroup.addAll(TreeActionsToolbarPanel.createTreeActions(tree))
     toolbar = ActionManager.getInstance().createActionToolbar(GIT_STAGE_PANEL_PLACE, toolbarGroup, true)
     toolbar.targetComponent = tree
@@ -139,7 +133,10 @@ internal class GitStagePanel(private val tracker: GitStageTracker,
 
       addToLeft(commitPanel.toolbar.component)
     }
-    val treePanel = simplePanel(createScrollPane(tree, SideBorder.TOP)).addToBottom(statusPanel)
+    val sideBorder = if (ExperimentalUI.isNewUI()) SideBorder.NONE else SideBorder.TOP
+    val treePanel = GitStageTreePanel()
+      .addToCenter(createScrollPane(tree, sideBorder))
+      .addToBottom(statusPanel)
     progressStripe = ProgressStripe(treePanel, this, ProgressWindow.DEFAULT_PROGRESS_DIALOG_POSTPONE_TIME_MILLIS)
     val treePanelWithToolbar = JPanel(BorderLayout())
     treePanelWithToolbar.add(toolbar.component, BorderLayout.NORTH)
@@ -158,7 +155,7 @@ internal class GitStagePanel(private val tracker: GitStageTracker,
     add(commitDiffSplitter, BorderLayout.CENTER)
     add(changesStatusPanel, BorderLayout.SOUTH)
 
-    updateLayout(isVertical, isEditorDiffPreview, forceDiffPreview = true)
+    updateLayout(isInitial = true)
 
     tracker.addListener(MyGitStageTrackerListener(), this)
     val busConnection = project.messageBus.connect(this)
@@ -210,18 +207,25 @@ internal class GitStagePanel(private val tracker: GitStageTracker,
     return null
   }
 
-  fun updateLayout(isVertical: Boolean, canUseEditorDiffPreview: Boolean, forceDiffPreview: Boolean = false) {
-    val isEditorDiffPreview = canUseEditorDiffPreview || isVertical
-    val isMessageSplitterVertical = isVertical || !isEditorDiffPreview
+  fun updateLayout() {
+    updateLayout(isInitial = false)
+  }
+
+  private fun updateLayout(isInitial: Boolean) {
+    val isVertical = isVertical()
+    val isEditorDiffPreview = isEditorDiffPreview()
+    val isInEditor = isEditorDiffPreview || isVertical
+    val isMessageSplitterVertical = !isEditorDiffPreview || isVertical
     if (treeMessageSplitter.orientation != isMessageSplitterVertical) {
       treeMessageSplitter.orientation = isMessageSplitterVertical
     }
-    setDiffPreviewInEditor(isEditorDiffPreview, forceDiffPreview)
+    setDiffPreviewInEditor(isInEditor, isInitial)
   }
 
-  private fun setDiffPreviewInEditor(isInEditor: Boolean, force: Boolean = false) {
+  private fun setDiffPreviewInEditor(isInEditor: Boolean, isInitial: Boolean) {
     if (disposableFlag.isDisposed) return
-    if (!force && (isInEditor == (editorTabPreview != null))) return
+    val needUpdatePreviews = isInEditor != (editorTabPreview != null)
+    if (!isInitial && !needUpdatePreviews) return
 
     if (diffPreviewProcessor != null) Disposer.dispose(diffPreviewProcessor!!)
     diffPreviewProcessor = GitStageDiffPreview(project, _tree, tracker, isInEditor, this)
@@ -245,7 +249,7 @@ internal class GitStagePanel(private val tracker: GitStageTracker,
 
     installSelectionHandler(tree, false)
     installNextDiffActionOn(this@GitStagePanel)
-    UIUtil.putClientProperty(tree, ExpandableItemsHandler.IGNORE_ITEM_SELECTION, true)
+    tree.putClientProperty(ExpandableItemsHandler.IGNORE_ITEM_SELECTION, true)
   }
 
   override fun dispose() {
@@ -370,10 +374,10 @@ internal class GitStagePanel(private val tracker: GitStageTracker,
 
     override fun getIncludableUserObjects(treeModelData: VcsTreeModelData): List<Any> {
       return treeModelData
-        .rawNodesStream()
+        .iterateRawNodes()
         .filter { node -> isIncludable(node) }
         .map { node -> node.userObject }
-        .collect(Collectors.toList())
+        .toList()
     }
 
     override fun getNodeStatus(node: ChangesBrowserNode<*>): ThreeStateCheckBox.State {
@@ -472,11 +476,13 @@ internal class GitStagePanel(private val tracker: GitStageTracker,
         update()
       }
     }
+  }
 
-    override fun vcsesChanged() = Unit
-    override fun executionStarted() = Unit
-    override fun beforeCommitChecksStarted() = Unit
-    override fun beforeCommitChecksEnded(isDefaultCommit: Boolean, result: CommitChecksResult) = Unit
+  private class GitStageTreePanel : BorderLayoutPanel() {
+    override fun updateUI() {
+      super.updateUI()
+      background = UIUtil.getTreeBackground()
+    }
   }
 
   companion object {

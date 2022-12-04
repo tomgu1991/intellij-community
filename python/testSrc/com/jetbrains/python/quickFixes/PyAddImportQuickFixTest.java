@@ -61,6 +61,61 @@ public class PyAddImportQuickFixTest extends PyQuickFixTestCase {
     return getCodeStyleSettings().getCustomSettings(PyCodeStyleSettings.class);
   }
 
+  // PY-10719
+  public void testBeforeImportAboveNoInspectionComment() {
+    doMultiFileAutoImportTest("Import 'a'");
+  }
+
+  // PY-10719
+  public void testBetweenImportsAboveNoInspectionComment() {
+    doMultiFileAutoImportTest("Import 'b'");
+  }
+
+  // PY-10719
+  public void testBeforeImportBelowFileCommentBlock() {
+    doMultiFileAutoImportTest("Import 'a'");
+  }
+
+  // PY-10719 PY-26016
+  public void testBetweenStatementAndImportAboveBoundComments() {
+    doMultiFileAutoImportTest("Import 'a'");
+  }
+
+  // PY-10719 PY-26016
+  public void testBeforeStatementBelowFileCommentBlock() {
+    doMultiFileAutoImportTest("Import 'a'");
+  }
+
+  // PY-10719 PY-26016
+  public void testBeforeStatementAboveBoundComments() {
+    doMultiFileAutoImportTest("Import 'a'");
+  }
+
+  // PY-10719 PY-26016
+  public void testBeforeImportAboveBoundCommentsBelowFileCommentBlock() {
+    doMultiFileAutoImportTest("Import 'a'");
+  }
+
+  // PY-10719 PY-26016
+  public void testBetweenImportsAboveBoundComments() {
+    doMultiFileAutoImportTest("Import 'b'");
+  }
+
+  // PY-10719 PY-26016
+  public void testBeforeImportBelowFileCommentBlockExceptNoInspectionComment() {
+    doMultiFileAutoImportTest("Import 'a'");
+  }
+
+  // PY-10719 PY-26016
+  public void testBeforeStatementAboveBoundCommentsBelowFileCommentBlock() {
+    doMultiFileAutoImportTest("Import 'a'");
+  }
+
+  // PY-10719 PY-53487
+  public void testBeforeStatementAboveNoInspectionComment() {
+    doMultiFileAutoImportTest("Import 'a'");
+  }
+
   // PY-19773
   public void testReexportedName() {
     doMultiFileAutoImportTest("Import 'flask.request'");
@@ -81,10 +136,11 @@ public class PyAddImportQuickFixTest extends PyQuickFixTestCase {
       "    pass",
       f -> runWithAdditionalFileInLibDir(
         "os.py",
-        "if windows():\n" +
-        "    import ntpath as path\n" +
-        "else:\n" +
-        "    import posixpath as path",
+        """
+          if windows():
+              import ntpath as path
+          else:
+              import posixpath as path""",
         f1 -> runWithAdditionalFileInLibDir(
           "posixpath.py",
           "def commonpath(paths):\n" +
@@ -128,11 +184,12 @@ public class PyAddImportQuickFixTest extends PyQuickFixTestCase {
       (__) ->
         runWithAdditionalFileInSkeletonDir(
           "sys.py",
-          "# encoding: utf-8\n" +
-          "# module sys\n" +
-          "# from (built-in)\n" +
-          "# by generator 1.138\n" +
-          "path = 10",
+          """
+            # encoding: utf-8
+            # module sys
+            # from (built-in)
+            # by generator 1.138
+            path = 10""",
           (___) -> doMultiFileAutoImportTest("Import 'sys'")
         )
     );
@@ -364,6 +421,7 @@ public class PyAddImportQuickFixTest extends PyQuickFixTestCase {
     assertNotNull(djangoViewClass);
     assertTrue(PyUserSkeletonsUtil.isUnderUserSkeletonsDirectory(djangoViewClass.getContainingFile()));
   }
+
   private void dumpSdkRootsFileSystemAndIndexResults() {
     dumpSdkRoots();
     VirtualFile skeletonsDir = PyUserSkeletonsUtil.getUserSkeletonsDirectory();
@@ -396,10 +454,12 @@ public class PyAddImportQuickFixTest extends PyQuickFixTestCase {
     };
     runWithAdditionalFileInLibDir(
       "_collections_abc.py",
-      "__all__ = [\"Sized\"]\n" +
-      "__name__ = \"collections.abc\"\n" +
-      "class Sized:\n" +
-      "    pass\n",
+      """
+        __all__ = ["Sized"]
+        __name__ = "collections.abc"
+        class Sized:
+            pass
+        """,
       fileConsumer
     );
   }

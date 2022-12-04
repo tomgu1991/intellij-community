@@ -6,7 +6,7 @@ import com.intellij.testFramework.TestDataPath;
 import org.jetbrains.kotlin.idea.test.JUnit3RunnerWithInners;
 import org.jetbrains.kotlin.idea.test.KotlinTestUtils;
 import org.jetbrains.kotlin.test.TestMetadata;
-import org.jetbrains.kotlin.idea.test.TestRoot;
+import org.jetbrains.kotlin.idea.base.test.TestRoot;
 import org.junit.runner.RunWith;
 
 /**
@@ -131,5 +131,15 @@ public class MultiFileLocalInspectionTestGenerated extends AbstractMultiFileLoca
     @TestMetadata("unusedSymbol/internalConstructorUsedInJava/internalConstructorUsedInJava.test")
     public void testUnusedSymbol_internalConstructorUsedInJava_InternalConstructorUsedInJava() throws Exception {
         runTest("testData/multiFileLocalInspections/unusedSymbol/internalConstructorUsedInJava/internalConstructorUsedInJava.test");
+    }
+
+    @TestMetadata("usePropertyAccessSyntax/excludedCustomAccessor/excludedCustomAccessor.test")
+    public void testUsePropertyAccessSyntax_excludedCustomAccessor_ExcludedCustomAccessor() throws Exception {
+        runTest("testData/multiFileLocalInspections/usePropertyAccessSyntax/excludedCustomAccessor/excludedCustomAccessor.test");
+    }
+
+    @TestMetadata("usePropertyAccessSyntax/notExcludedCustomAccessor/notExcludedCustomAccessor.test")
+    public void testUsePropertyAccessSyntax_notExcludedCustomAccessor_NotExcludedCustomAccessor() throws Exception {
+        runTest("testData/multiFileLocalInspections/usePropertyAccessSyntax/notExcludedCustomAccessor/notExcludedCustomAccessor.test");
     }
 }

@@ -4,17 +4,21 @@ package org.jetbrains.kotlin.idea.base.analysisApiProviders
 
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiManager
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.stubs.StubIndex
 import com.intellij.psi.stubs.StubIndexKey
 import org.jetbrains.kotlin.analysis.providers.KotlinDeclarationProvider
 import org.jetbrains.kotlin.analysis.providers.KotlinDeclarationProviderFactory
+import org.jetbrains.kotlin.idea.base.indices.names.KotlinTopLevelCallableByPackageShortNameIndex
+import org.jetbrains.kotlin.idea.base.indices.names.KotlinTopLevelClassLikeDeclarationByPackageShortNameIndex
 import org.jetbrains.kotlin.idea.stubindex.*
 import org.jetbrains.kotlin.name.CallableId
 import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.psi.*
+import org.jetbrains.kotlin.utils.addToStdlib.safeAs
 
 internal class IdeKotlinDeclarationProviderFactory(private val project: Project) : KotlinDeclarationProviderFactory() {
     override fun createDeclarationProvider(searchScope: GlobalSearchScope): KotlinDeclarationProvider {
@@ -27,6 +31,7 @@ private class IdeKotlinDeclarationProvider(
     private val scope: GlobalSearchScope
 ) : KotlinDeclarationProvider() {
     private val stubIndex: StubIndex = StubIndex.getInstance()
+    private val psiManager = PsiManager.getInstance(project)
 
     private inline fun <IndexKey : Any, reified Psi : PsiElement> firstMatchingOrNull(
         stubKey: StubIndexKey<IndexKey, Psi>,
@@ -45,41 +50,32 @@ private class IdeKotlinDeclarationProvider(
     }
 
     override fun getClassLikeDeclarationByClassId(classId: ClassId): KtClassLikeDeclaration? {
-        return firstMatchingOrNull(KotlinFullClassNameIndex.KEY, key = classId.asStringForIndexes()) {
-            candidate -> candidate.getClassId() == classId
+        return firstMatchingOrNull(KotlinFullClassNameIndex.KEY, key = classId.asStringForIndexes()) { candidate ->
+            candidate.getClassId() == classId
         } ?: getTypeAliasByClassId(classId)
     }
+
     override fun getAllClassesByClassId(classId: ClassId): Collection<KtClassOrObject> {
         return KotlinFullClassNameIndex
             .get(classId.asStringForIndexes(), project, scope)
-            .filter { candidate -> candidate.containingKtFile.packageFqName == classId.packageFqName }
+            .filter { candidate -> candidate.getClassId() == classId }
     }
 
     override fun getAllTypeAliasesByClassId(classId: ClassId): Collection<KtTypeAlias> {
         return listOfNotNull(getTypeAliasByClassId(classId)) //todo
     }
 
-    override fun getTypeAliasNamesInPackage(packageFqName: FqName): Set<Name> {
-        return KotlinTopLevelTypeAliasByPackageIndex
-            .get(packageFqName.asStringForIndexes(), project, scope)
-            .mapNotNullTo(mutableSetOf()) { it.nameAsName }
+    override fun getTopLevelCallableNamesInPackage(packageFqName: FqName): Set<Name> {
+        return KotlinTopLevelCallableByPackageShortNameIndex.getNamesInPackage(packageFqName, scope)
+
     }
 
-    override fun getPropertyNamesInPackage(packageFqName: FqName): Set<Name> {
-        return KotlinTopLevelPropertyByPackageIndex
-            .get(packageFqName.asStringForIndexes(), project, scope)
-            .mapNotNullTo(mutableSetOf()) { it.nameAsName }
+    override fun getTopLevelKotlinClassLikeDeclarationNamesInPackage(packageFqName: FqName): Set<Name> {
+        return KotlinTopLevelClassLikeDeclarationByPackageShortNameIndex.getNamesInPackage(packageFqName, scope)
     }
 
-    override fun getFunctionsNamesInPackage(packageFqName: FqName): Set<Name> {
-        return KotlinTopLevelFunctionByPackageIndex
-            .get(packageFqName.asStringForIndexes(), project, scope)
-            .mapNotNullTo(mutableSetOf()) { it.nameAsName }
-    }
-
-    override fun getFacadeFilesInPackage(packageFqName: FqName): Collection<KtFile> {
-        return KotlinFileFacadeClassByPackageIndex
-            .get(packageFqName.asString(), project, scope)
+    override fun findFilesForFacadeByPackage(packageFqName: FqName): Collection<KtFile> {
+        return KotlinFileFacadeClassByPackageIndex.get(packageFqName.asString(), project, scope)
     }
 
     override fun findFilesForFacade(facadeFqName: FqName): Collection<KtFile> {
@@ -99,25 +95,39 @@ private class IdeKotlinDeclarationProvider(
     }
 
     override fun getTopLevelProperties(callableId: CallableId): Collection<KtProperty> =
-        KotlinTopLevelPropertyFqnNameIndex.get(callableId.asStringForIndexes(), project, scope)
+        KotlinTopLevelPropertyFqnNameIndex.get(callableId.asTopLevelStringForIndexes(), project, scope)
 
     override fun getTopLevelFunctions(callableId: CallableId): Collection<KtNamedFunction> =
-        KotlinTopLevelFunctionFqnNameIndex.get(callableId.asStringForIndexes(), project, scope)
+        KotlinTopLevelFunctionFqnNameIndex.get(callableId.asTopLevelStringForIndexes(), project, scope)
 
 
-    override fun getClassNamesInPackage(packageFqName: FqName): Set<Name> =
-        KotlinTopLevelClassByPackageIndex
-            .get(packageFqName.asStringForIndexes(), project, scope)
-            .mapNotNullTo(hashSetOf()) { it.nameAsName }
+    override fun getTopLevelCallableFiles(callableId: CallableId): Collection<KtFile> {
+        val callableIdString = callableId.asTopLevelStringForIndexes()
+
+        return buildSet {
+            stubIndex.getContainingFilesIterator(KotlinTopLevelPropertyFqnNameIndex.key, callableIdString, project, scope).forEach {file ->
+                psiManager.findFile(file)?.safeAs<KtFile>()?.let { add(it) }
+            }
+            stubIndex.getContainingFilesIterator(KotlinTopLevelFunctionFqnNameIndex.key, callableIdString, project, scope).forEach {file ->
+                psiManager.findFile(file)?.safeAs<KtFile>()?.let { add(it) }
+            }
+        }
+    }
+
 
     companion object {
-        private fun CallableId.asStringForIndexes(): String =
-            (if (packageName.isRoot) callableName.asString() else toString()).replace('/', '.')
+        private fun CallableId.asTopLevelStringForIndexes(): String {
+            require(this.classId == null) {
+                "Expecting top-level callable, but was $this"
+            }
 
-        private fun FqName.asStringForIndexes(): String =
-            asString().replace('/', '.')
+            if (packageName.isRoot) return callableName.asString()
+            return "${packageName.asString()}.${callableName.asString()}"
+        }
 
-        private fun ClassId.asStringForIndexes(): String =
-            asSingleFqName().asStringForIndexes()
+        private fun ClassId.asStringForIndexes(): String {
+            if (packageFqName.isRoot) return relativeClassName.asString()
+            return "${packageFqName.asString()}.${relativeClassName.asString()}"
+        }
     }
 }

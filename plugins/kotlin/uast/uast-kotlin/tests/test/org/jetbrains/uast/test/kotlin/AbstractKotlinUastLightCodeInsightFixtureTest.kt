@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.uast.test.kotlin
 
@@ -15,7 +15,7 @@ import java.io.File
 abstract class AbstractKotlinUastLightCodeInsightFixtureTest : KotlinLightCodeInsightFixtureTestCase() {
 
     override fun getProjectDescriptor(): LightProjectDescriptor =
-        KotlinWithJdkAndRuntimeLightProjectDescriptor.INSTANCE_FULL_JDK
+        KotlinWithJdkAndRuntimeLightProjectDescriptor.getInstanceFullJdk()
 
     fun getVirtualFile(testName: String): VirtualFile {
         val testFile = TEST_KOTLIN_MODEL_DIR.listFiles { pathname -> pathname.nameWithoutExtension == testName }.first()

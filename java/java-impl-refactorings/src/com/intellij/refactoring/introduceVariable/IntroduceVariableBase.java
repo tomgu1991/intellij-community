@@ -94,16 +94,12 @@ public abstract class IntroduceVariableBase extends IntroduceHandlerBase {
     }
 
     public PsiExpression[] filter(ExpressionOccurrenceManager manager) {
-      switch (myChoice) {
-        case NO:
-          return new PsiExpression[]{manager.getMainOccurence()};
-        case NO_WRITE:
-          return StreamEx.of(manager.getOccurrences()).filter(expr -> !PsiUtil.isAccessedForWriting(expr)).toArray(PsiExpression.EMPTY_ARRAY);
-        case ALL:
-          return manager.getOccurrences();
-        default:
-          throw new IllegalStateException("Unexpected value: " + myChoice);
-      }
+      return switch (myChoice) {
+        case NO -> new PsiExpression[]{manager.getMainOccurence()};
+        case NO_WRITE ->
+          StreamEx.of(manager.getOccurrences()).filter(expr -> !PsiUtil.isAccessedForWriting(expr)).toArray(PsiExpression.EMPTY_ARRAY);
+        case ALL -> manager.getOccurrences();
+      };
     }
 
     @Override
@@ -304,7 +300,7 @@ public abstract class IntroduceVariableBase extends IntroduceHandlerBase {
   private static JavaReplaceChoice findChoice(@NotNull LinkedHashMap<JavaReplaceChoice, List<PsiExpression>> occurrencesMap,
                                               @NotNull JavaReplaceChoice replaceChoice) {
     return ContainerUtil.find(occurrencesMap.entrySet(), entry -> {
-      return entry.getKey().formatDescription(0) == replaceChoice.formatDescription(0);
+      return entry.getKey().formatDescription(0).equals(replaceChoice.formatDescription(0));
     }).getKey();
   }
 
@@ -520,7 +516,7 @@ public abstract class IntroduceVariableBase extends IntroduceHandlerBase {
       protected TextRange getOccurrenceRange(PsiExpression occurrence) {
         RangeMarker rangeMarker = occurrence.getUserData(ElementToWorkOn.TEXT_RANGE);
         if (rangeMarker != null) {
-          return new TextRange(rangeMarker.getStartOffset(), rangeMarker.getEndOffset());
+          return rangeMarker.getTextRange();
         }
         return occurrence.getTextRange();
       }

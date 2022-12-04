@@ -12,7 +12,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.Reader;
 import java.io.UncheckedIOException;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -62,6 +62,14 @@ public final class PathManager {
   private static String ourScratchPath;
   private static String ourPluginsPath;
   private static String ourLogPath;
+
+  private static final ArrayList<Path> ourPerProjectLockedPaths = new ArrayList<>();
+
+  public static void lockPerProjectPath(Path path) { ourPerProjectLockedPaths.add(path); }
+
+  public static void unlockPerProjectPath(Path path) { ourPerProjectLockedPaths.remove(path); }
+
+  public static @NotNull List<Path> getPerProjectLockedPaths() { return ourPerProjectLockedPaths; }
 
   // IDE installation paths
 
@@ -182,7 +190,7 @@ public final class PathManager {
         dir = dir.resolve(osSuffix);
         if (Files.isDirectory(dir)) {
           binDirs.add(dir);
-          if (SystemInfoRt.isLinux) {
+          if (SystemInfoRt.isWindows || SystemInfoRt.isLinux) {
             String arch = CpuArch.isIntel64() ? "amd64" : CpuArch.isArm64() ? "aarch64" : null;
             if (arch != null) {
               dir = dir.resolve(arch);
@@ -327,6 +335,10 @@ public final class PathManager {
     return Paths.get(getOptionsPath(), fileName + DEFAULT_EXT).toFile();
   }
 
+  public static @NotNull Path getPluginsDir() {
+    return Paths.get(getPluginsPath());
+  }
+
   public static @NotNull String getPluginsPath() {
     if (ourPluginsPath != null) return ourPluginsPath;
 
@@ -345,7 +357,8 @@ public final class PathManager {
   }
 
   public static @NotNull String getDefaultPluginPathFor(@NotNull String selector) {
-    return platformPath(selector, "Application Support", PLUGINS_DIRECTORY, "APPDATA", PLUGINS_DIRECTORY, "XDG_DATA_HOME", ".local/share", "");
+    return platformPath(selector, "Application Support", PLUGINS_DIRECTORY, "APPDATA", PLUGINS_DIRECTORY, "XDG_DATA_HOME", ".local/share",
+                        "");
   }
 
   public static @Nullable String getCustomOptionsDirectory() {
@@ -354,6 +367,10 @@ public final class PathManager {
   }
 
   // runtime paths
+
+  public static @NotNull Path getSystemDir() {
+    return Paths.get(getSystemPath());
+  }
 
   public static @NotNull String getSystemPath() {
     if (ourSystemPath != null) return ourSystemPath;
@@ -390,6 +407,10 @@ public final class PathManager {
       indexRootPath = getSystemPath() + "/index";
     }
     return Paths.get(indexRootPath);
+  }
+
+  public static @NotNull Path getLogDir() {
+    return Paths.get(getLogPath());
   }
 
   public static @NotNull String getLogPath() {
@@ -435,7 +456,7 @@ public final class PathManager {
    */
   public static @Nullable String getResourceRoot(@NotNull ClassLoader classLoader, @NotNull String resourcePath) {
     URL url = classLoader.getResource(resourcePath);
-    return url == null ? null : extractRoot(url, "/"+resourcePath);
+    return url == null ? null : extractRoot(url, "/" + resourcePath);
   }
 
   /**
@@ -553,7 +574,7 @@ public final class PathManager {
         continue;
       }
 
-      try (InputStream inputStream = Files.newInputStream(file)) {
+      try (Reader reader = Files.newBufferedReader(file)) {
         //noinspection NonSynchronizedMethodOverridesSynchronizedMethod
         new Properties() {
           @Override
@@ -566,7 +587,7 @@ public final class PathManager {
             }
             return null;
           }
-        }.load(inputStream);
+        }.load(reader);
       }
       catch (NoSuchFileException | AccessDeniedException ignore) {
       }
@@ -576,7 +597,6 @@ public final class PathManager {
     }
 
     // Check and fix conflicting properties.
-    sysProperties.setProperty("disableJbScreenMenuBar", "true"); // a temporary key for bundled runtime (will be removed soon)
     if ("true".equals(sysProperties.getProperty("jbScreenMenuBar.enabled"))) {
       sysProperties.setProperty("apple.laf.useScreenMenuBar", "false");
     }
@@ -711,7 +731,7 @@ public final class PathManager {
     }
 
     Path outClassesDir = rootPath.getParent().getParent();
-    Path artifactsDir = outClassesDir.resolveSibling("project-artifacts");
+    Path artifactsDir = outClassesDir.resolveSibling("jps-artifacts");
     if (!Files.exists(artifactsDir)) {
       // running IDE or tests in IDE
       artifactsDir = outClassesDir.resolve("artifacts");

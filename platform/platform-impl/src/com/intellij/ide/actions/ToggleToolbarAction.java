@@ -5,7 +5,7 @@ import com.intellij.ide.IdeBundle;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.idea.ActionsBundle;
 import com.intellij.openapi.actionSystem.*;
-import com.intellij.openapi.actionSystem.impl.Utils;
+import com.intellij.openapi.actionSystem.impl.ActionToolbarImpl;
 import com.intellij.openapi.editor.impl.EditorHeaderComponent;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
@@ -197,7 +197,9 @@ public final class ToggleToolbarAction extends ToggleAction implements DumbAware
 
   @NotNull
   private static Iterable<ActionToolbar> iterateToolbars(Iterable<? extends JComponent> roots) {
-    return UIUtil.uiTraverser(null).withRoots(roots).preOrderDfsTraversal().filter(ActionToolbar.class);
+    return UIUtil.uiTraverser(null).withRoots(roots).preOrderDfsTraversal()
+      .filter(ActionToolbar.class)
+      .filter(toolbar -> !Boolean.TRUE.equals(toolbar.getComponent().getClientProperty(ActionToolbarImpl.IMPORTANT_TOOLBAR_KEY)));
   }
 
   private static class OptionsGroup extends NonTrivialActionGroup implements DumbAware {
@@ -207,11 +209,6 @@ public final class ToggleToolbarAction extends ToggleAction implements DumbAware
     OptionsGroup(ToolWindow toolWindow) {
       getTemplatePresentation().setText(IdeBundle.message("group.view.options"));
       myToolWindow = toolWindow;
-    }
-
-    @Override
-    public @NotNull ActionUpdateThread getActionUpdateThread() {
-      return ActionUpdateThread.EDT;
     }
 
     @Override
@@ -226,11 +223,15 @@ public final class ToggleToolbarAction extends ToggleAction implements DumbAware
     @Override
     public AnAction @NotNull [] getChildren(@Nullable AnActionEvent e) {
       if (e == null) return EMPTY_ARRAY;
+      return e.getUpdateSession()
+        .compute(this, "getChildrenImpl", ActionUpdateThread.EDT, this::getChildrenImpl);
+    }
+
+    private AnAction @NotNull [] getChildrenImpl() {
       ContentManager contentManager = myToolWindow.getContentManagerIfCreated();
       Content selectedContent = contentManager == null ? null : contentManager.getSelectedContent();
       JComponent contentComponent = selectedContent == null ? null : selectedContent.getComponent();
       if (contentComponent == null) return EMPTY_ARRAY;
-      UpdateSession session = Utils.getOrCreateUpdateSession(e);
       List<AnAction> result = new SmartList<>();
       for (final ActionToolbar toolbar : iterateToolbars(Collections.singletonList(contentComponent))) {
         JComponent c = toolbar.getComponent();
@@ -241,7 +242,7 @@ public final class ToggleToolbarAction extends ToggleAction implements DumbAware
 
         List<AnAction> actions = toolbar.getActions();
         for (AnAction action : actions) {
-          if (action instanceof ToggleAction && !result.contains(action) && session.presentation(action).isVisible()) {
+          if (action instanceof ToggleAction && !result.contains(action)) {
             result.add(action);
           }
           else if (action instanceof Separator) {

@@ -110,11 +110,6 @@ public final class TestUtils {
     return method != null && AnnotationUtil.isAnnotated(method, JUnitCommonClassNames.ORG_JUNIT_TEST, CHECK_HIERARCHY);
   }
 
-  public static boolean isTestMethod(@Nullable PsiMethod method) {
-    if (method == null) return false;
-    return TestFrameworks.getInstance().isTestMethod(method);
-  }
-
   /**
    * @param frameworks to check matching with {@link TestFramework#getName}
    */

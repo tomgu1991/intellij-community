@@ -23,6 +23,7 @@ import com.intellij.openapi.wm.IdeFocusManager
 import com.intellij.ui.AppIcon
 import com.intellij.util.ExceptionUtil
 import com.intellij.util.containers.ContainerUtil
+import com.intellij.util.io.getHostName
 import com.intellij.util.io.origin
 import com.intellij.util.io.referrer
 import com.intellij.util.net.NetUtils
@@ -37,10 +38,7 @@ import org.jetbrains.annotations.NonNls
 import org.jetbrains.builtInWebServer.isSignedRequest
 import org.jetbrains.ide.RestService.Companion.createJsonReader
 import org.jetbrains.ide.RestService.Companion.createJsonWriter
-import org.jetbrains.io.addCommonHeaders
-import org.jetbrains.io.addNoCache
-import org.jetbrains.io.response
-import org.jetbrains.io.send
+import org.jetbrains.io.*
 import java.awt.Window
 import java.io.IOException
 import java.io.OutputStream
@@ -162,7 +160,7 @@ abstract class RestService : HttpRequestHandler() {
   private val trustedOrigins = Caffeine.newBuilder()
     .maximumSize(1024)
     .expireAfterWrite(1, TimeUnit.DAYS)
-    .build<String, Boolean>()
+    .build<Pair<String, String>, Boolean>()
   private val hostLocks = ContainerUtil.createConcurrentWeakKeyWeakValueMap<String, Any>()
 
   private var isBlockUnknownHosts = false
@@ -171,6 +169,12 @@ abstract class RestService : HttpRequestHandler() {
    * Service url must be "/api/$serviceName", but to preserve backward compatibility, prefixless path could be also supported
    */
   protected open val isPrefixlessAllowed: Boolean
+    get() = false
+
+  /**
+   * Whether service failures should be returned as HTML or PlainText.
+   */
+  protected open val reportErrorsAsPlainText: Boolean
     get() = false
 
   /**
@@ -215,18 +219,18 @@ abstract class RestService : HttpRequestHandler() {
     try {
       val counter = abuseCounter.get((context.channel().remoteAddress() as InetSocketAddress).address)!!
       if (counter.incrementAndGet() > Registry.intValue("ide.rest.api.requests.per.minute", 30)) {
-        HttpResponseStatus.TOO_MANY_REQUESTS.orInSafeMode(HttpResponseStatus.OK).send(context.channel(), request)
+        HttpResponseStatus.TOO_MANY_REQUESTS.orInSafeMode(HttpResponseStatus.OK).sendError(context.channel(), request)
         return true
       }
 
       if (!isHostTrusted(request, urlDecoder)) {
-        HttpResponseStatus.FORBIDDEN.orInSafeMode(HttpResponseStatus.OK).send(context.channel(), request)
+        HttpResponseStatus.FORBIDDEN.orInSafeMode(HttpResponseStatus.OK).sendError(context.channel(), request)
         return true
       }
 
       val error = execute(urlDecoder, request, context)
       if (error != null) {
-        HttpResponseStatus.BAD_REQUEST.send(context.channel(), request, error)
+        HttpResponseStatus.BAD_REQUEST.sendError(context.channel(), request, error)
       }
     }
     catch (e: Throwable) {
@@ -240,10 +244,23 @@ abstract class RestService : HttpRequestHandler() {
         LOG.error(e)
         status = HttpResponseStatus.INTERNAL_SERVER_ERROR
       }
-      status.send(context.channel(), request, XmlStringUtil.escapeString(ExceptionUtil.getThrowableText(e)))
+
+      status.sendError(context.channel(), request, XmlStringUtil.escapeString(ExceptionUtil.getThrowableText(e)))
     }
 
     return true
+  }
+
+  private fun HttpResponseStatus.sendError(channel: Channel,
+                                           request: HttpRequest,
+                                           description: String? = null,
+                                           extraHeaders: HttpHeaders? = null) {
+    if (reportErrorsAsPlainText) {
+      sendPlainText(channel, request, description, extraHeaders)
+    }
+    else {
+      send(channel, request, description, extraHeaders)
+    }
   }
 
   @Throws(InterruptedException::class, InvocationTargetException::class)
@@ -261,8 +278,13 @@ abstract class RestService : HttpRequestHandler() {
     }
 
     val referrer = request.origin ?: request.referrer
-    val host = try {
-      if (referrer == null) null else URI(referrer).host.nullize()
+    val (host, scheme) = try {
+      if (referrer == null)
+        null to ""
+      else
+        with(URI(referrer)) {
+          host.nullize() to scheme
+        }
     }
     catch (ignored: URISyntaxException) {
       return false
@@ -275,7 +297,7 @@ abstract class RestService : HttpRequestHandler() {
           return true
         }
         else {
-          trustedOrigins.getIfPresent(host)?.let {
+          trustedOrigins.getIfPresent(host to scheme)?.let {
             return it
           }
         }
@@ -294,7 +316,7 @@ abstract class RestService : HttpRequestHandler() {
           }
           isTrusted = showYesNoDialog(message, "title.use.rest.api")
           if (host != null) {
-            trustedOrigins.put(host, isTrusted)
+            trustedOrigins.put(host to scheme, isTrusted)
           }
           else {
             if (!isTrusted) {
@@ -306,6 +328,26 @@ abstract class RestService : HttpRequestHandler() {
     }
   }
 
+  fun isHostInPredefinedHosts(request: FullHttpRequest, urlDecoder: QueryStringDecoder, trustedPredefinedHosts: Set<String>, systemPropertyKey: String): Boolean {
+    val origin = request.origin
+    val originHost = try {
+      if (origin == null) null else URI(origin).takeIf { it.scheme == "https" }?.host.nullize()
+    }
+    catch (ignored: URISyntaxException) {
+      return false
+    }
+
+    val hostName = getHostName(request)
+    if (hostName != null && !NetUtils.isLocalhost(hostName)) {
+      LOG.error("Expected 'request.hostName' to be localhost. hostName='$hostName', origin='$origin'")
+    }
+
+    return (originHost != null && (
+      trustedPredefinedHosts.contains(originHost) ||
+      System.getProperty(systemPropertyKey, "").split(",").contains(originHost) ||
+      NetUtils.isLocalhost(originHost)))
+  }
+
   /**
    * Return error or send response using [sendOk], [send]
    */
@@ -314,6 +356,6 @@ abstract class RestService : HttpRequestHandler() {
   abstract fun execute(urlDecoder: QueryStringDecoder, request: FullHttpRequest, context: ChannelHandlerContext): String?
 }
 
-internal fun HttpResponseStatus.orInSafeMode(safeStatus: HttpResponseStatus): HttpResponseStatus {
+fun HttpResponseStatus.orInSafeMode(safeStatus: HttpResponseStatus): HttpResponseStatus {
   return if (Registry.`is`("ide.http.server.response.actual.status", true) || ApplicationManager.getApplication()?.isUnitTestMode == true) this else safeStatus
 }

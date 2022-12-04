@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.inspections
 
@@ -7,7 +7,7 @@ import com.intellij.codeInspection.ProblemDescriptor
 import com.intellij.codeInspection.ProblemsHolder
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElementVisitor
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.base.psi.dropCurlyBracketsIfPossible
 import org.jetbrains.kotlin.idea.base.psi.replaced
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
@@ -21,6 +21,8 @@ import org.jetbrains.kotlin.resolve.calls.util.getType
 import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameSafe
 import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
 import java.util.*
+
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.inspections.AbstractKotlinInspection
 
 class ReplaceStringFormatWithLiteralInspection : AbstractKotlinInspection() {
 
@@ -76,7 +78,7 @@ class ReplaceStringFormatWithLiteralInspection : AbstractKotlinInspection() {
             val replaceArgs = args.asSequence().drop(1).mapTo(LinkedList()) { ConvertToStringTemplateIntention.buildText(it, true) }
             val stringLiteral = stringPlaceHolder.replace(format) { replaceArgs.pop() }
             (qualifiedExpression ?: callExpression)
-                .let { it.replaced(KtPsiFactory(it).createStringTemplate(stringLiteral)) }
+                .let { it.replaced(KtPsiFactory(project).createStringTemplate(stringLiteral)) }
                 .entries
                 .forEach {
                     val blockEntry = (it as? KtBlockStringTemplateEntry)

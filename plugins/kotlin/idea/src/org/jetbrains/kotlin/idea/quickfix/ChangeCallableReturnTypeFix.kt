@@ -16,18 +16,19 @@ import org.jetbrains.kotlin.descriptors.ClassDescriptor
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
 import org.jetbrains.kotlin.diagnostics.Diagnostic
 import org.jetbrains.kotlin.diagnostics.Errors.COMPONENT_FUNCTION_RETURN_TYPE_MISMATCH
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToCall
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToDescriptorIfAny
 import org.jetbrains.kotlin.idea.caches.resolve.unsafeResolveToDescriptor
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.KotlinQuickFixAction
 import org.jetbrains.kotlin.idea.core.ShortenReferences
 import org.jetbrains.kotlin.idea.project.builtIns
 import org.jetbrains.kotlin.idea.util.IdeDescriptorRenderers
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.getElementTextWithContext
 import org.jetbrains.kotlin.resolve.BindingContext
-import org.jetbrains.kotlin.resolve.DataClassDescriptorResolver
+import org.jetbrains.kotlin.resolve.DataClassResolver
 import org.jetbrains.kotlin.resolve.DescriptorToSourceUtils
 import org.jetbrains.kotlin.resolve.descriptorUtil.builtIns
 import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
@@ -35,7 +36,6 @@ import org.jetbrains.kotlin.types.KotlinType
 import org.jetbrains.kotlin.types.checker.KotlinTypeChecker
 import org.jetbrains.kotlin.types.error.ErrorUtils
 import org.jetbrains.kotlin.types.typeUtil.isUnit
-import java.util.*
 
 abstract class ChangeCallableReturnTypeFix(
     element: KtCallableDeclaration,
@@ -132,6 +132,10 @@ abstract class ChangeCallableReturnTypeFix(
         }
     }
 
+    override fun startInWriteAction(): Boolean {
+        return changeFunctionLiteralReturnTypeFix == null || changeFunctionLiteralReturnTypeFix.startInWriteAction()
+    }
+
     override fun generatePreview(project: Project, editor: Editor, file: PsiFile): IntentionPreviewInfo {
         if (changeFunctionLiteralReturnTypeFix != null) {
             return changeFunctionLiteralReturnTypeFix.generatePreview(project, editor, file)
@@ -179,7 +183,7 @@ abstract class ChangeCallableReturnTypeFix(
         override fun doCreateActions(diagnostic: Diagnostic): List<IntentionAction> {
             val function = diagnostic.psiElement.findParentOfType<KtFunction>(strict = false) ?: return emptyList()
 
-            val actions = LinkedList<IntentionAction>()
+            val actions = mutableListOf<IntentionAction>()
 
             val descriptor = function.resolveToDescriptorIfAny(BodyResolveMode.FULL) as? FunctionDescriptor ?: return emptyList()
 
@@ -190,7 +194,7 @@ abstract class ChangeCallableReturnTypeFix(
 
             val functionType = descriptor.returnType ?: return actions
 
-            val overriddenMismatchingFunctions = LinkedList<FunctionDescriptor>()
+            val overriddenMismatchingFunctions = mutableListOf<FunctionDescriptor>()
             for (overriddenFunction in descriptor.overriddenDescriptors) {
                 val overriddenFunctionType = overriddenFunction.returnType ?: continue
                 if (!KotlinTypeChecker.DEFAULT.isSubtypeOf(functionType, overriddenFunctionType)) {
@@ -226,7 +230,7 @@ abstract class ChangeCallableReturnTypeFix(
     companion object {
         fun getDestructuringDeclarationEntryThatTypeMismatchComponentFunction(diagnostic: Diagnostic): KtDestructuringDeclarationEntry {
             val componentName = COMPONENT_FUNCTION_RETURN_TYPE_MISMATCH.cast(diagnostic).a
-            val componentIndex = DataClassDescriptorResolver.getComponentIndex(componentName.asString())
+            val componentIndex = DataClassResolver.getComponentIndex(componentName.asString())
             val multiDeclaration = diagnostic.psiElement.findParentOfType<KtDestructuringDeclaration>(strict = false)
                 ?: error("COMPONENT_FUNCTION_RETURN_TYPE_MISMATCH reported on expression that is not within any multi declaration")
             return multiDeclaration.entries[componentIndex - 1]

@@ -1,7 +1,8 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package org.jetbrains.kotlin.idea.search.usagesSearch
 
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.project.Project
 import com.intellij.psi.*
 import com.intellij.psi.util.MethodSignatureUtil
@@ -22,11 +23,11 @@ import org.jetbrains.kotlin.idea.caches.resolve.util.getJavaMethodDescriptor
 import org.jetbrains.kotlin.idea.caches.resolve.util.getJavaOrKotlinMemberDescriptor
 import org.jetbrains.kotlin.idea.caches.resolve.util.hasJavaResolutionFacade
 import org.jetbrains.kotlin.idea.codeInsight.DescriptorToSourceUtilsIde
+import org.jetbrains.kotlin.idea.core.compareDescriptors
 import org.jetbrains.kotlin.idea.references.unwrappedTargets
 import org.jetbrains.kotlin.idea.search.KotlinSearchUsagesSupport
 import org.jetbrains.kotlin.idea.search.ReceiverTypeSearcherInfo
 import org.jetbrains.kotlin.idea.util.FuzzyType
-import org.jetbrains.kotlin.idea.util.application.runReadAction
 import org.jetbrains.kotlin.idea.util.fuzzyExtensionReceiverType
 import org.jetbrains.kotlin.idea.util.toFuzzyType
 import org.jetbrains.kotlin.load.java.descriptors.JavaClassDescriptor
@@ -74,7 +75,7 @@ class KotlinConstructorCallLazyDescriptorHandle(ktElement: KtDeclaration) :
 
     override fun referencedTo(element: KtElement): Boolean =
         element.getConstructorCallDescriptor().let {
-            it != null && descriptor != null && it == descriptor
+            it != null && descriptor != null && compareDescriptors(element.project, it, descriptor)
         }
 }
 
@@ -85,7 +86,7 @@ class JavaConstructorCallLazyDescriptorHandle(psiMethod: PsiMethod) :
 
     override fun referencedTo(element: KtElement): Boolean =
         element.getConstructorCallDescriptor().let {
-            it != null && descriptor != null && it == descriptor
+            it != null && descriptor != null && compareDescriptors(element.project, it, descriptor)
         }
 }
 
@@ -236,13 +237,13 @@ private fun PsiElement.resolveTargetToDescriptor(isDestructionDeclarationSearch:
 
 private fun containsTypeOrDerivedInside(declaration: KtDeclaration, typeToSearch: FuzzyType): Boolean {
 
-    fun KotlinType.containsTypeOrDerivedInside(type: FuzzyType): Boolean {
-        return type.checkIsSuperTypeOf(this) != null || arguments.any { !it.isStarProjection && it.type.containsTypeOrDerivedInside(type) }
+    fun KotlinType.containsTypeOrDerivedInside(): Boolean {
+        return typeToSearch.checkIsSuperTypeOf(this) != null || arguments.any { !it.isStarProjection && it.type.containsTypeOrDerivedInside() }
     }
 
     val descriptor = declaration.resolveToDescriptorIfAny() as? CallableDescriptor
     val type = descriptor?.returnType
-    return type != null && type.containsTypeOrDerivedInside(typeToSearch)
+    return type != null && type.containsTypeOrDerivedInside()
 }
 
 private fun FuzzyType.toPsiClass(project: Project): PsiClass? {

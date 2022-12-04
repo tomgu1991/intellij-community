@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package org.jetbrains.kotlin.idea.testIntegration
 
@@ -8,6 +8,7 @@ import com.intellij.codeInsight.FileModificationService
 import com.intellij.codeInsight.navigation.NavigationUtil
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.lang.java.JavaLanguage
+import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.module.ModuleUtilCore
 import com.intellij.openapi.project.Project
@@ -24,17 +25,17 @@ import com.intellij.testIntegration.createTest.TestGenerators
 import org.jetbrains.kotlin.asJava.classes.KtLightClass
 import org.jetbrains.kotlin.asJava.findFacadeClass
 import org.jetbrains.kotlin.asJava.toLightClass
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.actions.JavaToKotlinAction
 import org.jetbrains.kotlin.idea.base.util.runWhenSmart
 import org.jetbrains.kotlin.idea.base.util.runWithAlternativeResolveEnabled
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToDescriptorIfAny
 import org.jetbrains.kotlin.idea.core.getPackage
 import org.jetbrains.kotlin.idea.core.util.toPsiDirectory
-import org.jetbrains.kotlin.idea.intentions.SelfTargetingRangeIntention
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.intentions.SelfTargetingRangeIntention
 import org.jetbrains.kotlin.idea.j2k.j2k
 import org.jetbrains.kotlin.idea.util.application.executeCommand
-import org.jetbrains.kotlin.idea.util.application.runWriteAction
+import org.jetbrains.kotlin.j2k.ConverterSettings.Companion.publicByDefault
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.endOffset
 import org.jetbrains.kotlin.psi.psiUtil.hasExpectModifier
@@ -179,7 +180,8 @@ class KotlinCreateTestIntention : SelfTargetingRangeIntention<KtNamedDeclaration
                                     generatedClass
                                         .methods
                                         .filter { it.name !in existingMethodNames }
-                                        .forEach { it.j2k()?.let { declaration -> existingClass.addDeclaration(declaration) } }
+                                        .forEach { it.j2k(settings = publicByDefault)
+                                            ?.let { declaration -> existingClass.addDeclaration(declaration) } }
                                     generatedClass.delete()
                                 }
 
@@ -193,8 +195,9 @@ class KotlinCreateTestIntention : SelfTargetingRangeIntention<KtNamedDeclaration
                                     listOf(generatedFile),
                                     project,
                                     srcModule,
-                                    false,
-                                    forceUsingOldJ2k = true
+                                    enableExternalCodeProcessing = false,
+                                    forceUsingOldJ2k = true,
+                                    settings = publicByDefault
                                 ).singleOrNull()
                             }
                         }

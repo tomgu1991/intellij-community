@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.quickfix
 
@@ -10,10 +10,10 @@ import com.intellij.openapi.ui.popup.ListPopupStep
 import com.intellij.openapi.ui.popup.PopupStep
 import com.intellij.openapi.ui.popup.util.BaseListPopupStep
 import org.jetbrains.kotlin.diagnostics.Diagnostic
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.analyzeAsReplacement
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
-import org.jetbrains.kotlin.idea.completion.KotlinIdeaCompletionBundle
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.KotlinQuickFixAction
 import org.jetbrains.kotlin.idea.refactoring.fqName.fqName
 import org.jetbrains.kotlin.idea.util.application.executeWriteCommand
 import org.jetbrains.kotlin.psi.*
@@ -51,7 +51,7 @@ class SpecifySuperTypeFix(
     private fun KtSuperExpression.specifySuperType(superType: String) {
         project.executeWriteCommand(KotlinBundle.message("intention.name.specify.supertype")) {
             val label = this.labelQualifier?.text ?: ""
-            replace(KtPsiFactory(this).createExpression("super<$superType>$label"))
+            replace(KtPsiFactory(project).createExpression("super<$superType>$label"))
         }
     }
 
@@ -87,7 +87,7 @@ class SpecifySuperTypeFix(
             }
             if (superTypes.size != superTypeListEntries.size) return null
 
-            val psiFactory = KtPsiFactory(superExpression)
+            val psiFactory = KtPsiFactory(superExpression.project)
             val superTypesForSuperExpression = superTypes.mapNotNull { (typeElement, kotlinType) ->
                 if (superTypes.any { it.second != kotlinType && it.second.isSubtypeOf(kotlinType) }) return@mapNotNull null
                 val fqName = kotlinType.fqName ?: return@mapNotNull null

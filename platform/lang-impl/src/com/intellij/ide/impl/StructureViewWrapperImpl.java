@@ -12,6 +12,7 @@ import com.intellij.lang.PsiStructureViewFactory;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.actionSystem.impl.Utils;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
@@ -62,8 +63,6 @@ import java.awt.event.HierarchyListener;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-
-import static com.intellij.openapi.application.ApplicationManager.getApplication;
 
 /**
  * @author Eugene Belyaev
@@ -177,7 +176,7 @@ public final class StructureViewWrapperImpl implements StructureViewWrapper, Dis
     PsiStructureViewFactory.EP_NAME.addChangeListener(this::clearCaches, this);
 
     StructureViewBuilder.EP_NAME.addChangeListener(this::clearCaches, this);
-    getApplication().getMessageBus().connect(this).subscribe(STRUCTURE_CHANGED, this::clearCaches);
+    ApplicationManager.getApplication().getMessageBus().connect(this).subscribe(STRUCTURE_CHANGED, this::clearCaches);
   }
 
   private void clearCaches() {
@@ -318,9 +317,7 @@ public final class StructureViewWrapperImpl implements StructureViewWrapper, Dis
       @Override
       public void run() {
         if (myProject.isDisposed()) return;
-        if (!getApplication().isDispatchThread()) {
-          LOG.error("EDT-based MergingUpdateQueue on background thread");
-        }
+        ApplicationManager.getApplication().assertIsDispatchThread();
         loggedRun("rebuild a structure: ", StructureViewWrapperImpl.this::rebuild);
       }
     });
@@ -467,8 +464,8 @@ public final class StructureViewWrapperImpl implements StructureViewWrapper, Dis
   private StructureViewBuilder createStructureViewBuilder(@NotNull VirtualFile file) {
     if (file.getLength() > PersistentFSConstants.getMaxIntellisenseFileSize()) return null;
 
-    FileEditorProvider[] providers = FileEditorProviderManager.getInstance().getProviders(myProject, file);
-    FileEditorProvider provider = providers.length == 0 ? null : providers[0];
+    List<FileEditorProvider> providers = FileEditorProviderManager.getInstance().getProviderList(myProject, file);
+    FileEditorProvider provider = providers.size() == 0 ? null : providers.get(0);
     if (provider == null) return null;
     if (provider instanceof TextEditorProvider) {
       return StructureViewBuilder.PROVIDER.getStructureViewBuilder(file.getFileType(), file, myProject);

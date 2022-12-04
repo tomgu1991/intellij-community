@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.core.script.configuration
 
@@ -360,7 +360,7 @@ class DefaultScriptingSupport(manager: CompositeScriptConfigurationManager) : De
         cache.clear()
     }
 
-    fun hideInterceptedNotification(file: VirtualFile) {
+    private fun hideInterceptedNotification(file: VirtualFile) {
         loaders.forEach {
             it.hideInterceptedNotification(file)
         }

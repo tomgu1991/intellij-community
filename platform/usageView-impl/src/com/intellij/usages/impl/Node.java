@@ -50,7 +50,7 @@ abstract class Node extends DefaultMutableTreeNode {
 
   /**
    * isDataXXX methods perform actual (expensive) data computation.
-   * Called from {@link #update(Consumer})
+   * Called from {@link #update(Consumer)}
    * to be compared later with cached data stored in {@link #myCachedFlags} and {@link #myCachedTextHash}
    */
   protected abstract boolean isDataValid();
@@ -91,7 +91,7 @@ abstract class Node extends DefaultMutableTreeNode {
 
   final void update(@NotNull Consumer<? super Node> edtFireTreeNodesChangedQueue) {
     // performance: always update in background because smart pointer' isValid() can cause PSI chameleons expansion which is ridiculously expensive in cpp
-    assert !ApplicationManager.getApplication().isDispatchThread();
+    ApplicationManager.getApplication().assertIsNonDispatchThread();
     boolean isDataValid = isDataValid();
     boolean isReadOnly = isDataReadOnly();
     String text = getNodeText();

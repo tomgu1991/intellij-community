@@ -1,14 +1,11 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package com.intellij.ide.util;
 
 import com.intellij.ide.actions.GotoClassPresentationUpdater;
 import com.intellij.ide.util.gotoByName.*;
 import com.intellij.lang.LangBundle;
-import com.intellij.openapi.actionSystem.ActionManager;
-import com.intellij.openapi.actionSystem.ActionToolbar;
-import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.DefaultActionGroup;
+import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.actionSystem.ex.CheckboxAction;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.project.Project;
@@ -548,14 +545,19 @@ public class DirectoryChooser extends DialogWrapper {
 
   private class FilterExistentAction extends CheckboxAction {
     FilterExistentAction() {
-      super(RefactoringBundle.messagePointer("directory.chooser.hide.non.existent.checkBox.text"),
-            () -> UIUtil.removeMnemonic(RefactoringBundle.message("directory.chooser.hide.non.existent.checkBox.text")),
+      super(RefactoringBundle.messagePointer("directory.chooser.hide.non.existing.checkBox.text"),
+            () -> UIUtil.removeMnemonic(RefactoringBundle.message("directory.chooser.hide.non.existing.checkBox.text")),
             null);
     }
 
     @Override
     public boolean isSelected(@NotNull AnActionEvent e) {
       return myShowExisting;
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
     }
 
     @Override

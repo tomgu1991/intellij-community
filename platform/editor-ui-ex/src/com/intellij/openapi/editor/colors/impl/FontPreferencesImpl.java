@@ -1,17 +1,26 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.editor.colors.impl;
 
 import com.intellij.application.options.EditorFontsConstants;
+import com.intellij.ide.ui.UISettings;
+import com.intellij.openapi.Disposable;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.editor.colors.EditorColorsManager;
 import com.intellij.openapi.editor.colors.EditorColorsScheme;
 import com.intellij.openapi.editor.colors.FontPreferences;
 import com.intellij.openapi.editor.colors.ModifiableFontPreferences;
 import com.intellij.openapi.util.NlsSafe;
+import com.intellij.util.EventDispatcher;
+import com.intellij.util.ExceptionUtil;
 import it.unimi.dsi.fastutil.objects.Object2FloatMap;
 import it.unimi.dsi.fastutil.objects.Object2FloatOpenHashMap;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -35,20 +44,21 @@ public class FontPreferencesImpl extends ModifiableFontPreferences {
   private boolean myUseLigatures;
   private float myLineSpacing = DEFAULT_LINE_SPACING;
 
-  @Nullable private Runnable myChangeListener;
+  @NotNull private final EventDispatcher<ChangeListener> myEventDispatcher = EventDispatcher.create(ChangeListener.class);
 
   /**
    * Font size to use by default. Default value is {@link #DEFAULT_FONT_SIZE}.
    */
   private float myTemplateFontSize = DEFAULT_FONT_SIZE;
 
-  public void setChangeListener(@Nullable Runnable changeListener) {
-    myChangeListener = changeListener;
+  private static final Logger LOG = Logger.getInstance(FontPreferencesImpl.class);
+
+  public void addChangeListener(@NotNull ChangeListener changeListener) {
+    myEventDispatcher.addListener(changeListener);
   }
 
-  @Nullable
-  public Runnable getChangeListener() {
-    return myChangeListener;
+  public void addChangeListener(@NotNull ChangeListener changeListener, @NotNull Disposable parentDisposable) {
+    myEventDispatcher.addListener(changeListener, parentDisposable);
   }
 
   @Override
@@ -64,9 +74,11 @@ public class FontPreferencesImpl extends ModifiableFontPreferences {
     myUseLigatures = false;
     myRegularSubFamily = null;
     myBoldSubFamily = null;
-    if (myChangeListener != null) {
-      myChangeListener.run();
-    }
+    notifyStateChanged();
+  }
+
+  private void notifyStateChanged() {
+    myEventDispatcher.getMulticaster().stateChanged(new ChangeEvent(this));
   }
 
   @Override
@@ -103,11 +115,19 @@ public class FontPreferencesImpl extends ModifiableFontPreferences {
   }
 
   public void setSize(@NotNull String fontFamily, float size) {
+    logSizeChangeIfNeeded(size);
     myFontSizes.put(fontFamily, size);
     myTemplateFontSize = size;
-    if (myChangeListener != null) {
-      myChangeListener.run();
-    }
+    notifyStateChanged();
+  }
+
+  private void logSizeChangeIfNeeded(float size) {
+    if (!LOG.isDebugEnabled()) return;
+    EditorColorsManager colorsManager = ApplicationManager.getApplication().getServiceIfCreated(EditorColorsManager.class);
+    if (colorsManager == null || colorsManager.getGlobalScheme().getFontPreferences() != this) return;
+
+    LOG.debug("Will set size %s to global font (presentationMode=%b)".formatted(size, UISettings.getInstance().getPresentationMode()));
+    LOG.debug(ExceptionUtil.currentStackTrace());
   }
 
   /**
@@ -176,9 +196,7 @@ public class FontPreferencesImpl extends ModifiableFontPreferences {
     if (!myEffectiveFontFamilies.contains(effectiveFontFamily)) {
       myEffectiveFontFamilies.add(effectiveFontFamily);
     }
-    if (myChangeListener != null) {
-      myChangeListener.run();
-    }
+    notifyStateChanged();
   }
 
   @Override
@@ -274,9 +292,7 @@ public class FontPreferencesImpl extends ModifiableFontPreferences {
   public void setUseLigatures(boolean useLigatures) {
     if (useLigatures != myUseLigatures) {
       myUseLigatures = useLigatures;
-      if (myChangeListener != null) {
-        myChangeListener.run();
-      }
+      notifyStateChanged();
     }
   }
 
@@ -294,9 +310,7 @@ public class FontPreferencesImpl extends ModifiableFontPreferences {
   public void setRegularSubFamily(String subFamily) {
     if (!Objects.equals(myRegularSubFamily, subFamily)) {
       myRegularSubFamily = subFamily;
-      if (myChangeListener != null) {
-        myChangeListener.run();
-      }
+      notifyStateChanged();
     }
   }
 
@@ -304,9 +318,7 @@ public class FontPreferencesImpl extends ModifiableFontPreferences {
   public void setBoldSubFamily(String subFamily) {
     if (!Objects.equals(myBoldSubFamily, subFamily)) {
       myBoldSubFamily = subFamily;
-      if (myChangeListener != null) {
-        myChangeListener.run();
-      }
+      notifyStateChanged();
     }
   }
 

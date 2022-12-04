@@ -13,7 +13,7 @@ import org.jetbrains.kotlin.idea.base.projectStructure.scope.KotlinSourceFilterS
 import org.jetbrains.kotlin.konan.library.KONAN_STDLIB_NAME
 import org.jetbrains.kotlin.platform.TargetPlatform
 import org.jetbrains.kotlin.platform.isCommon
-import org.jetbrains.kotlin.platform.js.isJs
+import org.jetbrains.kotlin.platform.isJs
 import org.jetbrains.kotlin.platform.jvm.isJvm
 import org.jetbrains.kotlin.platform.konan.NativePlatform
 import org.jetbrains.kotlin.platform.konan.NativePlatforms
@@ -55,8 +55,13 @@ internal fun TargetPlatform.canDependOn(other: IdeaModuleInfo, isHmppEnabled: Bo
 
 fun IdeaModuleInfo.isLibraryClasses() = this is SdkInfo || this is LibraryInfo
 
-fun IdeaModuleInfo.projectSourceModules(): List<ModuleSourceInfo>? =
-    (this as? ModuleSourceInfo)?.let(::listOf) ?: (this as? PlatformModuleInfo)?.containedModules
+fun IdeaModuleInfo.projectSourceModules(): List<ModuleSourceInfo> {
+    return when (this) {
+        is ModuleSourceInfo -> listOf(this)
+        is PlatformModuleInfo -> containedModules
+        else -> emptyList()
+    }
+}
 
 @Deprecated("Use org.jetbrains.kotlin.idea.base.projectStructure.kotlinSourceRootType' instead.")
 val ModuleSourceInfo.sourceType: SourceType

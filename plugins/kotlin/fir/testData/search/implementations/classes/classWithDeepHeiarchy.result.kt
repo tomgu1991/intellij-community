@@ -1,3 +1,3 @@
-FirLightClassForSymbol: A
-FirLightClassForSymbol: B
-FirLightClassForSymbol: C
+KtClass: A
+KtClass: B
+KtClass: C

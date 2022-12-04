@@ -3,9 +3,11 @@ package org.jetbrains.plugins.gradle.service.resolve
 
 import com.intellij.psi.*
 import com.intellij.psi.scope.PsiScopeProcessor
+import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.util.InheritanceUtil
 import groovy.lang.Closure
 import org.jetbrains.plugins.gradle.service.resolve.GradleCommonClassNames.GRADLE_API_PROJECT
+//import org.jetbrains.plugins.gradle.service.resolve.static.getStaticallyHandledExtensions
 import org.jetbrains.plugins.gradle.settings.GradleExtensionsSettings
 import org.jetbrains.plugins.groovy.lang.psi.impl.statements.expressions.TypesUtil.createType
 import org.jetbrains.plugins.groovy.lang.psi.impl.synthetic.GrLightMethodBuilder
@@ -45,8 +47,12 @@ class GradleProjectExtensionContributor : NonCodeMembersContributor() {
     val factory = PsiElementFactory.getInstance(containingFile.project)
     val manager = containingFile.manager
 
+    val staticExtensions = getGradleStaticallyHandledExtensions(place.project)
+
     for (extension in extensions) {
-      val delegateType = factory.createTypeFromText(extension.rootTypeFqn, place)
+      if (staticExtensions.contains(extension.name)) continue
+
+      val delegateType = createType(factory, extension.rootTypeFqn, place.resolveScope)
       if (delegateType !is PsiClassType) {
         continue
       }
@@ -74,5 +80,35 @@ class GradleProjectExtensionContributor : NonCodeMembersContributor() {
   private fun shouldAddConfiguration(extension: GradleExtensionsSettings.GradleExtension, context: PsiElement): Boolean {
     val clazz = JavaPsiFacade.getInstance(context.project).findClass(extension.rootTypeFqn, context.resolveScope) ?: return true
     return !InheritanceUtil.isInheritor(clazz, "org.gradle.api.internal.catalog.AbstractExternalDependencyFactory")
+  }
+
+  private fun createType(factory: PsiElementFactory, generifiedFqnClassName: String, resolveScope: GlobalSearchScope) : PsiType {
+    val className = generifiedFqnClassName.substringBefore('<')
+    val hostClassType = factory.createTypeByFQClassName(className, resolveScope)
+    val hostClass = hostClassType.resolve() ?: return hostClassType
+    val parameters = mutableListOf<String>()
+    val builder = StringBuilder()
+    var parameterStack = 1
+    for (char in generifiedFqnClassName.substringAfter('<')) {
+      if (char == '<') {
+        parameterStack += 1
+      } else if (char == '>') {
+        parameterStack -= 1
+        if (parameterStack == 0) {
+          parameters.add(builder.toString().trim())
+        }
+      } else if (char == ',') {
+        if (parameterStack == 0) {
+          parameters.add(builder.toString())
+          builder.clear()
+        } else {
+          builder.append(char)
+        }
+      } else {
+        builder.append(char)
+      }
+    }
+    val parsedParameters = parameters.map { createType(factory, it, resolveScope) }
+    return factory.createType(hostClass, *parsedParameters.toTypedArray())
   }
 }

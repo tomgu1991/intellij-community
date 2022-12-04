@@ -1,11 +1,14 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.psi.stubs;
 
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.CachedSingletonsRegistry;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.ModificationTracker;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.search.GlobalSearchScope;
+import com.intellij.psi.tree.StubFileElementType;
 import com.intellij.util.Processor;
 import com.intellij.util.Processors;
 import com.intellij.util.SmartList;
@@ -20,12 +23,15 @@ import org.jetbrains.annotations.Nullable;
 import java.util.*;
 
 public abstract class StubIndex {
-  private static class StubIndexHolder {
-    private static final StubIndex ourInstance = ApplicationManager.getApplication().getService(StubIndex.class);
-  }
+
+  private static StubIndex ourInstance = CachedSingletonsRegistry.markCachedField(StubIndex.class);
 
   public static StubIndex getInstance() {
-    return StubIndexHolder.ourInstance;
+    var instance = ourInstance;
+    if (instance == null) {
+      ourInstance = instance = ApplicationManager.getApplication().getService(StubIndex.class);
+    }
+    return instance;
   }
 
   /**
@@ -139,4 +145,16 @@ public abstract class StubIndex {
 
 
   public abstract void forceRebuild(@NotNull Throwable e);
+
+  /**
+   * @param fileElementType {@link StubFileElementType} to track changes for.
+   * @return {@link ModificationTracker} that changes stamp on every file update (with corresponding {@link StubFileElementType})
+   * for which the stub has changed.
+   * @implNote doesn't track changes of files with binary content. Modification tracking happens before the StubIndex update, so one can use
+   * this tracker to react on stub changes without performing the index update. File is considered modified if a stub for its actual content
+   * differs from what is stored in the index. Modification detector might react false-positively when the number of changed files is big.
+   */
+  @ApiStatus.Internal
+  @ApiStatus.Experimental
+  abstract public @NotNull ModificationTracker getPerFileElementTypeModificationTracker(@NotNull StubFileElementType<?> fileElementType);
 }

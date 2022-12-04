@@ -64,7 +64,7 @@ public class CommentedOutCodeInspection extends BaseInspection {
     }
 
     @Override
-    public void doFix(Project project, ProblemDescriptor descriptor) {
+    public void doFix(@NotNull Project project, @NotNull ProblemDescriptor descriptor) {
       final PsiElement element = descriptor.getPsiElement();
       if (!(element instanceof PsiComment)) {
         return;
@@ -97,7 +97,7 @@ public class CommentedOutCodeInspection extends BaseInspection {
     }
 
     @Override
-    public void doFix(Project project, ProblemDescriptor descriptor) {
+    public void doFix(@NotNull Project project, @NotNull ProblemDescriptor descriptor) {
       final PsiElement element = descriptor.getPsiElement();
       if (!(element instanceof PsiComment)) {
         return;
@@ -120,7 +120,7 @@ public class CommentedOutCodeInspection extends BaseInspection {
       else {
         final TextRange range = element.getTextRange();
         final PsiFile file = element.getContainingFile();
-        final Document document = PsiDocumentManager.getInstance(element.getProject()).getDocument(file);
+        final Document document = file.getViewProvider().getDocument();
         assert document != null;
         final int start = range.getStartOffset();
         final int end = range.getEndOffset();

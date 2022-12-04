@@ -9,6 +9,7 @@ import com.intellij.openapi.vcs.changes.ui.ChangesTree
 import com.intellij.openapi.vcs.changes.ui.ChangesViewContentManager
 import com.intellij.openapi.vcs.changes.ui.CurrentBranchComponent
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.ui.ExperimentalUI
 import com.intellij.ui.content.Content
 import com.intellij.util.ui.update.UiNotifyConnector
 import com.intellij.vcs.branch.BranchData
@@ -17,7 +18,6 @@ import com.intellij.vcs.log.runInEdt
 import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryChangeListener
 import org.jetbrains.annotations.Nls
-import org.jetbrains.annotations.NotNull
 import java.beans.PropertyChangeEvent
 
 abstract class SimpleTabTitleUpdater(private val tree: ChangesTree, private val tabName: String) : Disposable {
@@ -51,7 +51,12 @@ abstract class SimpleTabTitleUpdater(private val tree: ChangesTree, private val 
     tab.description = BranchPresentation.getTooltip(branches)
   }
 
-  private fun getDisplayName(): @NotNull @Nls String {
+  private fun getDisplayName(): @Nls String? {
+    if (ExperimentalUI.isNewUI()) {
+      val contentsCount = ChangesViewContentManager.getToolWindowFor(tree.project, tabName)?.contentManager?.contentCount ?: 0
+      if (contentsCount == 1) return null else return VcsBundle.message("tab.title.commit")
+    }
+
     val branchesText = BranchPresentation.getText(branches)
     if (branchesText.isBlank()) return VcsBundle.message("tab.title.commit")
 

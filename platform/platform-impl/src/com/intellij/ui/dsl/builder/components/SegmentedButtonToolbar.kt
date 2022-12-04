@@ -41,6 +41,7 @@ class SegmentedButtonToolbar(actionGroup: ActionGroup, private val spacingConfig
     setMinimumButtonSize(Dimension(0, 0))
     layoutPolicy = ActionToolbar.WRAP_LAYOUT_POLICY
     putClientProperty(DslComponentProperty.VISUAL_PADDINGS, Gaps(size = DarculaUIUtil.BW.get()))
+    putClientProperty(DslComponentProperty.TOP_BOTTOM_GAP, true)
 
     addFocusListener(object : FocusListener {
       override fun focusGained(e: FocusEvent?) {
@@ -153,13 +154,17 @@ internal class DeprecatedSegmentedButtonAction<T>(val option: T,
       property.set(option)
     }
   }
+
+  override fun getActionUpdateThread(): ActionUpdateThread {
+    return ActionUpdateThread.BGT
+  }
 }
 
 @Deprecated("Use Row.segmentedButton")
 private class DeprecatedSegmentedButton(
   action: AnAction,
   presentation: Presentation,
-  place: String?,
+  place: String,
   minimumSize: Dimension,
   private val spacingConfiguration: SpacingConfiguration
 ) : ActionButtonWithText(action, presentation, place, minimumSize) {

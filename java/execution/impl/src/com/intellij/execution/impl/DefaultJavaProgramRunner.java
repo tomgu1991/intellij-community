@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.execution.impl;
 
 import com.intellij.debugger.engine.JavaDebugProcess;
@@ -18,10 +18,7 @@ import com.intellij.execution.ui.ExecutionConsole;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.execution.ui.layout.impl.RunnerContentUi;
 import com.intellij.icons.AllIcons;
-import com.intellij.openapi.actionSystem.AnAction;
-import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.CustomShortcutSet;
-import com.intellij.openapi.actionSystem.Presentation;
+import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.compiler.JavaCompilerBundle;
@@ -30,6 +27,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.NlsActions;
+import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.util.io.StreamUtil;
 import com.intellij.openapi.util.registry.Registry;
 import com.intellij.psi.search.GlobalSearchScope;
@@ -38,7 +36,6 @@ import com.intellij.unscramble.ThreadDumpConsoleFactory;
 import com.intellij.unscramble.ThreadDumpParser;
 import com.intellij.unscramble.ThreadState;
 import com.intellij.util.ArrayUtil;
-import com.intellij.util.SlowOperations;
 import com.intellij.util.TimeoutUtil;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.containers.ContainerUtil;
@@ -107,9 +104,7 @@ public class DefaultJavaProgramRunner implements JvmPatchableProgramRunner<Runne
       });
     }
     else {
-      executionManager.startRunProfile(environment, currentState, (ignored) -> SlowOperations.allowSlowOperations(() -> {
-        return doExecute(currentState, environment);
-      }));
+      executionManager.startRunProfile(environment, currentState, (ignored) -> doExecute(currentState, environment));
     }
   }
 
@@ -246,6 +241,16 @@ public class DefaultJavaProgramRunner implements JvmPatchableProgramRunner<Runne
     protected ProxyBasedAction(@NlsActions.ActionText String text, @NlsActions.ActionDescription String description, Icon icon, ProcessHandler processHandler) {
       super(text, description, icon);
       myProcessHandler = processHandler;
+    }
+
+    @Override
+    public boolean isDumbAware() {
+      return true;
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.BGT;
     }
 
     @Override
@@ -391,6 +396,11 @@ public class DefaultJavaProgramRunner implements JvmPatchableProgramRunner<Runne
     }
 
     @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
+    }
+
+    @Override
     public void update(@NotNull AnActionEvent e) {
       Project project = e.getProject();
       if (project != null && myConnection == null) {
@@ -432,7 +442,8 @@ public class DefaultJavaProgramRunner implements JvmPatchableProgramRunner<Runne
     }
 
     public static void add(RunContentBuilder contentBuilder, ProcessHandler processHandler) {
-      if (Registry.is("debugger.attach.to.process.action") && processHandler instanceof BaseProcessHandler) {
+      // disabled on macos because of IDEA-252760
+      if (Registry.is("debugger.attach.to.process.action") && processHandler instanceof BaseProcessHandler && !SystemInfo.isMac) {
         contentBuilder.addAction(new AttachDebuggerAction((BaseProcessHandler<?>)processHandler));
       }
     }

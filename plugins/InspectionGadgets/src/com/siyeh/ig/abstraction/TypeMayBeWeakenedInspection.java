@@ -4,6 +4,7 @@ package com.siyeh.ig.abstraction;
 import com.intellij.codeInsight.daemon.impl.UnusedSymbolUtil;
 import com.intellij.codeInsight.daemon.impl.analysis.JavaHighlightUtil;
 import com.intellij.codeInsight.intention.LowPriorityAction;
+import com.intellij.codeInsight.intention.preview.IntentionPreviewInfo;
 import com.intellij.codeInspection.LocalQuickFix;
 import com.intellij.codeInspection.ProblemDescriptor;
 import com.intellij.codeInspection.SetInspectionOptionFix;
@@ -179,7 +180,7 @@ public class TypeMayBeWeakenedInspection extends BaseInspection {
     }
 
     @Override
-    protected void doFix(Project project, ProblemDescriptor descriptor) {
+    protected void doFix(@NotNull Project project, @NotNull ProblemDescriptor descriptor) {
       if (myCandidates.size() == 1) {
         addClass(myCandidates.get(0), descriptor.getPsiElement());
         return;
@@ -197,6 +198,13 @@ public class TypeMayBeWeakenedInspection extends BaseInspection {
         }
       });
       popup.showInBestPositionFor(editor);
+    }
+
+    @Override
+    public @NotNull IntentionPreviewInfo generatePreview(@NotNull Project project, @NotNull ProblemDescriptor previewDescriptor) {
+      return new IntentionPreviewInfo.Html(
+        InspectionGadgetsBundle.message("inspection.type.may.be.weakened.add.stopper.preview")
+      );
     }
 
     @Override
@@ -314,7 +322,7 @@ public class TypeMayBeWeakenedInspection extends BaseInspection {
     }
 
     @Override
-    protected void doFix(Project project, ProblemDescriptor descriptor) {
+    protected void doFix(@NotNull Project project, @NotNull ProblemDescriptor descriptor) {
       final PsiElement element = descriptor.getPsiElement();
       final PsiElement parent = element.getParent();
       final PsiTypeElement typeElement;

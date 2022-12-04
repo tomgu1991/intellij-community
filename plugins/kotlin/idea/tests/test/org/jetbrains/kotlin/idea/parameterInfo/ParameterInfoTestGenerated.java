@@ -6,7 +6,7 @@ import com.intellij.testFramework.TestDataPath;
 import org.jetbrains.kotlin.idea.test.JUnit3RunnerWithInners;
 import org.jetbrains.kotlin.idea.test.KotlinTestUtils;
 import org.jetbrains.kotlin.test.TestMetadata;
-import org.jetbrains.kotlin.idea.test.TestRoot;
+import org.jetbrains.kotlin.idea.base.test.TestRoot;
 import org.junit.runner.RunWith;
 
 /**
@@ -207,6 +207,16 @@ public abstract class ParameterInfoTestGenerated extends AbstractParameterInfoTe
             runTest("testData/parameterInfo/functionCall/lambdaArgument2.kt");
         }
 
+        @TestMetadata("lambdaArgumentForEach.kt")
+        public void testLambdaArgumentForEach() throws Exception {
+            runTest("testData/parameterInfo/functionCall/lambdaArgumentForEach.kt");
+        }
+
+        @TestMetadata("lambdaArgumentGroupBy.kt")
+        public void testLambdaArgumentGroupBy() throws Exception {
+            runTest("testData/parameterInfo/functionCall/lambdaArgumentGroupBy.kt");
+        }
+
         @TestMetadata("LocalFunctionBug.kt")
         public void testLocalFunctionBug() throws Exception {
             runTest("testData/parameterInfo/functionCall/LocalFunctionBug.kt");
@@ -397,6 +407,11 @@ public abstract class ParameterInfoTestGenerated extends AbstractParameterInfoTe
             runTest("testData/parameterInfo/functionCall/SubstituteFromArgumentsOnTyping.kt");
         }
 
+        @TestMetadata("SubstitutedTypeParamInReceiver.kt")
+        public void testSubstitutedTypeParamInReceiver() throws Exception {
+            runTest("testData/parameterInfo/functionCall/SubstitutedTypeParamInReceiver.kt");
+        }
+
         @TestMetadata("SuperConstructorCall.kt")
         public void testSuperConstructorCall() throws Exception {
             runTest("testData/parameterInfo/functionCall/SuperConstructorCall.kt");
@@ -485,6 +500,11 @@ public abstract class ParameterInfoTestGenerated extends AbstractParameterInfoTe
         @TestMetadata("Vararg.kt")
         public void testVararg() throws Exception {
             runTest("testData/parameterInfo/functionCall/Vararg.kt");
+        }
+
+        @TestMetadata("VarargBeforeArgs.kt")
+        public void testVarargBeforeArgs() throws Exception {
+            runTest("testData/parameterInfo/functionCall/VarargBeforeArgs.kt");
         }
 
         @TestMetadata("VarargFirstArgTrailingComma.kt")
@@ -618,6 +638,16 @@ public abstract class ParameterInfoTestGenerated extends AbstractParameterInfoTe
         @TestMetadata("ReifiedNoParens.kt")
         public void testReifiedNoParens() throws Exception {
             runTest("testData/parameterInfo/typeArguments/ReifiedNoParens.kt");
+        }
+
+        @TestMetadata("SubstitutedTypeParamInReceiver.kt")
+        public void testSubstitutedTypeParamInReceiver() throws Exception {
+            runTest("testData/parameterInfo/typeArguments/SubstitutedTypeParamInReceiver.kt");
+        }
+
+        @TestMetadata("SubstitutedTypeParamInReceiverNoParens.kt")
+        public void testSubstitutedTypeParamInReceiverNoParens() throws Exception {
+            runTest("testData/parameterInfo/typeArguments/SubstitutedTypeParamInReceiverNoParens.kt");
         }
 
         @TestMetadata("VariableType.kt")

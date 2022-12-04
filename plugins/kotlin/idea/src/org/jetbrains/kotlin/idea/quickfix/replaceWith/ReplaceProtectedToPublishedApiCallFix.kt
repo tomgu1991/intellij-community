@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.quickfix.replaceWith
 
@@ -12,9 +12,9 @@ import org.jetbrains.kotlin.descriptors.PropertyDescriptor
 import org.jetbrains.kotlin.diagnostics.Diagnostic
 import org.jetbrains.kotlin.diagnostics.DiagnosticFactory
 import org.jetbrains.kotlin.diagnostics.Errors
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.core.ShortenReferences
-import org.jetbrains.kotlin.idea.quickfix.KotlinQuickFixAction
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.KotlinQuickFixAction
 import org.jetbrains.kotlin.idea.quickfix.KotlinSingleIntentionActionFactory
 import org.jetbrains.kotlin.idea.util.IdeDescriptorRenderers
 import org.jetbrains.kotlin.js.descriptorUtils.getJetTypeFqName
@@ -46,11 +46,13 @@ class ReplaceProtectedToPublishedApiCallFix(
 
     override fun invoke(project: Project, editor: Editor?, file: KtFile) {
         val element = element ?: return
+        val psiFactory = KtPsiFactory(project)
+
         if (!isPublishedMemberAlreadyExists) {
             val classOwner = classOwnerPointer.element ?: return
             val newMember: KtDeclaration =
                 if (isProperty) {
-                    KtPsiFactory(classOwner).createProperty(
+                    psiFactory.createProperty(
                         "@kotlin.PublishedApi\n" +
                                 "internal " + newSignature +
                                 "\n" +
@@ -59,7 +61,7 @@ class ReplaceProtectedToPublishedApiCallFix(
                     )
 
                 } else {
-                    KtPsiFactory(classOwner).createFunction(
+                    psiFactory.createFunction(
                         "@kotlin.PublishedApi\n" +
                                 "internal " + newSignature +
                                 " = $originalName(${paramNames.keys.joinToString(", ") { it }})"
@@ -68,7 +70,7 @@ class ReplaceProtectedToPublishedApiCallFix(
 
             ShortenReferences.DEFAULT.process(classOwner.addDeclaration(newMember))
         }
-        element.replace(KtPsiFactory(element).createExpression(originalName.newNameQuoted))
+        element.replace(psiFactory.createExpression(originalName.newNameQuoted))
     }
 
     companion object : KotlinSingleIntentionActionFactory() {

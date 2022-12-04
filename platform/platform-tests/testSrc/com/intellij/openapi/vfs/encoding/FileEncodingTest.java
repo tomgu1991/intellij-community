@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.vfs.encoding;
 
 import com.intellij.diagnostic.ThreadDumper;
@@ -44,7 +44,6 @@ import com.intellij.refactoring.copy.CopyFilesOrDirectoriesHandler;
 import com.intellij.testFramework.*;
 import com.intellij.util.ArrayUtil;
 import com.intellij.util.ArrayUtilRt;
-import com.intellij.util.ObjectUtils;
 import com.intellij.util.TimeoutUtil;
 import com.intellij.util.text.ByteArrayCharSequence;
 import com.intellij.util.text.XmlCharsetDetector;
@@ -59,7 +58,6 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -74,7 +72,10 @@ public class FileEncodingTest extends HeavyPlatformTestCase implements TestDialo
   private static final String UTF8_XML_PROLOG = prolog(StandardCharsets.UTF_8);
   private static final byte[] NO_BOM = ArrayUtilRt.EMPTY_BYTE_ARRAY;
   @org.intellij.lang.annotations.Language("XML")
-  private static final String XML_TEST_BODY = "<web-app>\n" + "<!--\u043f\u0430\u043f\u0430-->\n" + "</web-app>";
+  private static final String XML_TEST_BODY = """
+    <web-app>
+    <!--\u043f\u0430\u043f\u0430-->
+    </web-app>""";
   private static final String THREE_RUSSIAN_LETTERS = "\u043F\u0440\u0438\u0432\u0435\u0442";
 
   private TestDialog myOldTestDialogValue;
@@ -294,24 +295,26 @@ public class FileEncodingTest extends HeavyPlatformTestCase implements TestDialo
 
   public void testHtmlEncodingMustBeCaseInsensitive() throws IOException {
     @org.intellij.lang.annotations.Language("HTML")
-    String content = "<html>\n" +
-                     "<head>\n" +
-                     "<meta http-equiv=\"content-type\" content=\"text/html;charset=us-ascii\"> \n" +
-                     "</head>\n" +
-                     "<body>\n" +
-                     "xyz\n" +
-                     "</body>\n" +
-                     "</html>";
+    String content = """
+      <html>
+      <head>
+      <meta http-equiv="content-type" content="text/html;charset=us-ascii">\s
+      </head>
+      <body>
+      xyz
+      </body>
+      </html>""";
     VirtualFile file = createTempFile("html", NO_BOM, content, WINDOWS_1252);
     assertEquals(US_ASCII, file.getCharset());
   }
   public void testHtmlContentAttributeOrder() throws IOException {
     @org.intellij.lang.annotations.Language("HTML")
-    String content = "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"\n" +
-                     "\t\t\"http://www.w3.org/TR/html4/loose.dtd\">\n" +
-                     "<html> <head>\n" +
-                     "\t<meta content=\"text/html;charset=US-ASCII\" http-equiv=\"Content-Type\">\n" +
-                     "</head> </html>";
+    String content = """
+      <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+      \t\t"http://www.w3.org/TR/html4/loose.dtd">
+      <html> <head>
+      \t<meta content="text/html;charset=US-ASCII" http-equiv="Content-Type">
+      </head> </html>""";
     VirtualFile file = createTempFile("html", NO_BOM, content, WINDOWS_1252);
     assertEquals(US_ASCII, file.getCharset());
   }
@@ -819,8 +822,11 @@ public class FileEncodingTest extends HeavyPlatformTestCase implements TestDialo
       File temp = createTempDirectory();
       VirtualFile tempDir = Objects.requireNonNull(LocalFileSystem.getInstance().refreshAndFindFileByIoFile(temp));
 
-      Project newProject = ProjectManagerEx.getInstanceEx().newProject(Paths.get(tempDir.getPath()), new OpenProjectTaskBuilder().build());
-      PlatformTestUtil.openProject(newProject);
+      Project newProject = ProjectManagerEx.getInstanceEx().openProject(Path.of(tempDir.getPath()),
+                                                                        OpenProjectTaskBuilderKt.createTestOpenProjectOptions());
+      if (ApplicationManager.getApplication().isDispatchThread()) {
+        PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue();
+      }
       try {
         PlatformTestUtil.saveProject(newProject);
 
@@ -1042,6 +1048,7 @@ public class FileEncodingTest extends HeavyPlatformTestCase implements TestDialo
     encodingManager.waitAllTasksExecuted(60, TimeUnit.SECONDS);
     UIUtil.dispatchAllInvocationEvents();
 
+    FileEditorManager.getInstance(getProject()).closeFile(file);
     ApplicationManager.getApplication().assertIsDispatchThread();
 
     if (exception.get() != null) {

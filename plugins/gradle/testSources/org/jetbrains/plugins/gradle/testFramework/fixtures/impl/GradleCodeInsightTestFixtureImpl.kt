@@ -3,20 +3,20 @@ package org.jetbrains.plugins.gradle.testFramework.fixtures.impl
 
 import com.intellij.openapi.module.Module
 import com.intellij.openapi.project.Project
+import com.intellij.testFramework.common.runAll
 import com.intellij.testFramework.fixtures.IdeaProjectTestFixture
 import com.intellij.testFramework.fixtures.JavaCodeInsightTestFixture
 import com.intellij.testFramework.fixtures.impl.JavaCodeInsightTestFixtureImpl
 import com.intellij.testFramework.fixtures.impl.TempDirTestFixtureImpl
-import com.intellij.testFramework.runAll
 import org.jetbrains.plugins.gradle.testFramework.fixtures.GradleCodeInsightTestFixture
-import org.jetbrains.plugins.gradle.testFramework.fixtures.GradleTestFixture
+import org.jetbrains.plugins.gradle.testFramework.fixtures.GradleProjectTestFixture
 
 class GradleCodeInsightTestFixtureImpl private constructor(
-  private val gradleFixture: GradleTestFixture,
+  private val gradleFixture: GradleProjectTestFixture,
   override val codeInsightFixture: JavaCodeInsightTestFixture
-) : GradleCodeInsightTestFixture, GradleTestFixture by gradleFixture {
+) : GradleCodeInsightTestFixture, GradleProjectTestFixture by gradleFixture {
 
-  constructor(fixture: GradleTestFixture) : this(fixture, createCodeInsightFixture(fixture))
+  constructor(fixture: GradleProjectTestFixture) : this(fixture, createCodeInsightFixture(fixture))
 
   override fun setUp() {
     gradleFixture.setUp()
@@ -31,7 +31,7 @@ class GradleCodeInsightTestFixtureImpl private constructor(
   }
 
   companion object {
-    private fun createCodeInsightFixture(gradleFixture: GradleTestFixture): JavaCodeInsightTestFixture {
+    private fun createCodeInsightFixture(gradleFixture: GradleProjectTestFixture): JavaCodeInsightTestFixture {
       val tempDirFixture = TempDirTestFixtureImpl()
       val projectFixture = object : IdeaProjectTestFixture {
         override fun getProject(): Project = gradleFixture.project

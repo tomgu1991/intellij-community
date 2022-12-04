@@ -62,6 +62,11 @@ public class ViewAsGroup extends ActionGroup implements DumbAware {
     }
 
     @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
+    }
+
+    @Override
     public void setSelected(@NotNull final AnActionEvent e, final boolean state) {
       if (!state) return;
 
@@ -187,10 +192,7 @@ public class ViewAsGroup extends ActionGroup implements DumbAware {
 
   @NotNull
   public static List<JavaValue> getSelectedValues(@NotNull AnActionEvent event) {
-    List<XValueNodeImpl> selectedNodes = event.getData(XDebuggerTree.SELECTED_NODES);
-    if (selectedNodes == null) {
-      return Collections.emptyList();
-    }
+    List<XValueNodeImpl> selectedNodes = XDebuggerTree.getSelectedNodes(event.getDataContext());
     return StreamEx.of(selectedNodes)
       .map(XValueNodeImpl::getValueContainer)
       .select(JavaValue.class)

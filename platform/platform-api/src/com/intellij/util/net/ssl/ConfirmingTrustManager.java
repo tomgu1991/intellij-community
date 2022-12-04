@@ -8,6 +8,7 @@ import com.intellij.openapi.util.NlsContexts;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.util.text.Strings;
 import com.intellij.util.EventDispatcher;
+import com.intellij.util.ThrowableConsumer;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.io.DigestUtil;
 import org.jetbrains.annotations.NotNull;
@@ -31,7 +32,6 @@ import java.util.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.stream.Collectors;
 
 /**
  * The central piece of our SSL support - special kind of trust manager, that asks user to confirm
@@ -46,8 +46,8 @@ public final class ConfirmingTrustManager extends ClientOnlyTrustManager {
   private static final Logger LOG = Logger.getInstance(ConfirmingTrustManager.class);
   private static final X509Certificate[] NO_CERTIFICATES = new X509Certificate[0];
 
-  public final ThreadLocal<UntrustedCertificateStrategy> myUntrustedCertificateStrategy =
-    ThreadLocal.withInitial(() -> UntrustedCertificateStrategy.ASK_USER);
+  public final ThreadLocal<@Nullable UntrustedCertificateStrategy> myUntrustedCertificateStrategy =
+    ThreadLocal.withInitial(() -> null);
 
   public static ConfirmingTrustManager createForStorage(@NotNull String path, @NotNull String password) {
     return new ConfirmingTrustManager(getSystemTrustManagers(), new MutableTrustManager(path, password));
@@ -105,7 +105,7 @@ public final class ConfirmingTrustManager extends ClientOnlyTrustManager {
         Arrays.stream(x509TrustManager.getAcceptedIssuers())
         .map(certificate -> certificate.getSubjectX500Principal().toString())
         .sorted()
-        .collect(Collectors.toList());
+        .toList();
       LOG.debug("Accepted trusted certificate roots from the system: \n" + StringUtil.join(acceptedRoots, "\n"));
 
       return x509TrustManager;
@@ -117,7 +117,7 @@ public final class ConfirmingTrustManager extends ClientOnlyTrustManager {
   }
 
   @NotNull
-  static X509TrustManager createTrustManagerFromCertificates(@NotNull Collection<X509Certificate> certificates) throws Exception {
+  static X509TrustManager createTrustManagerFromCertificates(@NotNull Collection<? extends X509Certificate> certificates) throws Exception {
     KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
     ks.load(null, null);
     for (X509Certificate certificate : certificates) {
@@ -174,8 +174,22 @@ public final class ConfirmingTrustManager extends ClientOnlyTrustManager {
 
   @Override
   public void checkServerTrusted(final X509Certificate[] chain, String authType) throws CertificateException {
-    boolean askUser = myUntrustedCertificateStrategy.get() == UntrustedCertificateStrategy.ASK_USER;
-    checkServerTrusted(chain, authType, new CertificateConfirmationParameters(askUser, true, null, null));
+    withCalculatedCertificateStrategy(strategyWithReason -> {
+      boolean askUser = strategyWithReason.getStrategy() == UntrustedCertificateStrategy.ASK_USER;
+      String askUserReason = strategyWithReason.getReason();
+      checkServerTrusted(chain, authType, new CertificateConfirmationParameters(askUser, true, null, null, askUserReason));
+    });
+  }
+
+  private void withCalculatedCertificateStrategy(ThrowableConsumer<? super UntrustedCertificateStrategyWithReason, ? extends CertificateException> block) throws CertificateException {
+    UntrustedCertificateStrategy initialStrategy = myUntrustedCertificateStrategy.get();
+    if (initialStrategy != null) {
+      block.consume(new UntrustedCertificateStrategyWithReason(initialStrategy, null));
+    }
+    else {
+      UntrustedCertificateStrategyWithReason strategy = ApplicationManager.getApplication().getService(InitialUntrustedCertificateStrategyProvider.class).getStrategy();
+      block.consume(strategy);
+    }
   }
 
   /**
@@ -184,7 +198,7 @@ public final class ConfirmingTrustManager extends ClientOnlyTrustManager {
   @Deprecated
   public void checkServerTrusted(final X509Certificate[] chain, String authType, boolean addToKeyStore, boolean askUser)
     throws CertificateException {
-    checkServerTrusted(chain, authType, new CertificateConfirmationParameters(askUser, addToKeyStore, null, null));
+    checkServerTrusted(chain, authType, new CertificateConfirmationParameters(askUser, addToKeyStore, null, null, null));
   }
 
   public void checkServerTrusted(final X509Certificate[] chain, String authType, @NotNull CertificateConfirmationParameters parameters)
@@ -224,7 +238,8 @@ public final class ConfirmingTrustManager extends ClientOnlyTrustManager {
       LOG.debug("Image Fetcher thread is detected. Certificate check will be skipped.");
       return true;
     }
-    if (app.isUnitTestMode() || app.isHeadlessEnvironment() || CertificateManager.getInstance().getState().ACCEPT_AUTOMATICALLY) {
+
+    if (app.isHeadlessEnvironment() || CertificateManager.getInstance().getState().ACCEPT_AUTOMATICALLY) {
       LOG.debug("Certificate will be accepted automatically");
       if (parameters.myAddToKeyStore) {
         myCustomManager.addCertificate(endPoint);
@@ -232,12 +247,32 @@ public final class ConfirmingTrustManager extends ClientOnlyTrustManager {
       return true;
     }
 
-    LOG.info("Going to ask user about certificate for: " + endPoint.getSubjectDN().toString() +
-             ", issuer: " + endPoint.getIssuerDN().toString());
-    boolean accepted = parameters.myAskUser && CertificateManager.showAcceptDialog(() -> {
-      // TODO may be another kind of warning, if default trust store is missing
-      return CertificateWarningDialog.createUntrustedCertificateWarning(endPoint, parameters.myCertificateDetails);
-    });
+    if (app.isUnitTestMode()) {
+      return false;
+    }
+
+    boolean accepted = false;
+    if (parameters.myAskUser) {
+
+      String acceptLogMessage = "Going to ask user about certificate for: " + endPoint.getSubjectDN().toString() +
+                       ", issuer: " + endPoint.getIssuerDN().toString();
+      if (parameters.myAskOrRejectReason != null) {
+        acceptLogMessage += ". Reason: " + parameters.myAskOrRejectReason;
+      }
+      LOG.info(acceptLogMessage);
+      accepted = CertificateManager.Companion.showAcceptDialog(() -> {
+        // TODO may be another kind of warning, if default trust store is missing
+        return CertificateWarningDialog.createUntrustedCertificateWarning(endPoint, parameters.myCertificateDetails);
+      });
+    }
+    else {
+      String rejectLogMessage = "Didn't show certificate dialog for: " + endPoint.getSubjectDN().toString() +
+                       ", issuer: " + endPoint.getIssuerDN().toString();
+      if (parameters.myAskOrRejectReason != null) {
+        rejectLogMessage += ". Reason: " + parameters.myAskOrRejectReason;
+      }
+      LOG.warn(rejectLogMessage);
+    }
     if (accepted) {
       LOG.info("Certificate was accepted by user");
       if (parameters.myAddToKeyStore) {
@@ -360,6 +395,7 @@ public final class ConfirmingTrustManager extends ClientOnlyTrustManager {
         }
         myKeyStore.setCertificateEntry(createAlias(certificate), certificate);
         flushKeyStore();
+        LOG.info("Added certificate for '" + certificate.getSubjectDN().toString() + "' to " + myPath);
         // trust manager should be updated each time its key store was modified
         myTrustManager = initFactoryAndGetManager();
         myDispatcher.getMulticaster().certificateAdded(certificate);
@@ -586,6 +622,7 @@ public final class ConfirmingTrustManager extends ClientOnlyTrustManager {
 
   public static final class CertificateConfirmationParameters {
     private final boolean myAskUser;
+    private final @Nullable String myAskOrRejectReason;
     private final boolean myAddToKeyStore;
     private final @Nullable @NlsContexts.DialogMessage String myCertificateDetails;
     private final @Nullable Runnable myOnUserAcceptCallback;
@@ -602,7 +639,7 @@ public final class ConfirmingTrustManager extends ClientOnlyTrustManager {
     public static @NotNull CertificateConfirmationParameters askConfirmation(boolean addToKeyStore,
                                                                              @Nullable @NlsContexts.DialogMessage String certificateDetails,
                                                                              @Nullable Runnable onUserAcceptCallback) {
-      return new CertificateConfirmationParameters(true, addToKeyStore, certificateDetails, onUserAcceptCallback);
+      return new CertificateConfirmationParameters(true, addToKeyStore, certificateDetails, onUserAcceptCallback, null);
     }
 
     /**
@@ -612,17 +649,19 @@ public final class ConfirmingTrustManager extends ClientOnlyTrustManager {
      * true.
      */
     public static @NotNull CertificateConfirmationParameters doNotAskConfirmation() {
-      return new CertificateConfirmationParameters(false, false, null, null);
+      return new CertificateConfirmationParameters(false, false, null, null, null);
     }
 
     private CertificateConfirmationParameters(boolean askUser,
                                               boolean addToKeyStore,
                                               @Nullable @NlsContexts.DialogMessage String certificateDetails,
-                                              @Nullable Runnable onUserAcceptCallback) {
+                                              @Nullable Runnable onUserAcceptCallback,
+                                              @Nullable String askOrRejectReason) {
       myAskUser = askUser;
       myAddToKeyStore = addToKeyStore;
       myCertificateDetails = certificateDetails;
       myOnUserAcceptCallback = onUserAcceptCallback;
+      myAskOrRejectReason = askOrRejectReason;
     }
 
     @Override
@@ -641,4 +680,5 @@ public final class ConfirmingTrustManager extends ClientOnlyTrustManager {
       return Objects.hash(myAskUser, myAddToKeyStore, myCertificateDetails, myOnUserAcceptCallback);
     }
   }
+
 }

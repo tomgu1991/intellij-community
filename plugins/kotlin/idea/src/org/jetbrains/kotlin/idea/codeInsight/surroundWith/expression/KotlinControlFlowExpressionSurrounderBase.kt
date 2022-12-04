@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.codeInsight.surroundWith.expression
 
@@ -16,9 +16,9 @@ abstract class KotlinControlFlowExpressionSurrounderBase : KotlinExpressionSurro
     override fun isApplicableToStatements() = false
 
     override fun surroundExpression(project: Project, editor: Editor, expression: KtExpression): TextRange? {
-        val factory = KtPsiFactory(expression)
+        val psiFactory = KtPsiFactory(project)
 
-        val newElement = factory.createExpressionByPattern(getPattern(), expression.text)
+        val newElement = psiFactory.createExpressionByPattern(getPattern(), expression.text)
         val replaced = expression.replaced(newElement)
 
         CodeInsightUtilBase.forcePsiPostprocessAndRestoreElement(replaced)

@@ -73,7 +73,7 @@ fun MutableEntityStorage.addSampleEntity(stringProperty: String,
                                          info: String = "",
                                          stringMapProperty: MutableMap<String, String> = HashMap(),
 ): SampleEntity {
-  val entity = SampleEntity(booleanProperty, source, stringProperty, stringListProperty, stringMapProperty, fileProperty) {
+  val entity = SampleEntity(booleanProperty, stringProperty, stringListProperty, stringMapProperty, fileProperty, source) {
     this.children = emptyList()
   }
   this.addEntity(entity)
@@ -89,11 +89,11 @@ fun MutableEntityStorage.addSourceEntity(data: String,
   return entity
 }
 
-fun MutableEntityStorage.addPersistentIdEntity(
+fun MutableEntityStorage.addSymbolicIdEntity(
   data: String,
   source: EntitySource = SampleEntitySource("test")
-): PersistentIdEntity {
-  val entity = PersistentIdEntity(data, source)
+): SymbolicIdEntity {
+  val entity = SymbolicIdEntity(data, source)
   this.addEntity(entity)
   return entity
 }

@@ -5,23 +5,21 @@ import com.intellij.ide.DataManager;
 import com.intellij.ide.IdeBundle;
 import com.intellij.ide.StandardTargetWeights;
 import com.intellij.ide.impl.SelectInTargetPsiWrapper;
+import com.intellij.ide.navbar.ide.NavBarIdeUtil;
+import com.intellij.ide.navbar.ide.NavBarService;
 import com.intellij.ide.ui.UISettings;
 import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.IdeFrame;
-import com.intellij.openapi.wm.IdeRootPaneNorthExtension;
 import com.intellij.openapi.wm.ex.IdeFrameEx;
 import com.intellij.openapi.wm.impl.status.IdeStatusBarImpl;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFileSystemItem;
 import com.intellij.util.Consumer;
-import com.intellij.util.containers.ContainerUtil;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
-
-import javax.swing.*;
 
 /**
  * @author Anna Kozlova
@@ -47,30 +45,34 @@ final class SelectInNavBarTarget extends SelectInTargetPsiWrapper implements Dum
 
   @Override
   protected void select(final Object selector, final VirtualFile virtualFile, final boolean requestFocus) {
+    if (NavBarIdeUtil.isNavbarV2Enabled()) {
+      NavBarService.getInstance(myProject).selectTail();
+      return;
+    }
     selectInNavBar(false);
   }
 
   @Override
   protected void select(final PsiElement element, boolean requestFocus) {
+    if (NavBarIdeUtil.isNavbarV2Enabled()) {
+      NavBarService.getInstance(myProject).selectTail();
+      return;
+    }
     selectInNavBar(false);
   }
 
   public static void selectInNavBar(boolean showPopup) {
+    if (NavBarIdeUtil.isNavbarV2Enabled()) {
+      return;
+    }
     DataManager.getInstance().getDataContextFromFocus()
       .doWhenDone((Consumer<DataContext>)context -> {
         IdeFrame frame = IdeFrame.KEY.getData(context);
         if (frame instanceof IdeFrameEx) {
-          final IdeRootPaneNorthExtension navBarExt = ((IdeFrameEx)frame).getNorthExtension(IdeStatusBarImpl.NAVBAR_WIDGET_KEY);
-          if (navBarExt != null) {
-            final JComponent c = navBarExt.getComponent();
-            final NavBarPanel panel = (NavBarPanel)c.getClientProperty(NavBarRootPaneExtension.PANEL_KEY);
-            panel.rebuildAndSelectItem((list) -> {
-              if (UISettings.getInstance().getShowMembersInNavigationBar()) {
-                int lastDirectory = ContainerUtil.lastIndexOf(list, (item) -> NavBarPanel.isExpandable(item.getObject()));
-                if (lastDirectory >= 0 && lastDirectory < list.size() - 1) return lastDirectory;
-              }
-              return list.size() - 1;
-            }, showPopup);
+          var navBar = ((IdeFrameEx)frame).getNorthExtension(IdeStatusBarImpl.NAVBAR_WIDGET_KEY);
+          if (navBar != null) {
+            NavBarPanel panel = (NavBarPanel)navBar.getClientProperty(NavBarRootPaneExtension.PANEL_KEY);
+            panel.rebuildAndSelectLastDirectoryOrTail(showPopup);
           }
         }
       });

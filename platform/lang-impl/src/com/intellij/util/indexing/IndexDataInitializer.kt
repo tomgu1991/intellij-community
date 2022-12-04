@@ -5,8 +5,8 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.util.SystemProperties
 import com.intellij.util.ThrowableRunnable
-import com.intellij.util.concurrency.AppExecutorUtil
-import com.intellij.util.concurrency.SequentialTaskExecutor
+import kotlinx.coroutines.*
+import kotlinx.coroutines.future.asCompletableFuture
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.Callable
@@ -36,34 +36,17 @@ abstract class IndexDataInitializer<T> : Callable<T?> {
 
   protected abstract fun prepareTasks(): Collection<ThrowableRunnable<*>>
 
-  @Throws(InterruptedException::class)
+  @OptIn(ExperimentalCoroutinesApi::class)
   private fun runParallelTasks(tasks: Collection<ThrowableRunnable<*>>) {
     if (tasks.isEmpty()) {
       return
     }
-    if (ourDoParallelIndicesInitialization) {
-      val taskExecutor = AppExecutorUtil.createBoundedApplicationPoolExecutor(
-        "Index Instantiation Pool",
-        UnindexedFilesUpdater.getNumberOfIndexingThreads()
-      )
 
-      tasks
-        .asSequence()
-        .map<ThrowableRunnable<*>, Future<*>?> { taskExecutor.submit { executeTask(it) } }
-        .forEach {
-          try {
-            it!!.get()
-          }
-          catch (e: Exception) {
-            LOG.error(e)
-          }
+    runBlocking(Dispatchers.IO.limitedParallelism(UnindexedFilesUpdater.getNumberOfIndexingThreads())) {
+      for (task in tasks) {
+        launch {
+          executeTask(task)
         }
-
-      taskExecutor.shutdown()
-    }
-    else {
-      for (callable in tasks) {
-        executeTask(callable)
       }
     }
   }
@@ -79,6 +62,9 @@ abstract class IndexDataInitializer<T> : Callable<T?> {
       }
       callable.run()
     }
+    catch (e: CancellationException) {
+      throw e
+    }
     catch (t: Throwable) {
       LOG.error(t)
     }
@@ -86,15 +72,13 @@ abstract class IndexDataInitializer<T> : Callable<T?> {
 
   companion object {
     private val LOG = Logger.getInstance(IndexDataInitializer::class.java)
-    private val ourDoParallelIndicesInitialization = SystemProperties.getBooleanProperty("idea.parallel.indices.initialization", true)
 
-    @JvmField
-    val ourDoAsyncIndicesInitialization = SystemProperties.getBooleanProperty("idea.async.indices.initialization", true)
-    private val ourGenesisExecutor = SequentialTaskExecutor.createSequentialApplicationPoolExecutor("Index Data Initializer Pool")
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
 
     @JvmStatic
     fun <T> submitGenesisTask(action: Callable<T>): Future<T> {
-      return ourGenesisExecutor.submit(action)
+      return scope.async { action.call() }.asCompletableFuture()
     }
   }
 }

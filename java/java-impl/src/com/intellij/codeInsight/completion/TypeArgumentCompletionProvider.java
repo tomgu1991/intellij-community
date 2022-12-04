@@ -24,9 +24,6 @@ import java.util.List;
 
 import static com.intellij.patterns.PsiJavaPatterns.psiElement;
 
-/**
-* @author peter
-*/
 class TypeArgumentCompletionProvider {
   static final ElementPattern<PsiElement> IN_TYPE_ARGS = psiElement().inside(PsiReferenceParameterList.class);
   private static final Logger LOG = Logger.getInstance(TypeArgumentCompletionProvider.class);
@@ -188,7 +185,7 @@ class TypeArgumentCompletionProvider {
     }
 
     @Override
-    public void renderElement(LookupElementPresentation presentation) {
+    public void renderElement(@NotNull LookupElementPresentation presentation) {
       myTypeItems.get(0).renderElement(presentation);
       presentation.setItemText(getLookupString());
       if (myTypeItems.size() > 1) {

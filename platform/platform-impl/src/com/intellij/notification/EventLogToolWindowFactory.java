@@ -31,9 +31,6 @@ import javax.swing.*;
 import javax.swing.event.AncestorEvent;
 import java.awt.*;
 
-/**
-* @author peter
-*/
 public final class EventLogToolWindowFactory implements ToolWindowFactory, DumbAware {
   @Override
   public boolean isApplicable(@NotNull Project project) {
@@ -132,6 +129,11 @@ public final class EventLogToolWindowFactory implements ToolWindowFactory, DumbA
     @Override
     protected Editor getEditor(@NotNull AnActionEvent e) {
       return myEditor;
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.BGT;
     }
   }
 

@@ -16,7 +16,9 @@ import com.intellij.openapi.vcs.ui.VcsCloneComponent
 import com.intellij.openapi.vcs.ui.cloneDialog.VcsCloneDialogComponentStateListener
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.TextFieldWithHistory
-import com.intellij.ui.layout.*
+import com.intellij.ui.dsl.builder.AlignX
+import com.intellij.ui.dsl.builder.BottomGap
+import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.concurrency.annotations.RequiresEdt
 import com.intellij.util.containers.ContainerUtil
 import com.intellij.util.ui.JBEmptyBorder
@@ -29,7 +31,8 @@ import javax.swing.event.DocumentEvent
 abstract class DvcsCloneDialogComponent(var project: Project,
                                         private var vcsDirectoryName: String,
                                         protected val rememberedInputs: DvcsRememberedInputs,
-                                        private val dialogStateListener: VcsCloneDialogComponentStateListener) : VcsCloneComponent {
+                                        private val dialogStateListener: VcsCloneDialogComponentStateListener)
+  : VcsCloneComponent, VcsCloneComponent.WithSettableUrl {
   protected val mainPanel: JPanel
   private val urlEditor = TextFieldWithHistory()
   private val directoryField = TextFieldWithBrowseButton()
@@ -47,12 +50,12 @@ abstract class DvcsCloneDialogComponent(var project: Project,
                                            project,
                                            fcd)
     mainPanel = panel {
-      row(VcsBundle.message("vcs.common.labels.url")) { urlEditor(growX) }
-      row(VcsBundle.message("vcs.common.labels.directory")) { directoryField(growX) }
-        .largeGapAfter()
+      row(VcsBundle.message("vcs.common.labels.url")) { cell(urlEditor).align(AlignX.FILL) }
+      row(VcsBundle.message("vcs.common.labels.directory")) { cell(directoryField).align(AlignX.FILL) }
+        .bottomGap(BottomGap.SMALL)
       row {
         errorComponent = BorderLayoutPanel(UIUtil.DEFAULT_HGAP, 0)
-        errorComponent()
+        cell(errorComponent).align(AlignX.FILL)
       }
     }
 
@@ -90,6 +93,10 @@ abstract class DvcsCloneDialogComponent(var project: Project,
   abstract override fun doClone(listener: CheckoutProvider.Listener)
 
   fun getDirectory(): String = directoryField.text.trim()
+
+  override fun setUrl(url: String) {
+    urlEditor.text = url
+  }
 
   fun getUrl(): String = sanitizeCloneUrl(urlEditor.text)
 

@@ -3,6 +3,7 @@ package com.intellij.ide.bookmark.actions
 
 import com.intellij.ide.bookmark.BookmarkBundle
 import com.intellij.ide.bookmark.BookmarkType
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.ui.popup.JBPopupFactory
@@ -11,7 +12,10 @@ import com.intellij.ui.popup.PopupState
 internal class ChooseBookmarkTypeAction : DumbAwareAction(BookmarkBundle.messagePointer("mnemonic.chooser.mnemonic.toggle.action.text")) {
   private val popupState = PopupState.forPopup()
 
+  override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+
   override fun update(event: AnActionEvent) {
+    if (checkMultipleSelectionAndDisableAction(event)) return
     val manager = event.bookmarksManager
     val bookmark = event.contextBookmark
     val type = bookmark?.let { manager?.getType(it) }
@@ -47,7 +51,7 @@ internal class ChooseBookmarkTypeAction : DumbAwareAction(BookmarkBundle.message
       null -> BookmarkBundle.message("mnemonic.chooser.bookmark.create.popup.title")
       else -> BookmarkBundle.message("mnemonic.chooser.mnemonic.change.popup.title")
     }
-    JBPopupFactory.getInstance().createComponentPopupBuilder(chooser, chooser.firstButton)
+    JBPopupFactory.getInstance().createComponentPopupBuilder(chooser.content, chooser.firstButton)
       .setFocusable(true).setRequestFocus(true)
       .setMovable(false).setResizable(false)
       .setTitle(title).createPopup()

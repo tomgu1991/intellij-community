@@ -1,10 +1,10 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.uast.kotlin
 
 import com.intellij.psi.*
+import org.jetbrains.kotlin.analysis.api.types.KtTypeNullability
 import org.jetbrains.kotlin.psi.*
-import org.jetbrains.kotlin.types.typeUtil.TypeNullability
 import org.jetbrains.uast.*
 
 interface BaseKotlinUastResolveProviderService {
@@ -56,7 +56,7 @@ interface BaseKotlinUastResolveProviderService {
 
     fun resolveCall(ktElement: KtElement): PsiMethod?
 
-    fun resolveAccessorCall(ktSimpleNameExpression: KtSimpleNameExpression): PsiMethod?
+    fun resolveSyntheticJavaPropertyAccessorCall(ktSimpleNameExpression: KtSimpleNameExpression): PsiMethod?
 
     fun isResolvedToExtension(ktCallElement: KtCallElement): Boolean
 
@@ -96,11 +96,11 @@ interface BaseKotlinUastResolveProviderService {
 
     fun getType(ktDeclaration: KtDeclaration, containingLightDeclaration: PsiModifierListOwner?): PsiType?
 
-    fun getFunctionType(ktFunction: KtFunction, source: UElement): PsiType?
+    fun getFunctionType(ktFunction: KtFunction, source: UElement?): PsiType?
 
     fun getFunctionalInterfaceType(uLambdaExpression: KotlinULambdaExpression): PsiType?
 
-    fun nullability(psiElement: PsiElement): TypeNullability?
+    fun nullability(psiElement: PsiElement): KtTypeNullability?
 
     // ----------
     // Evaluation

@@ -1,7 +1,8 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.core.script.ucache
 
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.module.ModuleManager
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
@@ -15,21 +16,19 @@ import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import org.jetbrains.kotlin.idea.core.script.configuration.utils.ScriptClassRootsStorage
 import org.jetbrains.kotlin.idea.core.script.scriptingWarnLog
-import org.jetbrains.kotlin.idea.util.application.runReadAction
 import java.nio.file.Path
 
 class ScriptSdksBuilder(
     val project: Project,
-    private val sdks: MutableMap<SdkId, Sdk?> = mutableMapOf(),
+    internal val sdks: MutableMap<SdkId, Sdk?> = mutableMapOf(),
     private val remove: Sdk? = null
 ) {
     private val defaultSdk by lazy { getScriptDefaultSdk() }
 
     fun build(): ScriptSdks {
+        val nonIndexedSdks = sdks.values.filterNotNullTo(mutableSetOf())
         val nonIndexedClassRoots = mutableSetOf<VirtualFile>()
         val nonIndexedSourceRoots = mutableSetOf<VirtualFile>()
-
-        val nonIndexedSdks = sdks.values.filterNotNullTo(mutableSetOf())
 
         runReadAction {
             for (module in ModuleManager.getInstance(project).modules.filter { !it.isDisposed }) {
@@ -38,9 +37,9 @@ class ScriptSdksBuilder(
                 nonIndexedSdks.remove(ModuleRootManager.getInstance(module).sdk)
             }
 
-            nonIndexedSdks.forEach {
-                nonIndexedClassRoots.addAll(it.rootProvider.getFiles(OrderRootType.CLASSES))
-                nonIndexedSourceRoots.addAll(it.rootProvider.getFiles(OrderRootType.SOURCES))
+            nonIndexedSdks.forEach { sdk ->
+                nonIndexedClassRoots += sdk.rootProvider.getFiles(OrderRootType.CLASSES)
+                nonIndexedSourceRoots += sdk.rootProvider.getFiles(OrderRootType.SOURCES)
             }
         }
 
@@ -83,10 +82,10 @@ class ScriptSdksBuilder(
             ?.takeIf { it.canBeUsedForScript() }
     }
 
-    fun addDefaultSdk(): Sdk? =
+    private fun addDefaultSdk(): Sdk? =
         sdks.getOrPut(SdkId.default) { defaultSdk }
 
-    fun addSdkByName(sdkName: String) {
+    private fun addSdkByName(sdkName: String) {
         val sdk = runReadAction { ProjectJdkTable.getInstance() }.allJdks
             .find { it.name == sdkName }
             ?.takeIf { it.canBeUsedForScript() }

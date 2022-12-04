@@ -62,7 +62,7 @@ public class UtilityClassWithPublicConstructorInspection
     public String getName() {
       return InspectionGadgetsBundle.message(
         "utility.class.with.public.constructor.make.quickfix",
-        Integer.valueOf(m_multipleConstructors ? 1 : 2));
+        Integer.valueOf(m_multipleConstructors ? 2 : 1));
     }
 
     @NotNull
@@ -72,7 +72,7 @@ public class UtilityClassWithPublicConstructorInspection
     }
 
     @Override
-    public void doFix(Project project, ProblemDescriptor descriptor) {
+    public void doFix(@NotNull Project project, @NotNull ProblemDescriptor descriptor) {
       final PsiElement classNameIdentifier = descriptor.getPsiElement();
       final PsiClass psiClass = (PsiClass)classNameIdentifier.getParent();
       if (psiClass == null) {

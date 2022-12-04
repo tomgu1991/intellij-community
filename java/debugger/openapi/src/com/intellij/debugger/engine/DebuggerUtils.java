@@ -319,6 +319,11 @@ public abstract class DebuggerUtils {
       return true;
     }
 
+    if (subType instanceof ArrayType &&
+        (CommonClassNames.JAVA_LANG_CLONEABLE.equals(superType) || CommonClassNames.JAVA_IO_SERIALIZABLE.equals(superType))) {
+      return true;
+    }
+
     return getSuperTypeInt(subType, superType) != null;
   }
 
@@ -554,26 +559,23 @@ public abstract class DebuggerUtils {
     if (typeComponent == null) {
       return false;
     }
-    return SyntheticTypeComponentProvider.EP_NAME.extensions().noneMatch(provider -> provider.isNotSynthetic(typeComponent)) &&
-           SyntheticTypeComponentProvider.EP_NAME.extensions().anyMatch(provider -> provider.isSynthetic(typeComponent));
+    if (ContainerUtil.exists(SyntheticTypeComponentProvider.EP_NAME.getExtensionList(),
+                             provider -> provider.isNotSynthetic(typeComponent))) {
+      return false;
+    }
+    return ContainerUtil.exists(SyntheticTypeComponentProvider.EP_NAME.getExtensionList(), provider -> provider.isSynthetic(typeComponent));
   }
 
   public static boolean isInsideSimpleGetter(@NotNull PsiElement contextElement) {
-    return SimplePropertyGetterProvider.EP_NAME.extensions().anyMatch(provider -> provider.isInsideSimpleGetter(contextElement));
+    return ContainerUtil.exists(SimplePropertyGetterProvider.EP_NAME.getExtensionList(),
+                                provider -> provider.isInsideSimpleGetter(contextElement));
   }
 
   public static boolean isPrimitiveType(final String typeName) {
     return ourPrimitiveTypeNames.contains(typeName);
   }
 
-  protected static class ArrayClass {
-    public String className;
-    public int dims;
-
-    public ArrayClass(String className, int dims) {
-      this.className = className;
-      this.dims = dims;
-    }
+  protected record ArrayClass(String className, int dims) {
   }
 
   public static DebuggerUtils getInstance() {
@@ -603,7 +605,7 @@ public abstract class DebuggerUtils {
       return true;
     }
 
-    return JavaDebugAware.EP_NAME.extensions().anyMatch(provider -> provider.isBreakpointAware(file));
+    return ContainerUtil.exists(JavaDebugAware.EP_NAME.getExtensionList(), provider -> provider.isBreakpointAware(file));
   }
 
   public static boolean isAndroidVM(@NotNull VirtualMachine virtualMachine) {

@@ -13,20 +13,22 @@ import com.intellij.openapi.diagnostic.trace
 import com.intellij.openapi.module.impl.ModulePath
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.io.FileUtil
-import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.projectModel.ProjectModelBundle
-import com.intellij.util.Function
 import com.intellij.util.PathUtil
 import com.intellij.util.containers.BidirectionalMap
 import com.intellij.util.containers.BidirectionalMultiMap
 import com.intellij.util.text.UniqueNameGenerator
 import com.intellij.workspaceModel.ide.*
+import com.intellij.workspaceModel.ide.impl.FileInDirectorySourceNames
 import com.intellij.workspaceModel.storage.*
-import com.intellij.workspaceModel.storage.bridgeEntities.api.*
+import com.intellij.workspaceModel.storage.bridgeEntities.*
 import com.intellij.workspaceModel.storage.impl.reportErrorAndAttachStorage
 import com.intellij.workspaceModel.storage.url.VirtualFileUrl
 import com.intellij.workspaceModel.storage.url.VirtualFileUrlManager
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import org.jdom.Element
 import org.jdom.JDOMException
 import org.jetbrains.annotations.TestOnly
@@ -36,11 +38,8 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.*
-import java.util.concurrent.Callable
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ForkJoinTask
-import java.util.function.Supplier
-import kotlin.streams.toList
+import java.util.stream.Collectors
 
 class JpsProjectSerializersImpl(directorySerializersFactories: List<JpsDirectoryEntitiesSerializerFactory<*>>,
                                 moduleListSerializers: List<JpsModuleListSerializer>,
@@ -110,7 +109,7 @@ class JpsProjectSerializersImpl(directorySerializersFactories: List<JpsDirectory
     val files = when {
       Files.isDirectory(libPath) -> Files.list(libPath).use { stream ->
         stream.filter { path: Path -> PathUtil.getFileExtension(path.toString()) == "xml" && Files.isRegularFile(path) }
-          .toList()
+          .collect(Collectors.toList())
       }
       else -> emptyList()
     }
@@ -133,12 +132,6 @@ class JpsProjectSerializersImpl(directorySerializersFactories: List<JpsDirectory
     fileIdToFileName.put(source.fileNameId, fileName)
     LOG.debug { "bindExistingSource: ${source.fileNameId}=$fileName" }
     return source
-  }
-
-  fun findModuleSerializer(modulePath: ModulePath): JpsFileEntitiesSerializer<*>? {
-    synchronized(lock) {
-      return fileSerializersByUrl.getValues(VfsUtilCore.pathToUrl(modulePath.path)).first()
-    }
   }
 
   override fun reloadFromChangedFiles(change: JpsConfigurationFilesChange,
@@ -240,21 +233,21 @@ class JpsProjectSerializersImpl(directorySerializersFactories: List<JpsDirectory
     return Pair(changedSources, builder)
   }
 
-  override fun loadAll(reader: JpsFileContentReader,
-                       builder: MutableEntityStorage,
-                       errorReporter: ErrorReporter,
-                       project: Project?): List<EntitySource> {
+  override suspend fun loadAll(reader: JpsFileContentReader,
+                               builder: MutableEntityStorage,
+                               errorReporter: ErrorReporter,
+                               project: Project?): List<EntitySource> {
     val serializers = synchronized(lock) { fileSerializersByUrl.values.toList() }
-    val tasks = serializers.map { serializer ->
-      ForkJoinTask.adapt(Callable {
-        val myBuilder = MutableEntityStorage.create()
-        loadEntitiesAndReportExceptions(serializer, myBuilder, reader, errorReporter)
-        myBuilder
-      })
-    }
+    val builders = coroutineScope {
+      serializers.map { serializer ->
+        async {
+          val result = MutableEntityStorage.create()
+          loadEntitiesAndReportExceptions(serializer, result, reader, errorReporter)
+          result
+        }
+      }
+    }.awaitAll()
 
-    ForkJoinTask.invokeAll(tasks)
-    val builders = tasks.mapNotNull { it.rawResult }
     val sourcesToUpdate = removeDuplicatingEntities(builders, serializers, project)
     val squashedBuilder = squash(builders)
     builder.addDiff(squashedBuilder)
@@ -292,15 +285,15 @@ class JpsProjectSerializersImpl(directorySerializersFactories: List<JpsDirectory
     builders.forEachIndexed { i, builder ->
       if (enableExternalStorage) {
         builder.entities(ModuleEntity::class.java).forEach { module ->
-          val moduleId = module.persistentId
-          modules.getOrPut(moduleId.name.toLowerCase(Locale.US)) { ArrayList() }.add(Triple(moduleId, builder, serializers[i]))
+          val moduleId = module.symbolicId
+          modules.computeIfAbsent(moduleId.name.lowercase(Locale.US)) { ArrayList() }.add(Triple(moduleId, builder, serializers[i]))
         }
       }
       builder.entities(LibraryEntity::class.java).filter { it.tableId == LibraryTableId.ProjectLibraryTableId }.forEach { library ->
-        libraries.getOrPut(library.persistentId) { ArrayList() }.add(builder to serializers[i])
+        libraries.computeIfAbsent(library.symbolicId) { ArrayList() }.add(builder to serializers[i])
       }
       builder.entities(ArtifactEntity::class.java).forEach { artifact ->
-        artifacts.getOrPut(artifact.persistentId) { ArrayList() }.add(builder to serializers[i])
+        artifacts.computeIfAbsent(artifact.symbolicId) { ArrayList() }.add(builder to serializers[i])
       }
     }
 
@@ -644,11 +637,11 @@ class JpsProjectSerializersImpl(directorySerializersFactories: List<JpsDirectory
             if (existingSerializers.isNotEmpty()) {
               val existingSources = existingSerializers.map { it.internalEntitySource }
               val entitiesWithOldSource = storage.entitiesBySource { it in existingSources }
-              val entitiesPersistentIds = entitiesWithOldSource.values
+              val entitiesSymbolicIds = entitiesWithOldSource.values
                 .flatMap { it.values }
                 .flatten()
-                .filterIsInstance<WorkspaceEntityWithPersistentId>()
-                .joinToString(separator = "||") { "$it (PersistentId: ${it.persistentId})" }
+                .filterIsInstance<WorkspaceEntityWithSymbolicId>()
+                .joinToString(separator = "||") { "$it (SymbolicId: ${it.symbolicId})" }
               //technically this is not an error, but cases when different entities have the same default file name are rare so let's report this
               // as error for now to find real cause of IDEA-265327
               val message = """
@@ -658,8 +651,8 @@ class JpsProjectSerializersImpl(directorySerializersFactories: List<JpsDirectory
              |Existing serializers: $existingSerializers
              |Their entity sources: $existingSources
              |Entities with these sources in the storage: ${entitiesWithOldSource.mapValues { (_, value) -> value.values }}
-             |Entities with persistent ids: $entitiesPersistentIds
-             |Original entities to save: ${entities.values.flatten().joinToString(separator = "||") { "$it (Persistent Id: ${(it as? WorkspaceEntityWithPersistentId)?.persistentId})" }}
+             |Entities with symbolic ids: $entitiesSymbolicIds
+             |Original entities to save: ${entities.values.flatten().joinToString(separator = "||") { "$it (Persistent Id: ${(it as? WorkspaceEntityWithSymbolicId)?.symbolicId})" }}
             """.trimMargin()
               reportErrorAndAttachStorage(message, storage)
             }
@@ -671,7 +664,13 @@ class JpsProjectSerializersImpl(directorySerializersFactories: List<JpsDirectory
         val url = getActualFileUrl(source)
         val internalSource = getInternalFileSource(source)
         if (url != null && internalSource != null
-            && (ModuleEntity::class.java in entities || FacetEntity::class.java in entities || ModuleGroupPathEntity::class.java in entities)) {
+            && (ModuleEntity::class.java in entities
+                || FacetEntity::class.java in entities
+                || ModuleGroupPathEntity::class.java in entities
+                || ContentRootEntity::class.java in entities
+                || SourceRootEntity::class.java in entities
+                || ExcludeUrlEntity::class.java in entities
+               )) {
           val existingSerializers = fileSerializersByUrl.getValues(url)
           val moduleGroup = (entities[ModuleGroupPathEntity::class.java]?.first() as? ModuleGroupPathEntity)?.path?.joinToString("/")
           if (existingSerializers.isEmpty() || existingSerializers.any { it is ModuleImlFileEntitiesSerializer && it.modulePath.group != moduleGroup }) {
@@ -745,9 +744,9 @@ class JpsProjectSerializersImpl(directorySerializersFactories: List<JpsDirectory
   private fun mergeSerializerEntitiesMap(existingSerializer2EntitiesMap: HashMap<JpsFileEntitiesSerializer<*>, MutableMap<Class<out WorkspaceEntity>, MutableSet<WorkspaceEntity>>>,
                                          serializer: JpsFileEntitiesSerializer<*>,
                                          entitiesMap: Map<Class<out WorkspaceEntity>, List<WorkspaceEntity>>) {
-    val existingEntitiesMap = existingSerializer2EntitiesMap.getOrPut(serializer) { HashMap() }
+    val existingEntitiesMap = existingSerializer2EntitiesMap.computeIfAbsent(serializer) { HashMap() }
     entitiesMap.forEach { (type, entity) ->
-      val existingEntities = existingEntitiesMap.getOrPut(type) { HashSet() }
+      val existingEntities = existingEntitiesMap.computeIfAbsent(type) { HashSet() }
       existingEntities.addAll(entity)
     }
   }
@@ -759,7 +758,12 @@ class JpsProjectSerializersImpl(directorySerializersFactories: List<JpsDirectory
     if (directoryFactory != null) {
       return getDefaultFileNameForEntity(directoryFactory, entities)
     }
-    if (ModuleEntity::class.java in entities || FacetEntity::class.java in entities) {
+    if (ModuleEntity::class.java in entities
+        || FacetEntity::class.java in entities
+        || ContentRootEntity::class.java in entities
+        || SourceRootEntity::class.java in entities
+        || ExcludeUrlEntity::class.java in entities
+      ) {
       val moduleListSerializer = moduleListSerializersByUrl.values.find {
          it.entitySourceFilter(originalSource)
       }
@@ -782,6 +786,19 @@ class JpsProjectSerializersImpl(directorySerializersFactories: List<JpsDirectory
     if (entity != null) {
       return moduleListSerializer.getFileName(entity)
     }
+    val contentRootEntity = entities[ContentRootEntity::class.java]?.firstOrNull() as? ContentRootEntity
+    if (contentRootEntity != null) {
+      return moduleListSerializer.getFileName(contentRootEntity.module)
+    }
+    val sourceRootEntity = entities[SourceRootEntity::class.java]?.firstOrNull() as? SourceRootEntity
+    if (sourceRootEntity != null) {
+      return moduleListSerializer.getFileName(sourceRootEntity.contentRoot.module)
+    }
+    val excludeUrlEntity = entities[ExcludeUrlEntity::class.java]?.firstOrNull() as? ExcludeUrlEntity
+    val module = excludeUrlEntity?.contentRoot?.module
+    if (module != null) {
+      return moduleListSerializer.getFileName(module)
+    }
     val additionalEntity = entities[FacetEntity::class.java]?.firstOrNull() as? FacetEntity ?: return null
     return moduleListSerializer.getFileName(additionalEntity.module)
   }
@@ -803,9 +820,9 @@ class JpsProjectSerializersImpl(directorySerializersFactories: List<JpsDirectory
                                                                           entities: List<WorkspaceEntity>)
     : Map<JpsFileEntitiesSerializer<*>, Map<Class<out WorkspaceEntity>, List<WorkspaceEntity>>> {
     val serializers = serializerToDirectoryFactory.getKeysByValue(factory) ?: emptyList()
-    val nameGenerator = UniqueNameGenerator(serializers, Function {
+    val nameGenerator = UniqueNameGenerator(serializers) {
       PathUtil.getFileName(it.fileUrl.url)
-    })
+    }
     return entities.asSequence()
       .filter { @Suppress("UNCHECKED_CAST") factory.entityFilter(it as E) }
       .associate { entity ->
@@ -862,7 +879,7 @@ class CachingJpsFileContentReader(private val configLocation: JpsProjectConfigLo
                               customModuleFilePath: String?): PathMacroManager {
     val path = JpsPathUtil.urlToPath(fileUrl)
     return if (FileUtil.extensionEquals(fileUrl, "iml") || isExternalModuleFile(path)) {
-      ModulePathMacroManager.createInstance(configLocation::projectFilePath, Supplier { customModuleFilePath ?: path })
+      ModulePathMacroManager.createInstance(configLocation::projectFilePath) { customModuleFilePath ?: path }
     }
     else {
       projectPathMacroManager
@@ -872,6 +889,9 @@ class CachingJpsFileContentReader(private val configLocation: JpsProjectConfigLo
 
 internal fun Element.getAttributeValueStrict(name: String): String =
   getAttributeValue(name) ?: throw JDOMException("Expected attribute $name under ${this.name} element")
+
+internal fun Element.getChildTagStrict(name: String): Element =
+  getChild(name) ?: throw JDOMException("Expected tag $name under ${this.name} element")
 
 fun isExternalModuleFile(filePath: String): Boolean {
   val parentPath = PathUtil.getParentPath(filePath)

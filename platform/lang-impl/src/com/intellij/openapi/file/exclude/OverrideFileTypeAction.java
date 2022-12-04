@@ -2,10 +2,7 @@
 package com.intellij.openapi.file.exclude;
 
 import com.intellij.idea.ActionsBundle;
-import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.CommonDataKeys;
-import com.intellij.openapi.actionSystem.DefaultActionGroup;
-import com.intellij.openapi.actionSystem.Presentation;
+import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.extensions.PluginDescriptor;
 import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.fileTypes.FileTypeManager;
@@ -36,6 +33,11 @@ class OverrideFileTypeAction extends DumbAwareAction {
                                 ? ActionsBundle.message("action.OverrideFileTypeAction.verbose.description", files[0].getName(), files.length - 1)
                                 : ActionsBundle.message("action.OverrideFileTypeAction.description"));
     presentation.setEnabledAndVisible(enabled);
+  }
+
+  @Override
+  public @NotNull ActionUpdateThread getActionUpdateThread() {
+    return ActionUpdateThread.BGT;
   }
 
   @Override
@@ -106,6 +108,12 @@ class OverrideFileTypeAction extends DumbAwareAction {
       boolean enabled = ContainerUtil.exists(myFiles, file -> isOverridableFile(file));
       e.getPresentation().setEnabled(enabled);
     }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.BGT;
+    }
+
     private static boolean isOverridableFile(@NotNull VirtualFile file) {
       return file.isValid()
              && !file.isDirectory()

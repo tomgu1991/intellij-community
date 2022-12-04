@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.debugger.stepping.smartStepInto
 
@@ -26,7 +26,11 @@ class KotlinLambdaSmartStepTarget(
             lambdaInfo
         )
 
-        if (!lambdaInfo.isSuspend && !lambdaInfo.callerMethodInfo.isInline && Registry.get("debugger.async.smart.step.into").asBoolean()) {
+        if (!lambdaInfo.isSuspend
+            && !lambdaInfo.callerMethodInfo.isInline
+            && !lambdaInfo.isSamSuspendMethod
+            && Registry.get("debugger.async.smart.step.into").asBoolean()
+        ) {
             val declaration = declarationPtr.getElementInReadAction()
             return KotlinLambdaAsyncMethodFilter(
                 declaration,

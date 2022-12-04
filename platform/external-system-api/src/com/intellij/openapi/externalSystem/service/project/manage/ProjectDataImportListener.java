@@ -2,7 +2,7 @@
 package com.intellij.openapi.externalSystem.service.project.manage;
 
 import com.intellij.util.messages.Topic;
-import org.jetbrains.annotations.ApiStatus;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -12,8 +12,22 @@ public interface ProjectDataImportListener {
   @Topic.ProjectLevel
   Topic<ProjectDataImportListener> TOPIC = new Topic<>("project data import listener", ProjectDataImportListener.class);
 
-  void onImportFinished(@Nullable String projectPath);
+  default void onImportStarted(@Nullable String projectPath) { }
 
-  @ApiStatus.Experimental
-  default void onImportFailed(@Nullable String projectPath) {}
+  default void onImportFinished(@Nullable String projectPath) { }
+
+  /**
+   * @deprecated use onImportFailed(String, Throwable) to access the cause
+   */
+  @SuppressWarnings("DeprecatedIsStillUsed")
+  @Deprecated
+  default void onImportFailed(@Nullable String projectPath) { }
+
+  default void onImportFailed(@Nullable String projectPath, @NotNull Throwable t) {
+    onImportFailed(projectPath);
+  }
+
+  default void onFinalTasksStarted(@Nullable String projectPath) { }
+
+  default void onFinalTasksFinished(@Nullable String projectPath) { }
 }

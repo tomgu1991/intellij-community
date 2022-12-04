@@ -20,6 +20,7 @@ import com.intellij.psi.impl.source.tree.LeafPsiElement
 import com.intellij.psi.tree.TokenSet
 import com.intellij.psi.util.PsiTreeUtil
 import org.jetbrains.kotlin.KtNodeTypes
+import org.jetbrains.kotlin.idea.base.psi.mustHaveNonEmptyPrimaryConstructor
 import org.jetbrains.kotlin.idea.formatter.adjustLineIndent
 import org.jetbrains.kotlin.kdoc.lexer.KDocTokens
 import org.jetbrains.kotlin.lexer.KtTokens
@@ -67,7 +68,7 @@ class KotlinTypedHandler : TypedHandlerDelegate() {
                     iterator.retreat()
                 }
 
-                if (iterator.atEnd() || iterator.tokenType !in SUPPRESS_AUTO_INSERT_CLOSE_BRACE_AFTER) {
+                if (iterator.atEnd() || iterator.tokenType !in KotlinTypedHandlerTokenSets.SUPPRESS_AUTO_INSERT_CLOSE_BRACE_AFTER) {
                     AutoPopupController.getInstance(project).autoPopupParameterInfo(editor, null)
                     return Result.CONTINUE
                 }
@@ -78,7 +79,7 @@ class KotlinTypedHandler : TypedHandlerDelegate() {
                 val leaf = file.findElementAt(offset)
                 if (leaf != null) {
                     val parent = leaf.parent
-                    if (parent != null && parent.node.elementType in CONTROL_FLOW_EXPRESSIONS) {
+                    if (parent != null && parent.node.elementType in KotlinTypedHandlerTokenSets.CONTROL_FLOW_EXPRESSIONS) {
                         val nonWhitespaceSibling = FormatterUtil.getPreviousNonWhitespaceSibling(leaf.node)
                         if (nonWhitespaceSibling != null && nonWhitespaceSibling.startOffset == tokenBeforeBraceOffset) {
                             EditorModificationUtilEx.insertStringAtCaret(editor, "{", false, true)
@@ -188,8 +189,8 @@ class KotlinTypedHandler : TypedHandlerDelegate() {
         return Result.CONTINUE
     }
 
-    companion object {
-        private val CONTROL_FLOW_EXPRESSIONS = TokenSet.create(
+    private object KotlinTypedHandlerTokenSets {
+        val CONTROL_FLOW_EXPRESSIONS: TokenSet = TokenSet.create(
             KtNodeTypes.IF,
             KtNodeTypes.ELSE,
             KtNodeTypes.FOR,
@@ -197,12 +198,14 @@ class KotlinTypedHandler : TypedHandlerDelegate() {
             KtNodeTypes.TRY,
         )
 
-        private val SUPPRESS_AUTO_INSERT_CLOSE_BRACE_AFTER = TokenSet.create(
+        val SUPPRESS_AUTO_INSERT_CLOSE_BRACE_AFTER: TokenSet = TokenSet.create(
             KtTokens.RPAR,
             KtTokens.ELSE_KEYWORD,
             KtTokens.TRY_KEYWORD,
         )
+    }
 
+    companion object {
         private val PREVIOUS_IN_STRING_DOLLAR_TYPED_OFFSET_KEY = Key.create<Int>("PREVIOUS_IN_STRING_DOLLAR_TYPED_OFFSET_KEY")
         private fun autoPopupParameterInfo(project: Project, editor: Editor) {
             val offset = editor.caretModel.offset
@@ -281,7 +284,7 @@ class KotlinTypedHandler : TypedHandlerDelegate() {
                     parentElement = parentElement.getParent()
                     if (parentElement is KtClass) {
                         val klassElement = parentElement
-                        contextMatched = klassElement.isData() || klassElement.hasModifier(KtTokens.INLINE_KEYWORD)
+                        contextMatched = klassElement.mustHaveNonEmptyPrimaryConstructor()
                     }
                 }
             }

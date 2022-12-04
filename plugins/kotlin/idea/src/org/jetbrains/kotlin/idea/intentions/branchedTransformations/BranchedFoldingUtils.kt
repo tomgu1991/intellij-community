@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.intentions.branchedTransformations
 
@@ -174,9 +174,10 @@ object BranchedFoldingUtils {
     fun canFoldToReturn(expression: KtExpression?): Boolean = getFoldableReturnNumber(expression) > 0
 
     fun tryFoldToAssignment(expression: KtExpression) {
+        val psiFactory = KtPsiFactory(expression.project)
+
         var lhs: KtExpression? = null
         var op: String? = null
-        val psiFactory = KtPsiFactory(expression)
         fun KtBinaryExpression.replaceWithRHS() {
             if (lhs == null || op == null) {
                 lhs = left!!.copy() as KtExpression
@@ -230,7 +231,9 @@ object BranchedFoldingUtils {
             }
         }
         lift(expression)
-        return expression.replaced(KtPsiFactory(expression).createExpressionByPattern("return $0", expression))
+
+        val psiFactory = KtPsiFactory(expression.project)
+        return expression.replaced(psiFactory.createExpressionByPattern("return $0", expression))
     }
 
     private fun KtTryExpression.tryBlockAndCatchBodies(): List<KtExpression?> = listOf(tryBlock) + catchClauses.map { it.catchBody }

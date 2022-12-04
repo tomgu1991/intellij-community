@@ -95,7 +95,7 @@ final class DocRenderer implements CustomFoldRegionRenderer {
   DocRenderer(@NotNull DocRenderItem item) {
     myItem = item;
   }
-  void update(boolean updateSize, boolean updateContent, List<Runnable> foldingTasks) {
+  void update(boolean updateSize, boolean updateContent, List<? super Runnable> foldingTasks) {
     CustomFoldRegion foldRegion = myItem.foldRegion;
     if (foldRegion != null) {
       if (updateSize) {
@@ -743,6 +743,11 @@ final class DocRenderer implements CustomFoldRegionRenderer {
     @Override
     public void update(@NotNull AnActionEvent e) {
       e.getPresentation().setVisible(myPane != null && myPane.hasSelection());
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
     }
 
     @Override

@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.refactoring.rename
 
@@ -13,22 +13,13 @@ import org.jetbrains.kotlin.psi.*
 open class KotlinVariableInplaceRenameHandler : VariableInplaceRenameHandler() {
     companion object {
         fun isInplaceRenameAvailable(element: PsiElement): Boolean {
-            when (element) {
-                is KtTypeParameter -> return true
-                is KtDestructuringDeclarationEntry -> return true
-                is KtParameter -> {
-                    val parent = element.parent
-                    if (parent is KtForExpression) {
-                        return true
-                    }
-                    if (parent is KtParameterList) {
-                        val grandparent = parent.parent
-                        return grandparent is KtCatchClause || grandparent is KtFunctionLiteral
-                    }
-                }
-                is KtLabeledExpression, is KtImportAlias -> return true
+            return when (element) {
+                is KtTypeParameter -> true
+                is KtDestructuringDeclarationEntry -> true
+                is KtParameter -> element.isLoopParameter || element.isCatchParameter || element.isLambdaParameter
+                is KtLabeledExpression, is KtImportAlias -> true
+                else -> false
             }
-            return false
         }
     }
 

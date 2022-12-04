@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.findUsages
 
@@ -13,6 +13,7 @@ import com.intellij.ide.highlighter.JavaFileType
 import com.intellij.lang.jvm.JvmModifier
 import com.intellij.lang.properties.psi.PropertiesFile
 import com.intellij.lang.properties.psi.Property
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
@@ -41,23 +42,20 @@ import org.jetbrains.kotlin.executeOnPooledThreadInReadAction
 import org.jetbrains.kotlin.findUsages.AbstractFindUsagesTest.Companion.FindUsageTestType
 import org.jetbrains.kotlin.idea.base.projectStructure.RootKindFilter
 import org.jetbrains.kotlin.idea.base.projectStructure.matches
+import org.jetbrains.kotlin.idea.base.searching.usages.KotlinFunctionFindUsagesOptions
+import org.jetbrains.kotlin.idea.base.searching.usages.KotlinPropertyFindUsagesOptions
+import org.jetbrains.kotlin.idea.base.searching.usages.handlers.KotlinFindMemberUsagesHandler
 import org.jetbrains.kotlin.idea.base.util.projectScope
 import org.jetbrains.kotlin.idea.base.util.runReadActionInSmartMode
 import org.jetbrains.kotlin.idea.caches.resolve.analyzeWithAllCompilerChecks
 import org.jetbrains.kotlin.idea.core.script.ScriptConfigurationManager
-import org.jetbrains.kotlin.idea.core.util.clearDialogsResults
-import org.jetbrains.kotlin.idea.core.util.setDialogsResult
 import org.jetbrains.kotlin.idea.core.util.toPsiFile
-import org.jetbrains.kotlin.idea.findUsages.KotlinFunctionFindUsagesOptions
-import org.jetbrains.kotlin.idea.findUsages.KotlinPropertyFindUsagesOptions
-import org.jetbrains.kotlin.idea.findUsages.handlers.KotlinFindMemberUsagesHandler
-import org.jetbrains.kotlin.idea.refactoring.CHECK_SUPER_METHODS_YES_NO_DIALOG
+import org.jetbrains.kotlin.idea.base.util.*
 import org.jetbrains.kotlin.idea.search.usagesSearch.ExpressionsOfTypeProcessor
 import org.jetbrains.kotlin.idea.test.DirectiveBasedActionUtils
 import org.jetbrains.kotlin.idea.test.KotlinLightCodeInsightFixtureTestCase
 import org.jetbrains.kotlin.idea.test.KotlinWithJdkAndRuntimeLightProjectDescriptor
 import org.jetbrains.kotlin.idea.test.TestFixtureExtension
-import org.jetbrains.kotlin.idea.util.application.runReadAction
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.psiUtil.getNonStrictParentOfType
 import org.jetbrains.kotlin.resolve.diagnostics.Diagnostics
@@ -82,12 +80,12 @@ abstract class AbstractFindUsagesWithDisableComponentSearchTest : AbstractFindUs
 }
 
 abstract class AbstractKotlinScriptFindUsagesTest : AbstractFindUsagesTest() {
-    override fun getProjectDescriptor(): LightProjectDescriptor = KotlinWithJdkAndRuntimeLightProjectDescriptor.INSTANCE_WITH_SCRIPT_RUNTIME
+    override fun getProjectDescriptor(): LightProjectDescriptor = KotlinWithJdkAndRuntimeLightProjectDescriptor.getInstanceWithScriptRuntime()
 }
 
 abstract class AbstractFindUsagesTest : KotlinLightCodeInsightFixtureTestCase() {
 
-    override fun getProjectDescriptor(): LightProjectDescriptor = KotlinWithJdkAndRuntimeLightProjectDescriptor.INSTANCE_NO_SOURCES
+    override fun getProjectDescriptor(): LightProjectDescriptor = KotlinWithJdkAndRuntimeLightProjectDescriptor.getInstanceNoSources()
 
     // used in Spring tests (outside main project!)
     protected open fun extraConfig(path: String) {
@@ -95,12 +93,15 @@ abstract class AbstractFindUsagesTest : KotlinLightCodeInsightFixtureTestCase() 
 
     protected open val prefixForResults = ""
 
+    protected open val ignoreLog = false
+
     protected open fun <T : PsiElement> doTest(path: String): Unit = doFindUsageTest<T>(
         path,
         this::extraConfig,
         KotlinFindUsageConfigurator.fromFixture(myFixture),
         if (isFirPlugin) FindUsageTestType.FIR else FindUsageTestType.DEFAULT,
         prefixForResults,
+        ignoreLog,
     )
 
     companion object {
@@ -114,6 +115,7 @@ abstract class AbstractFindUsagesTest : KotlinLightCodeInsightFixtureTestCase() 
             configurator: KotlinFindUsageConfigurator,
             testType: FindUsageTestType = FindUsageTestType.DEFAULT,
             prefixForResults: String = "",
+            ignoreLog: Boolean,
             executionWrapper: (findUsageTest: (FindUsageTestType) -> Unit) -> Unit = { it(testType) }
         ) {
             val mainFile = File(path)
@@ -239,6 +241,7 @@ abstract class AbstractFindUsagesTest : KotlinLightCodeInsightFixtureTestCase() 
                             alwaysAppendFileName = false,
                             testType = executionTestType,
                             javaNamesMap = javaNamesMap,
+                            ignoreLog = ignoreLog
                         )
 
                         val navigationElement = caretElement.navigationElement
@@ -253,6 +256,7 @@ abstract class AbstractFindUsagesTest : KotlinLightCodeInsightFixtureTestCase() 
                                 alwaysAppendFileName = false,
                                 testType = executionTestType,
                                 javaNamesMap = javaNamesMap,
+                                ignoreLog = ignoreLog
                             )
                         }
                     } else {
@@ -266,6 +270,7 @@ abstract class AbstractFindUsagesTest : KotlinLightCodeInsightFixtureTestCase() 
                             alwaysAppendFileName = false,
                             testType = executionTestType,
                             javaNamesMap = javaNamesMap,
+                            ignoreLog = ignoreLog
                         )
                     }
                 }
@@ -315,6 +320,7 @@ internal fun <T : PsiElement> findUsagesAndCheckResults(
     alwaysAppendFileName: Boolean = false,
     testType: FindUsageTestType = FindUsageTestType.DEFAULT,
     javaNamesMap: Map<String, String>? = null,
+    ignoreLog: Boolean = false
 ) {
     val highlightingMode = InTextDirectivesUtils.isDirectiveDefined(mainFileText, "// HIGHLIGHTING")
 
@@ -383,7 +389,7 @@ internal fun <T : PsiElement> findUsagesAndCheckResults(
     val finalUsages = filteredUsages.map(convertToString).sorted()
     KotlinTestUtils.assertEqualsToFile(testType.name, File(rootPath, prefix + "results.txt"), finalUsages.joinToString("\n"))
 
-    if (log != null) {
+    if (log != null  && !ignoreLog) {
         KotlinTestUtils.assertEqualsToFile(testType.name, File(rootPath, prefix + "log"), log)
 
         // if log is empty then compare results with plain search
@@ -478,4 +484,5 @@ internal fun findUsages(
         clearDialogsResults()
     }
 }
+
 

@@ -3,7 +3,6 @@ package com.intellij.debugger.engine.dfaassist.java;
 
 import com.intellij.codeInspection.dataFlow.TypeConstraint;
 import com.intellij.codeInspection.dataFlow.TypeConstraints;
-import com.intellij.codeInspection.dataFlow.java.JavaClassDef;
 import com.intellij.codeInspection.dataFlow.jvm.SpecialField;
 import com.intellij.codeInspection.dataFlow.jvm.descriptors.ArrayElementDescriptor;
 import com.intellij.codeInspection.dataFlow.value.DfaVariableValue;
@@ -146,7 +145,7 @@ public class JavaDfaAssistProvider implements DfaAssistProvider {
     }
     if (psi instanceof PsiLocalVariable || psi instanceof PsiParameter) {
       String varName = ((PsiVariable)psi).getName();
-      if (varName == null || PsiResolveHelper.getInstance(psi.getProject()).resolveReferencedVariable(varName, anchor) != psi) {
+      if (PsiResolveHelper.getInstance(psi.getProject()).resolveReferencedVariable(varName, anchor) != psi) {
         // Another variable with the same name could be tracked by DFA in different code branch but not visible at current code location
         return null;
       }

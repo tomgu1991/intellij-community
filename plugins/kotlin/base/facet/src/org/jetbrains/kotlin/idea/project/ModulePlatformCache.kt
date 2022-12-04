@@ -7,15 +7,14 @@ import com.intellij.openapi.project.Project
 import com.intellij.workspaceModel.ide.WorkspaceModelTopics
 import org.jetbrains.kotlin.config.KotlinFacetSettingsProvider
 import org.jetbrains.kotlin.idea.base.facet.platform.platform
-import org.jetbrains.kotlin.idea.base.util.caching.FineGrainedEntityCache
+import org.jetbrains.kotlin.idea.base.util.caching.SynchronizedFineGrainedEntityCache
 import org.jetbrains.kotlin.idea.base.util.caching.ModuleEntityChangeListener
 import org.jetbrains.kotlin.platform.TargetPlatform
 import org.jetbrains.kotlin.platform.jvm.JvmPlatforms
 
-class ModulePlatformCache(project: Project): FineGrainedEntityCache<Module, TargetPlatform>(project, cleanOnLowMemory = false) {
+class ModulePlatformCache(project: Project): SynchronizedFineGrainedEntityCache<Module, TargetPlatform>(project) {
     override fun subscribe() {
-        val busConnection = project.messageBus.connect(this)
-        WorkspaceModelTopics.getInstance(project).subscribeImmediately(busConnection, ModelChangeListener(project))
+        project.messageBus.connect(this).subscribe(WorkspaceModelTopics.CHANGED, ModelChangeListener(project))
     }
 
     override fun checkKeyValidity(key: Module) {

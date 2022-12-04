@@ -309,19 +309,17 @@ public final class JsonSchemaAnnotatorChecker implements JsonValidationHost {
 
   @Nullable
   public static JsonSchemaType getMatchingSchemaType(@NotNull JsonSchemaObject schema, @NotNull JsonSchemaType input) {
-    if (schema.getType() != null) {
-      final JsonSchemaType matchType = schema.getType();
-      if (matchType != null) {
-        if (JsonSchemaType._integer.equals(input) && JsonSchemaType._number.equals(matchType)) {
-          return input;
-        }
-        if (JsonSchemaType._string_number.equals(input) && (JsonSchemaType._number.equals(matchType)
-                                                            || JsonSchemaType._integer.equals(matchType)
-                                                            || JsonSchemaType._string.equals(matchType))) {
-          return input;
-        }
-        return matchType;
+    final JsonSchemaType matchType = schema.getType();
+    if (matchType != null) {
+      if (JsonSchemaType._integer.equals(input) && JsonSchemaType._number.equals(matchType)) {
+        return input;
       }
+      if (JsonSchemaType._string_number.equals(input) && (JsonSchemaType._number.equals(matchType)
+                                                          || JsonSchemaType._integer.equals(matchType)
+                                                          || JsonSchemaType._string.equals(matchType))) {
+        return input;
+      }
+      return matchType;
     }
     if (schema.getTypeVariants() != null) {
       Set<JsonSchemaType> matchTypes = schema.getTypeVariants();
@@ -419,20 +417,13 @@ public final class JsonSchemaAnnotatorChecker implements JsonValidationHost {
     Collection<JsonValidationError> values = checker.getErrors().values();
     for (JsonValidationError value: values) {
       switch (value.getPriority()) {
-        case LOW_PRIORITY:
-          lowPriorityCount++;
-          break;
-        case MISSING_PROPS:
-          hasMissing = true;
-          break;
-        case MEDIUM_PRIORITY:
-          hasMedium = true;
-          break;
-        case TYPE_MISMATCH:
-          hasHard = true;
-          break;
-        case NOT_SCHEMA:
+        case LOW_PRIORITY -> lowPriorityCount++;
+        case MISSING_PROPS -> hasMissing = true;
+        case MEDIUM_PRIORITY -> hasMedium = true;
+        case TYPE_MISMATCH -> hasHard = true;
+        case NOT_SCHEMA -> {
           return AverageFailureAmount.NotSchema;
+        }
       }
     }
 
@@ -579,7 +570,7 @@ public final class JsonSchemaAnnotatorChecker implements JsonValidationHost {
 
       if (allTypes.size() == 1) return errors.iterator().next();
 
-      List<String> actualInfos = errors.stream().map(e -> e.getMessage()).map(JsonSchemaAnnotatorChecker::fetchActual).distinct().collect(Collectors.toList());
+      List<String> actualInfos = errors.stream().map(e -> e.getMessage()).map(JsonSchemaAnnotatorChecker::fetchActual).distinct().toList();
       String actualInfo = actualInfos.size() == 1 ? (" " + JsonBundle.message("schema.validation.actual") + actualInfos.get(0) + ".") : "";
       String commonTypeMessage = JsonBundle.message("schema.validation.incompatible.types") + "\n" +
                                  JsonBundle.message("schema.validation.required.one.of",

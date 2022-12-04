@@ -9,6 +9,7 @@ import com.intellij.codeInspection.ui.MultipleCheckboxOptionsPanel;
 import com.intellij.codeInspection.util.IntentionName;
 import com.intellij.java.JavaBundle;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Predicates;
 import com.intellij.psi.*;
 import com.intellij.psi.codeStyle.CodeStyleManager;
 import com.intellij.psi.impl.PsiDiamondTypeUtil;
@@ -178,7 +179,7 @@ public class RawUseOfParameterizedTypeInspection extends BaseInspection {
             continue;
           }
           PsiType parameterType = parameter.getType();
-          if (PsiTypesUtil.mentionsTypeParameters(parameterType, tp -> true)) return false;
+          if (PsiTypesUtil.mentionsTypeParameters(parameterType, Predicates.alwaysTrue())) return false;
         }
         return true;
       }
@@ -349,7 +350,7 @@ public class RawUseOfParameterizedTypeInspection extends BaseInspection {
     }
 
     @Override
-    protected void doFix(Project project, ProblemDescriptor descriptor) {
+    protected void doFix(@NotNull Project project, @NotNull ProblemDescriptor descriptor) {
       PsiJavaCodeReferenceElement element = ObjectUtils.tryCast(descriptor.getPsiElement(), PsiJavaCodeReferenceElement.class);
       if (element == null) return;
       PsiReferenceParameterList parameterList = element.getParameterList();
@@ -377,7 +378,7 @@ public class RawUseOfParameterizedTypeInspection extends BaseInspection {
     }
 
     @Override
-    protected void doFix(Project project, ProblemDescriptor descriptor) {
+    protected void doFix(@NotNull Project project, @NotNull ProblemDescriptor descriptor) {
       PsiTypeElement cast = PsiTreeUtil.getNonStrictParentOfType(descriptor.getStartElement(), PsiTypeElement.class);
       if (cast == null) return;
       CodeStyleManager.getInstance(project).reformat(new CommentTracker().replace(cast, myTargetType));
@@ -409,7 +410,7 @@ public class RawUseOfParameterizedTypeInspection extends BaseInspection {
     }
 
     @Override
-    protected void doFix(Project project, ProblemDescriptor descriptor) {
+    protected void doFix(@NotNull Project project, @NotNull ProblemDescriptor descriptor) {
       final PsiElement element = descriptor.getStartElement().getParent();
       if (element instanceof PsiVariable) {
         final PsiVariable variable = (PsiVariable)element;

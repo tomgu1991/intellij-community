@@ -4,6 +4,7 @@ package com.intellij.codeInspection;
 import com.intellij.ProjectTopics;
 import com.intellij.analysis.AnalysisScope;
 import com.intellij.codeInspection.ex.*;
+import com.intellij.codeInspection.inspectionProfile.YamlInspectionProfileImpl;
 import com.intellij.codeInspection.reference.RefElement;
 import com.intellij.configurationStore.StoreUtil;
 import com.intellij.conversion.ConversionListener;
@@ -16,7 +17,6 @@ import com.intellij.ide.CommandLineInspectionProgressReporter;
 import com.intellij.ide.CommandLineInspectionProjectConfigurator;
 import com.intellij.ide.impl.PatchProjectUtil;
 import com.intellij.ide.impl.ProjectUtil;
-import com.intellij.ide.startup.StartupManagerEx;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.*;
 import com.intellij.openapi.application.ex.ApplicationInfoEx;
@@ -35,6 +35,7 @@ import com.intellij.openapi.project.ex.ProjectManagerEx;
 import com.intellij.openapi.roots.AdditionalLibraryRootsListener;
 import com.intellij.openapi.roots.ModuleRootEvent;
 import com.intellij.openapi.roots.ModuleRootListener;
+import com.intellij.openapi.startup.StartupManager;
 import com.intellij.openapi.util.Comparing;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.Pair;
@@ -58,12 +59,14 @@ import com.intellij.psi.search.scope.packageSet.*;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.containers.MultiMap;
 import com.intellij.util.messages.MessageBusConnection;
+import kotlinx.coroutines.future.FutureKt;
 import one.util.streamex.StreamEx;
 import org.jdom.JDOMException;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.jetbrains.concurrency.AsyncPromise;
+import org.yaml.snakeyaml.parser.ParserException;
 
 import javax.xml.stream.XMLStreamException;
 import java.io.File;
@@ -229,7 +232,6 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
       onFailure(convertErrorBuffer.toString());
       return null;
     }
-
     for (CommandLineInspectionProjectConfigurator configurator : CommandLineInspectionProjectConfigurator.EP_NAME.getExtensionList()) {
       CommandLineInspectionProjectConfigurator.ConfiguratorContext context = configuratorContext(projectPath, null);
       if (configurator.isApplicable(context)) {
@@ -270,7 +272,7 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
 
   @Nullable
   @VisibleForTesting
-  public AnalysisScope getAnalysisScope(@NotNull Project project) throws ExecutionException, InterruptedException {
+  public final AnalysisScope getAnalysisScope(@NotNull Project project) throws ExecutionException, InterruptedException {
     SearchScope scope = getSearchScope(project);
     if (scope == null) return null;
     return new AnalysisScope(scope, project);
@@ -278,42 +280,42 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
 
   @Nullable
   protected SearchScope getSearchScope(@NotNull Project project) throws ExecutionException, InterruptedException {
-    SearchScope scope;
 
     if (myAnalyzeChanges) {
       List<VirtualFile> files = getChangedFiles(project);
-      scope = GlobalSearchScope.filesWithoutLibrariesScope(project, files);
+      return GlobalSearchScope.filesWithoutLibrariesScope(project, files);
     }
-    else {
-      if (myScopePattern != null) {
-        try {
-          PackageSet packageSet = PackageSetFactory.getInstance().compile(myScopePattern);
-          NamedScope namedScope = new NamedScope("commandLineScope", AllIcons.Ide.LocalScope, packageSet);
-          scope = GlobalSearchScopesCore.filterScope(project, namedScope);
-        }
-        catch (ParsingException e) {
-          LOG.error("Error of scope parsing", e);
-          gracefulExit();
-          return null;
-        }
-      }
-      else if (mySourceDirectory == null) {
-        String scopeName = System.getProperty("idea.analyze.scope");
-        NamedScope namedScope = scopeName != null ? NamedScopesHolder.getScope(project, scopeName) : null;
-        scope = namedScope != null ? GlobalSearchScopesCore.filterScope(project, namedScope) : GlobalSearchScope.projectScope(project);
-      }
-      else {
-        mySourceDirectory = mySourceDirectory.replace(File.separatorChar, '/');
 
-        VirtualFile vfsDir = LocalFileSystem.getInstance().findFileByPath(mySourceDirectory);
-        if (vfsDir == null) {
-          reportError(InspectionsBundle.message("inspection.application.directory.cannot.be.found", mySourceDirectory));
-          printHelpAndExit();
-        }
-        scope = GlobalSearchScopesCore.directoriesScope(project, true, Objects.requireNonNull(vfsDir));
+    if (myScopePattern != null) {
+      try {
+        PackageSet packageSet = PackageSetFactory.getInstance().compile(myScopePattern);
+        NamedScope namedScope = new NamedScope("commandLineScope", AllIcons.Ide.LocalScope, packageSet);
+        return GlobalSearchScopesCore.filterScope(project, namedScope);
+      }
+      catch (ParsingException e) {
+        LOG.error("Error of scope parsing", e);
+        gracefulExit();
+        throw new IllegalStateException("unreachable");
       }
     }
-    return scope;
+
+    if (mySourceDirectory != null) {
+      if (!new File(mySourceDirectory).isAbsolute()) {
+        mySourceDirectory = new File(myProjectPath, mySourceDirectory).getPath();
+      }
+      mySourceDirectory = mySourceDirectory.replace(File.separatorChar, '/');
+
+      VirtualFile vfsDir = LocalFileSystem.getInstance().findFileByPath(mySourceDirectory);
+      if (vfsDir == null) {
+        reportError(InspectionsBundle.message("inspection.application.directory.cannot.be.found", mySourceDirectory));
+        printHelpAndExit();
+      }
+      return GlobalSearchScopesCore.directoriesScope(project, true, Objects.requireNonNull(vfsDir));
+    }
+
+    String scopeName = System.getProperty("idea.analyze.scope");
+    NamedScope namedScope = scopeName != null ? NamedScopesHolder.getScope(project, scopeName) : null;
+    return namedScope != null ? GlobalSearchScopesCore.filterScope(project, namedScope) : GlobalSearchScope.projectScope(project);
   }
 
   private static void addRootChangesListener(Disposable parentDisposable, InspectionsReportConverter reportConverter) {
@@ -373,11 +375,11 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
   }
 
   private static void waitAllStartupActivitiesPassed(@NotNull Project project) throws InterruptedException, ExecutionException {
-    LOG.assertTrue(!ApplicationManager.getApplication().isDispatchThread());
+    ApplicationManager.getApplication().assertIsNonDispatchThread();
     LOG.info("Waiting for startup activities");
     int timeout = Registry.intValue("batch.inspections.startup.activities.timeout", 180);
     try {
-      StartupManagerEx.getInstanceEx(project).getAllActivitiesPassedFuture().get(timeout, TimeUnit.MINUTES);
+      FutureKt.asCompletableFuture(StartupManager.getInstance(project).getAllActivitiesPassedFuture()).get(timeout, TimeUnit.MINUTES);
       LOG.info("Startup activities finished");
     }
     catch (TimeoutException e) {
@@ -488,7 +490,7 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
     // convert report
     if (reportConverter != null) {
       try {
-        List<File> results = ContainerUtil.map2List(inspectionsResults, path -> path.toFile());
+        List<File> results = ContainerUtil.map2List(inspectionsResults, Path::toFile);
         reportConverter.convert(resultsDataPath.toString(), myOutPath, context.getTools(),
                                 results);
         InspectResultsConsumer.runConsumers(context.getTools(), results, project);
@@ -559,7 +561,7 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
     );
     context.setReportedProblemFilter(
       (element, descriptors) -> {
-        List<ProblemDescriptorBase> problemDescriptors = StreamEx.of(descriptors).select(ProblemDescriptorBase.class).toList();
+        List<ProblemDescriptorBase> problemDescriptors = ContainerUtil.filterIsInstance(descriptors, ProblemDescriptorBase.class);
         if (!problemDescriptors.isEmpty()) {
           ProblemDescriptorBase problemDescriptor = problemDescriptors.get(0);
           VirtualFile file = problemDescriptor.getContainingFile();
@@ -588,7 +590,7 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
     );
     context.setReportedProblemFilter(
       (element, descriptors) -> {
-        List<ProblemDescriptorBase> any = StreamEx.of(descriptors).select(ProblemDescriptorBase.class).toList();
+        List<ProblemDescriptorBase> any = ContainerUtil.filterIsInstance(descriptors, ProblemDescriptorBase.class);
         if (!any.isEmpty()) {
           ProblemDescriptorBase problemDescriptor = any.get(0);
           String text = problemDescriptor.toString();
@@ -708,7 +710,7 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
     });
   }
 
-  public @NotNull InspectionProfileImpl loadInspectionProfile(@NotNull Project project) throws IOException, JDOMException {
+  private @NotNull InspectionProfileImpl loadInspectionProfile(@NotNull Project project) throws IOException, JDOMException {
     InspectionProfileImpl profile = loadInspectionProfile(project, myProfileName, myProfilePath, "command line");
     if (profile != null) return profile;
 
@@ -742,6 +744,19 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
     }
 
     if (profilePath != null && !profilePath.isEmpty()) {
+      if (YamlInspectionProfileImpl.isYamlFile(profilePath)) {
+        if (!new File(profilePath).isFile()) {
+          throw new InspectionApplicationException("Inspection profile '" + profilePath + "' does not exist");
+        }
+        try {
+          return YamlInspectionProfileImpl.loadFrom(project, profilePath).buildEffectiveProfile();
+        }
+        catch (ParserException e) {
+          // snakeyaml doesn't provide any information about where the YAML stream comes from,
+          // its StreamReader constructor hardcodes the name to "'reader'".
+          throw new InspectionApplicationException("Parse error in '" + profilePath + "': " + e);
+        }
+      }
       InspectionProfileImpl inspectionProfile = loadProfileByPath(profilePath);
       if (inspectionProfile == null) {
         onFailure(InspectionsBundle.message("inspection.application.profile.failed.configure.by.path.0.1", profilePath, configSource));
@@ -760,18 +775,13 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
   }
 
   public @Nullable InspectionProfileImpl loadProfileByName(@NotNull Project project, @NotNull String profileName) {
-    InspectionProfileManager.getInstance().getProfiles(); //force init provided profiles
+    InspectionProfileManager.getInstance().getProfiles(); //  force init provided profiles
     InspectionProjectProfileManager profileManager = InspectionProjectProfileManager.getInstance(project);
     InspectionProfileImpl inspectionProfile = profileManager.getProfile(profileName, false);
-    if (inspectionProfile != null) {
-      reportMessage(1, "Loaded the '" + profileName + "' shared project profile");
-    }
-    else {
-      //check if ide profile is used for project
+    if (inspectionProfile == null) {  // check if the IDE profile is used for the project
       for (InspectionProfileImpl profile : profileManager.getProfiles()) {
         if (Comparing.strEqual(profile.getName(), profileName)) {
           inspectionProfile = profile;
-          reportMessage(1, "Loaded the '" + profileName + "' local profile");
           break;
         }
       }

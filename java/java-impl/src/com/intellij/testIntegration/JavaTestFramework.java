@@ -9,6 +9,8 @@ import com.intellij.ide.fileTemplates.FileTemplateManager;
 import com.intellij.lang.Language;
 import com.intellij.lang.java.JavaLanguage;
 import com.intellij.openapi.module.Module;
+import com.intellij.openapi.project.DumbService;
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.DependencyScope;
 import com.intellij.openapi.roots.ExternalLibraryDescriptor;
 import com.intellij.openapi.roots.JavaProjectModelModificationService;
@@ -33,7 +35,8 @@ public abstract class JavaTestFramework implements TestFramework {
   @Override
   public boolean isLibraryAttached(@NotNull Module module) {
     GlobalSearchScope scope = GlobalSearchScope.moduleWithDependenciesAndLibrariesScope(module);
-    PsiClass c = JavaPsiFacade.getInstance(module.getProject()).findClass(getMarkerClassFQName(), scope);
+    Project project = module.getProject();
+    PsiClass c = DumbService.getInstance(project).computeWithAlternativeResolveEnabled(() -> JavaPsiFacade.getInstance(project).findClass(getMarkerClassFQName(), scope));
     return c != null;
   }
 
@@ -54,7 +57,7 @@ public abstract class JavaTestFramework implements TestFramework {
   protected abstract String getMarkerClassFQName();
 
   /**
-   * Return {@code true} iff {@link #getMarkerClassFQName()} can be found in the resolve scope of {@code clazz} 
+   * Return {@code true} iff {@link #getMarkerClassFQName()} can be found in the resolve scope of {@code clazz}
    */
   protected boolean isFrameworkAvailable(@NotNull PsiElement clazz) {
     String markerClassFQName = getMarkerClassFQName();
@@ -114,7 +117,7 @@ public abstract class JavaTestFramework implements TestFramework {
 
   @Nullable
   protected abstract PsiMethod findTearDownMethod(@NotNull PsiClass clazz);
-  
+
   @Nullable
   @Override
   public PsiElement findBeforeClassMethod(@NotNull PsiElement clazz) {

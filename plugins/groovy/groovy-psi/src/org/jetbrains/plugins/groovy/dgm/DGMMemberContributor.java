@@ -75,7 +75,7 @@ public final class DGMMemberContributor {
       return true;
     }
 
-    Collection<PsiMethod> macros = macroService.getAllMacros(place);
+    Collection<PsiMethod> macros = macroService.getAllKnownMacros(place);
     for (PsiMethod macro : macros) {
       if (!processor.execute(GdkMethodUtil.createMacroMethod(macro), state)) {
         return false;
@@ -116,8 +116,8 @@ public final class DGMMemberContributor {
 
   private static void doCollectExtensions(@NotNull Project project,
                                           @NotNull GlobalSearchScope resolveScope,
-                                          @NotNull List<String> instanceClasses,
-                                          @NotNull List<String> staticClasses,
+                                          @NotNull List<? super String> instanceClasses,
+                                          @NotNull List<? super String> staticClasses,
                                           @NlsSafe @NotNull String packageName) {
     PsiPackage aPackage = JavaPsiFacade.getInstance(project).findPackage(packageName);
     if (aPackage == null) return;
@@ -135,7 +135,7 @@ public final class DGMMemberContributor {
     }
   }
 
-  private static void collectClasses(@NotNull IProperty pr, @NotNull List<String> classes) {
+  private static void collectClasses(@NotNull IProperty pr, @NotNull List<? super String> classes) {
     String value = pr.getUnescapedValue();
     if (value == null) return;
     value = value.trim();

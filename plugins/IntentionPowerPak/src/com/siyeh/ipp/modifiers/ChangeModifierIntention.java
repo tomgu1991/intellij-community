@@ -34,6 +34,7 @@ import com.intellij.openapi.util.NlsContexts;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.util.io.FileUtilRt;
 import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
 import com.intellij.psi.codeStyle.CodeStyleManager;
 import com.intellij.psi.impl.source.resolve.JavaResolveUtil;
@@ -72,6 +73,7 @@ public class ChangeModifierIntention extends BaseElementAtCaretIntentionAction {
   private AccessModifier myTarget;
 
   // Necessary to register an extension
+  @SuppressWarnings("unused")
   public ChangeModifierIntention() {
     this(false);
   }
@@ -91,11 +93,13 @@ public class ChangeModifierIntention extends BaseElementAtCaretIntentionAction {
     if (modifiers.isEmpty()) return false;
     if (!myErrorFix && !ContainerUtil.exists(modifiers, mod -> mod.hasModifier(member))) return false;
     modifiers.removeIf(mod -> mod.hasModifier(member));
-    AccessModifier target = null;
     if (modifiers.isEmpty()) return false;
+    AccessModifier target = null;
     if (modifiers.size() == 1) {
       target = modifiers.get(0);
-      setText(IntentionPowerPackBundle.message("change.modifier.text", identifier.getText(), target));
+      String name = identifier.getText();
+      if (member instanceof PsiMethod) name += "()";
+      setText(IntentionPowerPackBundle.message("change.modifier.text", name, target));
     }
     else {
       setText(getFamilyName());
@@ -247,10 +251,11 @@ public class ChangeModifierIntention extends BaseElementAtCaretIntentionAction {
 
     void undoChange() {
       Project project = myFile.getProject();
+      VirtualFile virtualFile = myFile.getVirtualFile();
       FileEditorManager fileEditorManager = FileEditorManager.getInstance(project);
-      FileEditor fileEditor = fileEditorManager.getSelectedEditor(myFile.getVirtualFile());
+      FileEditor fileEditor = virtualFile != null ? fileEditorManager.getSelectedEditor(virtualFile) : null;
       UndoManager manager = UndoManager.getInstance(project);
-      if (manager.isUndoAvailable(fileEditor)) {
+      if (fileEditor != null && manager.isUndoAvailable(fileEditor)) {
         manager.undo(fileEditor);
       }
       else {

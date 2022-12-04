@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.wm.impl.welcomeScreen;
 
 import com.intellij.CommonBundle;
@@ -27,11 +27,11 @@ import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import java.awt.*;
-import java.util.*;
 import java.util.List;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static com.intellij.openapi.wm.impl.welcomeScreen.FlatWelcomeFrame.getPreferredFocusedComponent;
+import static com.intellij.ide.wizard.AbstractWizard.isNewWizard;
 import static com.intellij.openapi.wm.impl.welcomeScreen.WelcomeScreenUIManager.getProjectsBackground;
 
 public class ActionGroupPanelWrapper {
@@ -87,11 +87,9 @@ public class ActionGroupPanelWrapper {
                          }) {
                            @Override
                            protected JComponent createItemComponent() {
-                             myTextLabel = new ErrorLabel();
-                             myTextLabel.setOpaque(true);
-                             myTextLabel.setBorder(JBUI.Borders.empty(3, 7));
-
-                             return myTextLabel;
+                             JComponent component = super.createItemComponent();
+                             myTextLabel.setBorder(!isNewWizard() ? JBUI.Borders.empty(3) : JBUI.Borders.empty(5, 0));
+                             return component;
                            }
 
                            @Override
@@ -182,6 +180,11 @@ public class ActionGroupPanelWrapper {
         @Override
         public void update(@NotNull AnActionEvent e) {
           e.getPresentation().setEnabled(!StackingPopupDispatcher.getInstance().isPopupFocused());
+        }
+
+        @Override
+        public @NotNull ActionUpdateThread getActionUpdateThread() {
+          return ActionUpdateThread.EDT;
         }
 
         @Override
@@ -296,7 +299,7 @@ public class ActionGroupPanelWrapper {
         for (ListSelectionListener listener : listeners) {
           listener.valueChanged(new ListSelectionEvent(list, list.getSelectedIndex(), list.getSelectedIndex(), false));
         }
-        JComponent toFocus = getPreferredFocusedComponent(panel);
+        JComponent toFocus = FlatWelcomeFrame.getPreferredFocusedComponent(panel);
         IdeFocusManager.getGlobalInstance().doWhenFocusSettlesDown(() -> IdeFocusManager.getGlobalInstance().requestFocus(toFocus, true));
       };
       panel.first.setName(action.getClass().getName());
@@ -311,6 +314,10 @@ public class ActionGroupPanelWrapper {
         @Override
         public void update(@NotNull AnActionEvent e) {
           action.update(e);
+        }
+        @Override
+        public @NotNull ActionUpdateThread getActionUpdateThread() {
+          return action.getActionUpdateThread();
         }
       };
     }

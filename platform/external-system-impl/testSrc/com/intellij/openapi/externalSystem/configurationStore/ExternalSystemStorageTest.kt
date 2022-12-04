@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.externalSystem.configurationStore
 
 import com.intellij.configurationStore.StoreReloadManager
@@ -14,7 +14,6 @@ import com.intellij.facet.mock.MockSubFacetType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.*
 import com.intellij.openapi.application.ex.PathManagerEx
-import com.intellij.openapi.application.impl.coroutineDispatchingContext
 import com.intellij.openapi.externalSystem.ExternalSystemModulePropertyManager
 import com.intellij.openapi.externalSystem.model.ProjectSystemId
 import com.intellij.openapi.externalSystem.model.project.ModuleData
@@ -53,8 +52,9 @@ import com.intellij.util.ui.UIUtil
 import com.intellij.workspaceModel.ide.WorkspaceModel.Companion.getInstance
 import com.intellij.workspaceModel.ide.impl.jps.serialization.JpsProjectModelSynchronizer
 import com.intellij.workspaceModel.storage.MutableEntityStorage.Companion.from
-import com.intellij.workspaceModel.storage.bridgeEntities.api.ExternalSystemModuleOptionsEntity
-import com.intellij.workspaceModel.storage.bridgeEntities.api.ModuleEntity
+import com.intellij.workspaceModel.storage.bridgeEntities.ExternalSystemModuleOptionsEntity
+import com.intellij.workspaceModel.storage.bridgeEntities.ModuleEntity
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.assertj.core.api.Assertions.assertThat
@@ -68,6 +68,7 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.*
 
 class ExternalSystemStorageTest {
   companion object {
@@ -113,7 +114,7 @@ class ExternalSystemStorageTest {
   fun `applying external system options twice`() {
     createProjectAndUseInLoadComponentStateMode(tempDirManager, directoryBased = true, useDefaultProjectSettings = false) { project ->
       runBlocking {
-        withContext(AppUIExecutor.onWriteThread().coroutineDispatchingContext()) {
+        withContext(Dispatchers.EDT) {
           runWriteAction {
             val projectDir = project.stateStore.directoryStorePath!!.parent
             val module = ModuleManager.getInstance(project).newModule(projectDir.resolve("test.iml").systemIndependentPath,
@@ -564,9 +565,9 @@ class ExternalSystemStorageTest {
       """.trimIndent())
       WriteAction.runAndWait<RuntimeException> {
         VfsUtil.markDirtyAndRefresh(false, false, false, miscFile)
-        StoreReloadManager.getInstance().flushChangedProjectFileAlarm()
       }
-      ApplicationManager.getApplication().invokeAndWait{
+      runBlocking { StoreReloadManager.getInstance().reloadChangedStorageFiles() }
+      ApplicationManager.getApplication().invokeAndWait {
         PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue()
       }
     }
@@ -585,8 +586,8 @@ class ExternalSystemStorageTest {
       """.trimIndent())
       WriteAction.runAndWait<RuntimeException> {
         VfsUtil.markDirtyAndRefresh(false, false, false, miscFile)
-        StoreReloadManager.getInstance().flushChangedProjectFileAlarm()
       }
+      runBlocking { StoreReloadManager.getInstance().reloadChangedStorageFiles() }
       ApplicationManager.getApplication().invokeAndWait{
         PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue()
       }
@@ -596,7 +597,7 @@ class ExternalSystemStorageTest {
   @Test
   fun `external-system-id attributes are not removed from libraries, artifacts and facets on save`() {
     loadModifySaveAndCheck("elementsWithExternalSystemIdAttributes", "elementsWithExternalSystemIdAttributes") { project ->
-      JpsProjectModelSynchronizer.getInstance(project)!!.markAllEntitiesAsDirty()
+      JpsProjectModelSynchronizer.getInstance(project).markAllEntitiesAsDirty()
     }
   }
 
@@ -712,6 +713,35 @@ class ExternalSystemStorageTest {
     checkFacetAndSubFacet(module, "web", null, MOCK_EXTERNAL_SOURCE)
   }
 
+  @Test
+  fun `load module with test properties`() = loadProjectAndCheckResults("moduleWithTestProperties") { project ->
+    val mainModuleName = "foo"
+    val testModuleName = "foo.test"
+    val moduleManager = ModuleManager.getInstance(project)
+    val testModule = moduleManager.findModuleByName(testModuleName)
+    val mainModule = moduleManager.findModuleByName(mainModuleName)
+    assertNotNull(testModule)
+    assertNotNull(mainModule)
+    val testModuleProperties = TestModuleProperties.getInstance(testModule!!)
+    assertEquals(mainModuleName, testModuleProperties.productionModuleName)
+    assertSame(mainModule, testModuleProperties.productionModule)
+  }
+
+  @Test
+  fun `test property for module`() {
+    loadModifySaveAndCheck("twoModules", "moduleWithTestProperties") {project ->
+      val mainModuleName = "foo"
+      val testModuleName = "foo.test"
+      val moduleManager = ModuleManager.getInstance(project)
+      val testModule = moduleManager.findModuleByName(testModuleName)
+      assertNotNull(testModule)
+      val testModuleProperties = TestModuleProperties.getInstance(testModule!!)
+      runWriteActionAndWait {
+        testModuleProperties.productionModuleName = mainModuleName
+      }
+    }
+  }
+
   @Test(expected = Test.None::class)
   fun `get modifiable models of renamed module`() = loadProjectAndCheckResults("singleModuleWithImportedSubFacet") { project ->
     runWriteActionAndWait {
@@ -763,8 +793,8 @@ class ExternalSystemStorageTest {
   @Before
   fun registerFacetType() {
     WriteAction.runAndWait<RuntimeException> {
-      FacetType.EP_NAME.getPoint().registerExtension(MockFacetType(), disposableRule.disposable)
-      FacetType.EP_NAME.getPoint().registerExtension(MockSubFacetType(), disposableRule.disposable)
+      FacetType.EP_NAME.point.registerExtension(MockFacetType(), disposableRule.disposable)
+      FacetType.EP_NAME.point.registerExtension(MockSubFacetType(), disposableRule.disposable)
     }
   }
 
@@ -791,8 +821,8 @@ class ExternalSystemStorageTest {
         cacheDir.delete()
 
         runBlocking {
-          withContext(AppUIExecutor.onWriteThread().coroutineDispatchingContext()) {
-            runWriteAction {
+          withContext(Dispatchers.EDT) {
+            ApplicationManager.getApplication().runWriteAction {
               //we need to set language level explicitly because otherwise if some tests modifies language level in the default project, we'll
               // get different content in misc.xml
               LanguageLevelProjectExtension.getInstance(project)!!.languageLevel = LanguageLevel.JDK_1_8
@@ -842,12 +872,12 @@ class ExternalSystemStorageTest {
 
   private fun loadProjectAndCheckResults(testDataDirName: String, checkProject: (Project) -> Unit) {
     @Suppress("RedundantSuspendModifier")
-    suspend fun copyProjectFiles(dir: VirtualFile): Path {
-      val projectDir = VfsUtil.virtualToIoFile(dir)
-      FileUtil.copyDir(testDataRoot.resolve("common/project").toFile(), projectDir)
+    fun copyProjectFiles(dir: VirtualFile): Path {
+      val projectDir = dir.toNioPath()
+      FileUtil.copyDir(testDataRoot.resolve("common/project").toFile(), projectDir.toFile())
       val testProjectFilesDir = testDataRoot.resolve(testDataDirName).resolve("project").toFile()
       if (testProjectFilesDir.exists()) {
-        FileUtil.copyDir(testProjectFilesDir, projectDir)
+        FileUtil.copyDir(testProjectFilesDir, projectDir.toFile())
       }
       val testCacheFilesDir = testDataRoot.resolve(testDataDirName).resolve("cache").toFile()
       if (testCacheFilesDir.exists()) {
@@ -855,7 +885,7 @@ class ExternalSystemStorageTest {
         FileUtil.copyDir(testCacheFilesDir, cachePath.toFile())
       }
       VfsUtil.markDirtyAndRefresh(false, true, true, dir)
-      return projectDir.toPath()
+      return projectDir
     }
     doNotEnableExternalStorageByDefaultInTests {
       runBlocking {
@@ -870,8 +900,9 @@ class ExternalSystemStorageTest {
 
   private fun suppressLogs(action: () -> Unit) {
     LoggedErrorProcessor.executeWith<RuntimeException>(object : LoggedErrorProcessor() {
-      override fun processError(category: String, message: String?, t: Throwable?, details: Array<out String>): Boolean =
-        message == null || !message.contains("Trying to load multiple modules with the same name.")
+      override fun processError(category: String, message: String, details: Array<out String>, t: Throwable?): Set<Action> =
+        if (message.contains("Trying to load multiple modules with the same name.")) Action.NONE
+        else Action.ALL
     }) {
       action()
     }

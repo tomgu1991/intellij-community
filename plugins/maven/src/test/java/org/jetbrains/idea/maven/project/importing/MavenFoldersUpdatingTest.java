@@ -22,11 +22,9 @@ import com.intellij.openapi.roots.*;
 import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.vcs.changes.VcsIgnoreManager;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.util.containers.ContainerUtil;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.idea.maven.importing.MavenFoldersImporter;
-import org.jetbrains.idea.maven.importing.MavenRootModelAdapter;
-import org.jetbrains.idea.maven.importing.MavenRootModelAdapterLegacyImpl;
-import org.jetbrains.idea.maven.importing.ModifiableModelsProviderProxyWrapper;
+import org.jetbrains.idea.maven.importing.*;
 import org.jetbrains.jps.model.java.JavaModuleSourceRootTypes;
 import org.jetbrains.jps.model.java.JavaSourceRootProperties;
 import org.jetbrains.jps.model.java.JavaSourceRootType;
@@ -37,15 +35,17 @@ import java.io.File;
 public class MavenFoldersUpdatingTest extends MavenMultiVersionImportingTestCase {
   @Test
   public void testUpdatingExternallyCreatedFolders() {
-    importProject("<groupId>test</groupId>" +
-                  "<artifactId>project</artifactId>" +
-                  "<version>1</version>");
+    importProject("""
+                    <groupId>test</groupId>
+                    <artifactId>project</artifactId>
+                    <version>1</version>
+                    """);
 
     myProjectRoot.getChildren(); // make sure fs is cached
 
     new File(myProjectRoot.getPath(), "target/foo").mkdirs();
     new File(myProjectRoot.getPath(), "target/generated-sources/xxx/z").mkdirs();
-    updateProjectFolders();
+    updateTargetFolders();
 
     assertExcludes("project", "target");
     assertGeneratedSources("project", "target/generated-sources/xxx");
@@ -55,12 +55,14 @@ public class MavenFoldersUpdatingTest extends MavenMultiVersionImportingTestCase
 
   @Test 
   public void testIgnoreTargetFolder() {
-    importProject("<groupId>test</groupId>" +
-                  "<artifactId>project</artifactId>" +
-                  "<version>1</version>");
+    importProject("""
+                    <groupId>test</groupId>
+                    <artifactId>project</artifactId>
+                    <version>1</version>
+                    """);
 
     new File(myProjectRoot.getPath(), "target/classes").mkdirs();
-    updateProjectFolders();
+    updateTargetFolders();
 
     assertExcludes("project", "target");
     myProjectRoot.refresh(false, true);
@@ -73,25 +75,30 @@ public class MavenFoldersUpdatingTest extends MavenMultiVersionImportingTestCase
 
   @Test 
   public void testUpdatingFoldersForAllTheProjects() {
-    createProjectPom("<groupId>test</groupId>" +
-                     "<artifactId>project</artifactId>" +
-                     "<packaging>pom</packaging>" +
-                     "<version>1</version>" +
-
-                     "<modules>" +
-                     "  <module>m1</module>" +
-                     "  <module>m2</module>" +
-                     "</modules>");
+    createProjectPom("""
+                       <groupId>test</groupId>
+                       <artifactId>project</artifactId>
+                       <packaging>pom</packaging>
+                       <version>1</version>
+                       <modules>
+                         <module>m1</module>
+                         <module>m2</module>
+                       </modules>
+                       """);
 
     createModulePom("m1",
-                    "<groupId>test</groupId>" +
-                    "<artifactId>m1</artifactId>" +
-                    "<version>1</version>");
+                    """
+                      <groupId>test</groupId>
+                      <artifactId>m1</artifactId>
+                      <version>1</version>
+                      """);
 
     createModulePom("m2",
-                    "<groupId>test</groupId>" +
-                    "<artifactId>m2</artifactId>" +
-                    "<version>1</version>");
+                    """
+                      <groupId>test</groupId>
+                      <artifactId>m2</artifactId>
+                      <version>1</version>
+                      """);
 
     importProject();
 
@@ -103,7 +110,7 @@ public class MavenFoldersUpdatingTest extends MavenMultiVersionImportingTestCase
     new File(myProjectRoot.getPath(), "m2/target/bar").mkdirs();
     new File(myProjectRoot.getPath(), "m2/target/generated-sources/yyy/z").mkdirs();
 
-    updateProjectFolders();
+    updateTargetFolders();
 
     assertExcludes("m1", "target");
     assertGeneratedSources("m1", "target/generated-sources/xxx");
@@ -115,16 +122,18 @@ public class MavenFoldersUpdatingTest extends MavenMultiVersionImportingTestCase
   @Test 
   public void testDoesNotTouchSourceFolders() {
     createStdProjectFolders();
-    importProject("<groupId>test</groupId>" +
-                  "<artifactId>project</artifactId>" +
-                  "<version>1</version>");
+    importProject("""
+                    <groupId>test</groupId>
+                    <artifactId>project</artifactId>
+                    <version>1</version>
+                    """);
 
     assertSources("project", "src/main/java");
     assertResources("project", "src/main/resources");
     assertTestSources("project", "src/test/java");
     assertTestResources("project", "src/test/resources");
 
-    updateProjectFolders();
+    updateTargetFolders();
 
     assertSources("project", "src/main/java");
     assertResources("project", "src/main/resources");
@@ -134,9 +143,11 @@ public class MavenFoldersUpdatingTest extends MavenMultiVersionImportingTestCase
 
   @Test 
   public void testDoesNotExcludeRegisteredSources() {
-    importProject("<groupId>test</groupId>" +
-                  "<artifactId>project</artifactId>" +
-                  "<version>1</version>");
+    importProject("""
+                    <groupId>test</groupId>
+                    <artifactId>project</artifactId>
+                    <version>1</version>
+                    """);
 
     new File(myProjectRoot.getPath(), "target/foo").mkdirs();
     final File sourceDir = new File(myProjectRoot.getPath(), "target/src");
@@ -152,27 +163,36 @@ public class MavenFoldersUpdatingTest extends MavenMultiVersionImportingTestCase
     });
 
 
-    updateProjectFolders();
+    updateTargetFolders();
 
-    assertSources("project", "target/src");
+    if (supportsKeepingManualChanges()) {
+      assertSources("project", "target/src");
+    }
+    else {
+      assertSources("project", "src/main/java");
+    }
     assertExcludes("project", "target");
   }
 
   @Test 
   public void testDoesNothingWithNonMavenModules() {
-    importProject("<groupId>test</groupId>" +
-                  "<artifactId>project</artifactId>" +
-                  "<version>1</version>");
+    importProject("""
+                    <groupId>test</groupId>
+                    <artifactId>project</artifactId>
+                    <version>1</version>
+                    """);
 
     createModule("userModule");
-    updateProjectFolders(); // shouldn't throw exceptions
+    updateTargetFolders(); // shouldn't throw exceptions
   }
 
   @Test 
   public void testDoNotUpdateOutputFoldersWhenUpdatingExcludedFolders() {
-    importProject("<groupId>test</groupId>" +
-                  "<artifactId>project</artifactId>" +
-                  "<version>1</version>");
+    importProject("""
+                    <groupId>test</groupId>
+                    <artifactId>project</artifactId>
+                    <version>1</version>
+                    """);
 
     ApplicationManager.getApplication().runWriteAction(() -> {
       MavenRootModelAdapter adapter = new MavenRootModelAdapter(new MavenRootModelAdapterLegacyImpl(
@@ -185,7 +205,7 @@ public class MavenFoldersUpdatingTest extends MavenMultiVersionImportingTestCase
     });
 
 
-    MavenFoldersImporter.updateProjectFolders(myProject, true);
+    updateTargetFolders();
 
     ModuleRootManager rootManager = ModuleRootManager.getInstance(getModule("project"));
     CompilerModuleExtension compiler = rootManager.getModuleExtension(CompilerModuleExtension.class);
@@ -195,9 +215,11 @@ public class MavenFoldersUpdatingTest extends MavenMultiVersionImportingTestCase
 
   @Test 
   public void testDoNotCommitIfFoldersWasNotChanged() {
-    importProject("<groupId>test</groupId>" +
-                  "<artifactId>project</artifactId>" +
-                  "<version>1</version>");
+    importProject("""
+                    <groupId>test</groupId>
+                    <artifactId>project</artifactId>
+                    <version>1</version>
+                    """);
 
     final int[] count = new int[]{0};
     myProject.getMessageBus().connect().subscribe(ProjectTopics.PROJECT_ROOTS, new ModuleRootListener() {
@@ -207,68 +229,80 @@ public class MavenFoldersUpdatingTest extends MavenMultiVersionImportingTestCase
       }
     });
 
-    updateProjectFolders();
-
-    assertEquals(0, count[0]);
+    updateTargetFolders();
+    assertEquals(isWorkspaceImport() ? 0 : 1, count[0]);
   }
 
-  @Test 
+  @Test
   public void testCommitOnlyOnceForAllModules() {
-    createProjectPom("<groupId>test</groupId>" +
-                     "<artifactId>project</artifactId>" +
-                     "<packaging>pom</packaging>" +
-                     "<version>1</version>" +
+    createProjectPom("""
+                       <groupId>test</groupId>
+                       <artifactId>project</artifactId>
+                       <packaging>pom</packaging>
+                       <version>1</version>
+                       <modules>
+                         <module>m1</module>
+                         <module>m2</module>
+                       </modules>
+                       """);
 
-                     "<modules>" +
-                     "  <module>m1</module>" +
-                     "  <module>m2</module>" +
-                     "</modules>");
+    createModulePom("m1",
+                    """
+                      <groupId>test</groupId>
+                      <artifactId>m1</artifactId>
+                      <version>1</version>
+                      """);
 
-    VirtualFile m1 = createModulePom("m1",
-                                     "<groupId>test</groupId>" +
-                                     "<artifactId>m1</artifactId>" +
-                                     "<version>1</version>");
-
-    VirtualFile m2 = createModulePom("m2",
-                                     "<groupId>test</groupId>" +
-                                     "<artifactId>m2</artifactId>" +
-                                     "<version>1</version>");
+    createModulePom("m2",
+                    """
+                      <groupId>test</groupId>
+                      <artifactId>m2</artifactId>
+                      <version>1</version>
+                      """);
 
     importProject();
 
-    final int[] count = new int[]{0};
-    myProject.getMessageBus().connect().subscribe(ProjectTopics.PROJECT_ROOTS, new ModuleRootListener() {
-      @Override
-      public void rootsChanged(@NotNull ModuleRootEvent event) {
-        count[0]++;
-      }
-    });
+    MavenEventsTestHelper eventsTestHelper = new MavenEventsTestHelper();
+    eventsTestHelper.setUp(myProject);
+    try {
+      updateTargetFolders();
+      eventsTestHelper.assertRootsChanged(isWorkspaceImport() ? 0 : 1);
+      eventsTestHelper.assertWorkspaceModelChanges(isWorkspaceImport() ? 0 : 1);
 
-    new File(myProjectRoot.getPath(), "target/generated-sources/foo/z").mkdirs();
-    new File(m1.getPath(), "target/generated-sources/bar/z").mkdirs();
-    new File(m2.getPath(), "target/generated-sources/baz/z").mkdirs();
+      // let's add some generated folders, what should be picked up on updateTargetFolders
+      new File(myProjectRoot.getPath(), "target/generated-sources/foo/z").mkdirs();
+      new File(myProjectRoot.getPath(), "m1/target/generated-sources/bar/z").mkdirs();
+      new File(myProjectRoot.getPath(), "m2/target/generated-sources/baz/z").mkdirs();
+      updateTargetFolders();
 
-    updateProjectFolders();
-
-    assertEquals(1, count[0]);
+      eventsTestHelper.assertRootsChanged(1);
+      eventsTestHelper.assertWorkspaceModelChanges(1);
+    }
+    finally {
+      eventsTestHelper.tearDown();
+    }
   }
 
   @Test 
   public void testMarkSourcesAsGeneratedOnReImport() {
-    importProject("<groupId>test</groupId>" +
-                  "<artifactId>project</artifactId>" +
-                  "<version>1</version>");
+    importProject("""
+                    <groupId>test</groupId>
+                    <artifactId>project</artifactId>
+                    <version>1</version>
+                    """);
     new File(myProjectRoot.getPath(), "target/generated-sources/xxx/z").mkdirs();
-    updateProjectFolders();
+    updateTargetFolders();
 
     assertGeneratedSources("project", "target/generated-sources/xxx");
 
     ModuleRootModificationUtil.updateModel(getModule("project"), model -> {
-      for (SourceFolder folder : model.getContentEntries()[0].getSourceFolders()) {
-        JavaSourceRootProperties properties = folder.getJpsElement().getProperties(JavaModuleSourceRootTypes.SOURCES);
-        assertNotNull(properties);
-        properties.setForGeneratedSources(false);
-      }
+      SourceFolder[] folders = model.getContentEntries()[0].getSourceFolders();
+      SourceFolder generated = ContainerUtil.find(folders, it -> it.getUrl().endsWith("target/generated-sources/xxx"));
+      assertNotNull("Generated folder not found", generated);
+
+      JavaSourceRootProperties properties = generated.getJpsElement().getProperties(JavaModuleSourceRootTypes.SOURCES);
+      assertNotNull(properties);
+      properties.setForGeneratedSources(false);
     });
     assertGeneratedSources("project");
 
@@ -276,7 +310,7 @@ public class MavenFoldersUpdatingTest extends MavenMultiVersionImportingTestCase
     assertGeneratedSources("project", "target/generated-sources/xxx");
   }
 
-  private void updateProjectFolders() {
-    MavenFoldersImporter.updateProjectFolders(myProject, false);
+  private void updateTargetFolders() {
+    MavenProjectImporter.tryUpdateTargetFolders(myProject);
   }
 }

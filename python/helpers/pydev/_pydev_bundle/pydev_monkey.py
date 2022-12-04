@@ -3,7 +3,8 @@ import os
 import sys
 import traceback
 from _pydev_imps._pydev_saved_modules import threading
-from _pydevd_bundle.pydevd_constants import get_global_debugger, IS_WINDOWS, IS_MACOS, IS_JYTHON, IS_PY36_OR_LESSER, IS_PY38_OR_GREATER, \
+from _pydevd_bundle.pydevd_constants import get_global_debugger, IS_WINDOWS, IS_MACOS, \
+    IS_JYTHON, IS_PY36_OR_LESSER, IS_PY36_OR_GREATER, IS_PY38_OR_GREATER, \
     get_current_thread_id
 from _pydev_bundle import pydev_log
 
@@ -108,7 +109,7 @@ def starts_with_python_shebang(path):
 
 
 def is_python(path):
-    if isinstance(path, os.PathLike):
+    if IS_PY36_OR_GREATER and isinstance(path, os.PathLike):
         path = path.__fspath__()
     if path.endswith("'") or path.endswith('"'):
         path = path[1:len(path) - 1]
@@ -450,7 +451,6 @@ def create_execl(original_name):
         import os
         args = patch_args(args)
         if is_python_args(args):
-            path = args[0]
             send_process_will_be_substituted()
         return getattr(os, original_name)(path, *args)
     return new_execl
@@ -465,7 +465,6 @@ def create_execv(original_name):
         import os
         args = patch_args(args)
         if is_python_args(args):
-            path = args[0]
             send_process_will_be_substituted()
         return getattr(os, original_name)(path, args)
     return new_execv
@@ -480,7 +479,6 @@ def create_execve(original_name):
         import os
         args = patch_args(args)
         if is_python_args(args):
-            path = args[0]
             send_process_will_be_substituted()
         return getattr(os, original_name)(path, args, env)
     return new_execve

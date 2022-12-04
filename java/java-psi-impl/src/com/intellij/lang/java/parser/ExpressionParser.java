@@ -61,6 +61,10 @@ public class ExpressionParser {
   public PsiBuilder.Marker parse(@NotNull PsiBuilder builder) {
     return parseAssignment(builder);
   }
+  @Nullable
+  PsiBuilder.Marker parse(@NotNull PsiBuilder builder, final int mode) {
+    return parseAssignment(builder, mode);
+  }
 
   @Nullable
   public PsiBuilder.Marker parseCaseLabel(@NotNull PsiBuilder builder) {
@@ -240,7 +244,7 @@ public class ExpressionParser {
           expression.done(toCreate);
           return expression;
         }
-        myParser.getPatternParser().parsePrimaryPattern(builder);
+        myParser.getPatternParser().parsePrimaryPattern(builder, false);
       } else {
         final PsiBuilder.Marker right = parseExpression(builder, ExprType.SHIFT, mode);
         if (right == null) {
@@ -944,7 +948,15 @@ public class ExpressionParser {
       }
     }
 
-    final boolean closed = expectOrError(builder, JavaTokenType.RPARENTH, "expected.rparen");
+    boolean closed = true;
+    if (!expect(builder, JavaTokenType.RPARENTH)) {
+      if (first) {
+        error(builder, JavaPsiBundle.message("expected.rparen"));
+      } else {
+        error(builder, JavaPsiBundle.message("expected.comma.or.rparen"));
+      }
+      closed = false;
+    }
 
     list.done(JavaElementType.EXPRESSION_LIST);
     if (!closed) {

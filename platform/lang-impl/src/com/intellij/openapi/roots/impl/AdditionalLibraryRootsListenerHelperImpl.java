@@ -7,9 +7,13 @@ import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.util.indexing.FileBasedIndex;
 import com.intellij.util.indexing.FileBasedIndexImpl;
+import com.intellij.util.indexing.IndexableFilesIndex;
 import com.intellij.util.indexing.UnindexedFilesUpdater;
 import com.intellij.util.indexing.roots.AdditionalLibraryRootsContributor;
+import com.intellij.util.indexing.roots.IndexableFilesIndexImpl;
 import com.intellij.util.indexing.roots.IndexableFilesIterator;
+import com.intellij.workspaceModel.core.fileIndex.WorkspaceFileIndex;
+import com.intellij.workspaceModel.core.fileIndex.impl.WorkspaceFileIndexEx;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -28,8 +32,12 @@ public class AdditionalLibraryRootsListenerHelperImpl implements AdditionalLibra
                                                   @NotNull String libraryNameForDebug) {
     DirectoryIndex directoryIndex = DirectoryIndex.getInstance(project);
     if (directoryIndex instanceof DirectoryIndexImpl) {
-      ((DirectoryIndexImpl)directoryIndex).reset(DirectoryIndexAnalyticsReporter.ResetReason.ADDITIONAL_LIBRARIES_PROVIDER);
+      ((DirectoryIndexImpl)directoryIndex).reset();
     }
+    if (IndexableFilesIndex.shouldBeUsed()) {
+      ((IndexableFilesIndexImpl)IndexableFilesIndex.getInstance(project)).resetNonWorkspacePart();
+    }
+    ((WorkspaceFileIndexEx)WorkspaceFileIndex.getInstance(project)).resetCustomContributors();
     additionalLibraryRootsChanged(project, presentableLibraryName, oldRoots, newRoots, libraryNameForDebug);
   }
 
@@ -62,7 +70,7 @@ public class AdditionalLibraryRootsListenerHelperImpl implements AdditionalLibra
       Collections.singletonList(
         AdditionalLibraryRootsContributor.createIndexingIterator(presentableLibraryName, rootsToIndex, libraryNameForDebug));
 
-    new UnindexedFilesUpdater(project, indexableFilesIterators, "On updated roots of library '" + presentableLibraryName + "'").
-      queue(project);
+    new UnindexedFilesUpdater(project, indexableFilesIterators, null, "On updated roots of library '" + presentableLibraryName + "'").
+      queue();
   }
 }

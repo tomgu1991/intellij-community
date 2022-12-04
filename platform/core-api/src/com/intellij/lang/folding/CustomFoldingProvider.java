@@ -2,6 +2,7 @@
 package com.intellij.lang.folding;
 
 import com.intellij.codeInsight.folding.CodeFoldingSettings;
+import com.intellij.lang.Language;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.extensions.ExtensionPointName;
 import org.jetbrains.annotations.Nls;
@@ -46,7 +47,6 @@ public abstract class CustomFoldingProvider {
   }
 
   /**
-   * @param foldingBuilder
    * @return true, if custom folding provider is supported
    */
   public boolean isSupportedBy(FoldingBuilder foldingBuilder) {
@@ -57,6 +57,10 @@ public abstract class CustomFoldingProvider {
       LOG.error("non-comment based custom folding node need to be filtered in overridden `CustomFoldingBuilder#isCustomFoldingCandidate(ASTNode)`");
     }
     return foldingBuilder instanceof CustomFoldingBuilder;
+  }
+
+  public boolean isSupported(@NotNull Language language) {
+    return true;
   }
 
   /**

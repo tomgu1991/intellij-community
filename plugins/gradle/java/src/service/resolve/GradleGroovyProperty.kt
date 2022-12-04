@@ -2,13 +2,13 @@
 package org.jetbrains.plugins.gradle.service.resolve
 
 import com.intellij.codeInsight.javadoc.JavaDocInfoGeneratorFactory
-import com.intellij.icons.AllIcons
 import com.intellij.ide.presentation.Presentation
 import com.intellij.openapi.util.Key
 import com.intellij.psi.OriginInfoAwareElement
 import com.intellij.psi.PsiElement
+import com.intellij.ui.IconManager
+import com.intellij.ui.PlatformIcons
 import com.intellij.util.lazyPub
-import org.jetbrains.plugins.gradle.settings.GradleExtensionsSettings.GradleProp
 import org.jetbrains.plugins.gradle.util.GradleDocumentationBundle
 import org.jetbrains.plugins.groovy.dsl.holders.NonCodeMembersHolder
 import org.jetbrains.plugins.groovy.lang.resolve.api.LazyTypeProperty
@@ -16,21 +16,26 @@ import javax.swing.Icon
 
 @Presentation(typeName = "Gradle Property")
 class GradleGroovyProperty(
-  private val myProperty: GradleProp,
+  name: String,
+  typeFqn: String,
+  value: String?,
   context: PsiElement
-) : LazyTypeProperty(myProperty.name, myProperty.typeFqn, context),
+) : LazyTypeProperty(name, typeFqn, context),
     OriginInfoAwareElement {
 
-  override fun getIcon(flags: Int): Icon = AllIcons.Nodes.Property
+  override fun getIcon(flags: Int): Icon = IconManager.getInstance().getPlatformIcon(PlatformIcons.Property)
 
-  override fun getOriginInfo(): String = "via ext"
+  companion object {
+    internal const val EXTENSION_PROPERTY : String = "via ext"
+  }
+
+  override fun getOriginInfo(): String = EXTENSION_PROPERTY
 
   private val doc by lazyPub {
-    val value = myProperty.value
     val result = StringBuilder()
     result.append("<PRE>")
     JavaDocInfoGeneratorFactory.create(context.project, null).generateType(result, propertyType, context, true)
-    result.append(" " + myProperty.name)
+    result.append(" $name")
     val hasInitializer = !value.isNullOrBlank()
     if (hasInitializer) {
       result.append(" = ")

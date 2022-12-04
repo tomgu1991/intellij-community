@@ -20,15 +20,11 @@ import com.intellij.workspaceModel.ide.impl.legacyBridge.library.LibraryBridgeIm
 import com.intellij.workspaceModel.ide.legacyBridge.LibraryModifiableModelBridge
 import com.intellij.workspaceModel.storage.CachedValue
 import com.intellij.workspaceModel.storage.MutableEntityStorage
-import com.intellij.workspaceModel.storage.bridgeEntities.api.LibraryEntity
-import com.intellij.workspaceModel.storage.bridgeEntities.api.LibraryPropertiesEntity
-import com.intellij.workspaceModel.storage.bridgeEntities.api.LibraryRoot
-import com.intellij.workspaceModel.storage.referrersx
+import com.intellij.workspaceModel.storage.bridgeEntities.*
 import com.intellij.workspaceModel.storage.url.VirtualFileUrl
 import com.intellij.workspaceModel.storage.url.VirtualFileUrlManager
 import org.jdom.Element
 import org.jetbrains.jps.model.serialization.library.JpsLibraryTableSerializer
-import com.intellij.workspaceModel.storage.bridgeEntities.api.modifyEntity
 
 internal class LibraryModifiableModelBridgeImpl(
   private val originalLibrary: LibraryBridgeImpl,
@@ -39,7 +35,7 @@ internal class LibraryModifiableModelBridgeImpl(
 ) : LegacyBridgeModifiableBase(diff, cacheStorageResult), LibraryModifiableModelBridge, RootProvider {
 
   private val virtualFileManager: VirtualFileUrlManager = VirtualFileUrlManager.getInstance(originalLibrary.project)
-  private var entityId = originalLibrarySnapshot.libraryEntity.persistentId
+  private var entityId = originalLibrarySnapshot.libraryEntity.symbolicId
   private var reloadKind = false
 
   private val currentLibraryValue = CachedValue { storage ->
@@ -75,7 +71,7 @@ internal class LibraryModifiableModelBridgeImpl(
       error("Library named $name already exists")
     }
 
-    entityId = entity.persistentId.copy(name = name)
+    entityId = entity.symbolicId.copy(name = name)
     diff.modifyEntity(entity) {
       this.name = name
     }
@@ -98,7 +94,7 @@ internal class LibraryModifiableModelBridgeImpl(
         targetBuilder.addDiff(diff)
       }
       else {
-        WorkspaceModel.getInstance(originalLibrary.project).updateProjectModel {
+        WorkspaceModel.getInstance(originalLibrary.project).updateProjectModel("Library model commit") {
           it.addDiff(diff)
         }
       }
@@ -123,19 +119,18 @@ internal class LibraryModifiableModelBridgeImpl(
   private fun updateProperties(libraryType: String, propertiesXmlTag: String? = null) {
     val entity = currentLibrary.libraryEntity
 
-    val referrers = entity.referrersx(LibraryPropertiesEntity::library).toList()
-    if (referrers.isEmpty()) {
-      diff.addEntity(LibraryPropertiesEntity(entity.entitySource, libraryType) {
+    val properties = entity.libraryProperties
+    if (properties == null) {
+      diff.addEntity(LibraryPropertiesEntity(libraryType, entity.entitySource) {
         library = entity
         if (propertiesXmlTag != null) this.propertiesXmlTag = propertiesXmlTag
       })
     }
     else {
-      diff.modifyEntity(referrers.first()) {
+      diff.modifyEntity(properties) {
         this.libraryType = libraryType
         if (propertiesXmlTag != null) this.propertiesXmlTag = propertiesXmlTag
       }
-      referrers.drop(1).forEach { diff.removeEntity(it) }
     }
   }
 
@@ -171,7 +166,7 @@ internal class LibraryModifiableModelBridgeImpl(
     val inclusionOptions = if (recursive) LibraryRoot.InclusionOptions.ARCHIVES_UNDER_ROOT_RECURSIVELY else LibraryRoot.InclusionOptions.ARCHIVES_UNDER_ROOT
 
     update {
-      roots = roots + listOf(LibraryRoot(virtualFileUrl, rootTypeId, inclusionOptions))
+      roots.add(LibraryRoot(virtualFileUrl, rootTypeId, inclusionOptions))
     }
 
     if (assertChangesApplied && !currentLibrary.isJarDirectory(virtualFileUrl.url, rootType)) {
@@ -197,7 +192,7 @@ internal class LibraryModifiableModelBridgeImpl(
 
       val mutable = roots.toMutableList()
       ContainerUtil.swapElements(mutable, prevRootIndex, index)
-      roots = mutable.toList()
+      roots = mutable
     }
   }
 
@@ -214,7 +209,7 @@ internal class LibraryModifiableModelBridgeImpl(
 
       val mutable = roots.toMutableList()
       ContainerUtil.swapElements(mutable, index + nextRootOffset + 1, index)
-      roots = mutable.toList()
+      roots = mutable
     }
   }
 
@@ -238,8 +233,8 @@ internal class LibraryModifiableModelBridgeImpl(
     val virtualFileUrl = virtualFileManager.fromUrl(url)
 
     update {
-      if (!excludedRoots.contains(virtualFileUrl)) {
-        excludedRoots = excludedRoots + listOf(virtualFileUrl)
+      if (!excludedRoots.map { it.url }.contains(virtualFileUrl)) {
+        excludedRoots = excludedRoots + ExcludeUrlEntity(virtualFileUrl, this.entitySource)
       }
     }
 
@@ -259,7 +254,7 @@ internal class LibraryModifiableModelBridgeImpl(
     )
 
     update {
-      roots = roots + root
+      roots.add(root)
     }
 
     if (assertChangesApplied && !currentLibrary.getUrls(rootType).contains(virtualFileUrl.url)) {
@@ -320,8 +315,11 @@ internal class LibraryModifiableModelBridgeImpl(
     if (!currentLibrary.getUrls(rootType).contains(virtualFileUrl.url)) return false
 
     update {
-      roots = roots.filterNot { it.url == virtualFileUrl && it.type.name == rootType.name() }
-      excludedRoots = excludedRoots.filter { isUnderRoots(it, roots) }
+      roots.removeIf{ it.url == virtualFileUrl && it.type.name == rootType.name() }
+    }
+    val libraryEntity = currentLibrary.libraryEntity
+    libraryEntity.excludedRoots.filterNot { isUnderRoots(it.url, libraryEntity.roots) }.forEach { 
+      diff.removeEntity(it)
     }
 
     if (assertChangesApplied && currentLibrary.getUrls(rootType).contains(virtualFileUrl.url)) {
@@ -336,11 +334,9 @@ internal class LibraryModifiableModelBridgeImpl(
 
     val virtualFileUrl = virtualFileManager.fromUrl(url)
 
-    if (!currentLibrary.excludedRootUrls.contains(virtualFileUrl.url)) return false
-
-    update {
-      excludedRoots = excludedRoots.filter { it != virtualFileUrl }
-    }
+    val excludeUrlEntity = currentLibrary.libraryEntity.excludedRoots.find { it.url == virtualFileUrl }
+    if (excludeUrlEntity == null) return false
+    diff.removeEntity(excludeUrlEntity)
 
     if (assertChangesApplied && currentLibrary.excludedRootUrls.contains(virtualFileUrl.url)) {
       error("removeRoot: removed excluded url '${virtualFileUrl.url}' still exists after removing")

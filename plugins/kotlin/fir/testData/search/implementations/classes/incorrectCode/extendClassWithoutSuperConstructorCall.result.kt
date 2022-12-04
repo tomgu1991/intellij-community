@@ -1,1 +1,1 @@
-FirLightClassForSymbol: B
+KtClass: B

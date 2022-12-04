@@ -6,7 +6,7 @@ import com.intellij.testFramework.TestDataPath;
 import org.jetbrains.kotlin.idea.test.JUnit3RunnerWithInners;
 import org.jetbrains.kotlin.idea.test.KotlinTestUtils;
 import org.jetbrains.kotlin.test.TestMetadata;
-import org.jetbrains.kotlin.idea.test.TestRoot;
+import org.jetbrains.kotlin.idea.base.test.TestRoot;
 import org.junit.runner.RunWith;
 import org.jetbrains.kotlin.test.TargetBackend;
 
@@ -846,9 +846,39 @@ public abstract class KotlinEvaluateExpressionInMppTestGenerated extends Abstrac
                 runTest("testData/evaluation/singleBreakpoint/simpleLocals/localFunctionWithCapturedLocalVar.kt");
             }
 
+            @TestMetadata("localFunctionWithCapturedOuterParameter.kt")
+            public void testLocalFunctionWithCapturedOuterParameter() throws Exception {
+                runTest("testData/evaluation/singleBreakpoint/simpleLocals/localFunctionWithCapturedOuterParameter.kt");
+            }
+
             @TestMetadata("twoLocals.kt")
             public void testTwoLocals() throws Exception {
                 runTest("testData/evaluation/singleBreakpoint/simpleLocals/twoLocals.kt");
+            }
+
+            @TestMetadata("variableFinderShouldNotImplementDynamicScoping.kt")
+            public void testVariableFinderShouldNotImplementDynamicScoping() throws Exception {
+                runTest("testData/evaluation/singleBreakpoint/simpleLocals/variableFinderShouldNotImplementDynamicScoping.kt");
+            }
+
+            @TestMetadata("variableFinderShouldNotImplementDynamicScoping2.kt")
+            public void testVariableFinderShouldNotImplementDynamicScoping2() throws Exception {
+                runTest("testData/evaluation/singleBreakpoint/simpleLocals/variableFinderShouldNotImplementDynamicScoping2.kt");
+            }
+
+            @TestMetadata("variableFinderShouldNotImplementDynamicScoping3.kt")
+            public void testVariableFinderShouldNotImplementDynamicScoping3() throws Exception {
+                runTest("testData/evaluation/singleBreakpoint/simpleLocals/variableFinderShouldNotImplementDynamicScoping3.kt");
+            }
+
+            @TestMetadata("variableFinderShouldNotImplementDynamicScoping4.kt")
+            public void testVariableFinderShouldNotImplementDynamicScoping4() throws Exception {
+                runTest("testData/evaluation/singleBreakpoint/simpleLocals/variableFinderShouldNotImplementDynamicScoping4.kt");
+            }
+
+            @TestMetadata("variableFinderShouldNotImplementDynamicScoping5.kt")
+            public void testVariableFinderShouldNotImplementDynamicScoping5() throws Exception {
+                runTest("testData/evaluation/singleBreakpoint/simpleLocals/variableFinderShouldNotImplementDynamicScoping5.kt");
             }
         }
 
@@ -947,6 +977,11 @@ public abstract class KotlinEvaluateExpressionInMppTestGenerated extends Abstrac
                 runTest("testData/evaluation/singleBreakpoint/callableBug.kt");
             }
 
+            @TestMetadata("capturedVariablesInSamLambda.kt")
+            public void testCapturedVariablesInSamLambda() throws Exception {
+                runTest("testData/evaluation/singleBreakpoint/capturedVariablesInSamLambda.kt");
+            }
+
             @TestMetadata("classFromAnotherPackage.kt")
             public void testClassFromAnotherPackage() throws Exception {
                 runTest("testData/evaluation/singleBreakpoint/classFromAnotherPackage.kt");
@@ -1037,9 +1072,9 @@ public abstract class KotlinEvaluateExpressionInMppTestGenerated extends Abstrac
                 runTest("testData/evaluation/singleBreakpoint/extractThis.kt");
             }
 
-            @TestMetadata("extractThisInTrait.kt")
-            public void testExtractThisInTrait() throws Exception {
-                runTest("testData/evaluation/singleBreakpoint/extractThisInTrait.kt");
+            @TestMetadata("extractThisInInterface.kt")
+            public void testExtractThisInInterface() throws Exception {
+                runTest("testData/evaluation/singleBreakpoint/extractThisInInterface.kt");
             }
 
             @TestMetadata("extractVariablesFromCall.kt")
@@ -1220,6 +1255,11 @@ public abstract class KotlinEvaluateExpressionInMppTestGenerated extends Abstrac
             @TestMetadata("ktij21907.kt")
             public void testKtij21907() throws Exception {
                 runTest("testData/evaluation/singleBreakpoint/ktij21907.kt");
+            }
+
+            @TestMetadata("ktij21963.kt")
+            public void testKtij21963() throws Exception {
+                runTest("testData/evaluation/singleBreakpoint/ktij21963.kt");
             }
 
             @TestMetadata("lambdaToString.kt")
@@ -1537,6 +1577,11 @@ public abstract class KotlinEvaluateExpressionInMppTestGenerated extends Abstrac
                 runTest("testData/evaluation/multipleBreakpoints/isInsideInlineLambda.kt");
             }
 
+            @TestMetadata("kt51755.kt")
+            public void testKt51755() throws Exception {
+                runTest("testData/evaluation/multipleBreakpoints/kt51755.kt");
+            }
+
             @TestMetadata("lambdaParameters.kt")
             public void testLambdaParameters() throws Exception {
                 runTest("testData/evaluation/multipleBreakpoints/lambdaParameters.kt");
@@ -1654,6 +1699,11 @@ public abstract class KotlinEvaluateExpressionInMppTestGenerated extends Abstrac
         @TestMetadata("functionBreakpointInCommonCode.kt")
         public void testFunctionBreakpointInCommonCode() throws Exception {
             runTest("testData/evaluation/multiplatform/functionBreakpointInCommonCode.kt");
+        }
+
+        @TestMetadata("ktij21854.kt")
+        public void testKtij21854() throws Exception {
+            runTest("testData/evaluation/multiplatform/ktij21854.kt");
         }
 
         @TestMetadata("typealiasFromCommonCode.kt")

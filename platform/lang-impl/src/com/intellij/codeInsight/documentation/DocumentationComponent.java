@@ -719,6 +719,11 @@ public class DocumentationComponent extends JPanel implements Disposable, DataPr
         presentation.setVisible(presentation.isEnabled());
       }
     }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
+    }
   }
 
   protected class ForwardAction extends AnAction implements HintManagerImpl.ActionToIgnore {
@@ -738,6 +743,11 @@ public class DocumentationComponent extends JPanel implements Disposable, DataPr
       if (!isToolbar(e)) {
         presentation.setVisible(presentation.isEnabled());
       }
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
     }
   }
 
@@ -797,6 +807,11 @@ public class DocumentationComponent extends JPanel implements Disposable, DataPr
       Presentation presentation = e.getPresentation();
       presentation.setEnabled(hasExternalDoc());
     }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.BGT;
+    }
   }
 
   private boolean hasExternalDoc() {
@@ -827,28 +842,11 @@ public class DocumentationComponent extends JPanel implements Disposable, DataPr
     myHint = null;
   }
 
-  private static class Context {
-    final SmartPsiElementPointer<PsiElement> element;
-    final @Nls String text;
-    final String externalUrl;
-    final DocumentationProvider provider;
-    final Rectangle viewRect;
-    final int highlightedLink;
-
-    Context(SmartPsiElementPointer<PsiElement> element,
-            @Nls String text,
-            String externalUrl,
-            DocumentationProvider provider,
-            Rectangle viewRect,
-            int highlightedLink) {
-      this.element = element;
-      this.text = text;
-      this.externalUrl = externalUrl;
-      this.provider = provider;
-      this.viewRect = viewRect;
-      this.highlightedLink = highlightedLink;
-    }
-
+  private record Context(SmartPsiElementPointer<PsiElement> element,
+                         @Nls String text,
+                         String externalUrl,
+                         DocumentationProvider provider,
+                         Rectangle viewRect, int highlightedLink) {
     @NotNull
     Context withText(@NotNull @Nls String text) {
       return new Context(element, text, externalUrl, provider, viewRect, highlightedLink);
@@ -882,6 +880,11 @@ public class DocumentationComponent extends JPanel implements Disposable, DataPr
     }
 
     @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.BGT;
+    }
+
+    @Override
     public void setSelected(@NotNull AnActionEvent e, boolean state) {
       Registry.get("documentation.show.toolbar").setValue(state);
       updateControlState();
@@ -899,6 +902,11 @@ public class DocumentationComponent extends JPanel implements Disposable, DataPr
       var project = e.getProject();
       e.getPresentation().setEnabledAndVisible(project != null && LookupManager.getInstance(project).getActiveLookup() != null);
       super.update(e);
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
     }
 
     @Override
@@ -930,6 +938,11 @@ public class DocumentationComponent extends JPanel implements Disposable, DataPr
     }
 
     @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
+    }
+
+    @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
       myToolwindowCallback.run();
     }
@@ -943,6 +956,11 @@ public class DocumentationComponent extends JPanel implements Disposable, DataPr
     @Override
     public void update(@NotNull AnActionEvent e) {
       e.getPresentation().setEnabledAndVisible(myHint != null && (myManuallyResized || myHint.getDimensionServiceKey() != null));
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.BGT;
     }
 
     @Override

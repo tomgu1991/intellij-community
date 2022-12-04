@@ -11,6 +11,7 @@ import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiMethod;
 import com.intellij.refactoring.actions.RefactoringActionContextUtil;
+import com.intellij.ui.ExperimentalUI;
 import com.intellij.util.IncorrectOperationException;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -49,7 +50,7 @@ public class ReplaceConstructorWithFactoryAction extends PsiElementBaseIntention
 
   @Override
   public Icon getIcon(int flags) {
-    return AllIcons.Actions.RefactoringBulb;
+    return ExperimentalUI.isNewUI() ? null : AllIcons.Actions.RefactoringBulb;
   }
 
   private static boolean isNotEnumClass(@Nullable PsiClass psiClass) {

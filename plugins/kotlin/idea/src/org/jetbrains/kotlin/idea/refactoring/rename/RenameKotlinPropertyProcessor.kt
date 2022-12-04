@@ -3,6 +3,7 @@
 package org.jetbrains.kotlin.idea.refactoring.rename
 
 import com.intellij.navigation.NavigationItem
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.Pass
@@ -24,14 +25,11 @@ import org.jetbrains.kotlin.asJava.elements.KtLightMethod
 import org.jetbrains.kotlin.codegen.state.KotlinTypeMapper
 import org.jetbrains.kotlin.descriptors.ClassDescriptor
 import org.jetbrains.kotlin.descriptors.PropertyDescriptor
-import org.jetbrains.kotlin.descriptors.ValueParameterDescriptor
 import org.jetbrains.kotlin.descriptors.VariableDescriptor
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.base.psi.unquoteKotlinIdentifier
-import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.caches.resolve.getResolutionFacade
 import org.jetbrains.kotlin.idea.caches.resolve.unsafeResolveToDescriptor
-import org.jetbrains.kotlin.idea.core.getDeepestSuperDeclarations
 import org.jetbrains.kotlin.idea.core.isEnumCompanionPropertyWithEntryConflict
 import org.jetbrains.kotlin.idea.refactoring.KotlinRefactoringSettings
 import org.jetbrains.kotlin.idea.refactoring.checkSuperMethodsWithPopup
@@ -40,9 +38,9 @@ import org.jetbrains.kotlin.idea.references.KtDestructuringDeclarationReference
 import org.jetbrains.kotlin.idea.references.KtReference
 import org.jetbrains.kotlin.idea.references.KtSimpleNameReference
 import org.jetbrains.kotlin.idea.references.mainReference
-import org.jetbrains.kotlin.idea.search.codeUsageScope
+import org.jetbrains.kotlin.idea.base.util.codeUsageScope
+import org.jetbrains.kotlin.idea.search.KotlinSearchUsagesSupport
 import org.jetbrains.kotlin.idea.util.application.isUnitTestMode
-import org.jetbrains.kotlin.idea.util.application.runReadAction
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.load.java.JvmAbi
 import org.jetbrains.kotlin.name.Name
@@ -51,10 +49,7 @@ import org.jetbrains.kotlin.psi.psiUtil.containingClassOrObject
 import org.jetbrains.kotlin.psi.psiUtil.findPropertyByName
 import org.jetbrains.kotlin.psi.psiUtil.isPrivate
 import org.jetbrains.kotlin.psi.psiUtil.quoteIfNeeded
-import org.jetbrains.kotlin.resolve.BindingContext
-import org.jetbrains.kotlin.resolve.DataClassDescriptorResolver
-import org.jetbrains.kotlin.resolve.DescriptorToSourceUtils
-import org.jetbrains.kotlin.resolve.DescriptorUtils
+import org.jetbrains.kotlin.resolve.*
 import org.jetbrains.kotlin.resolve.source.getPsi
 import org.jetbrains.kotlin.util.findCallableMemberBySignature
 import org.jetbrains.kotlin.utils.DFS
@@ -254,7 +249,7 @@ class RenameKotlinPropertyProcessor : RenameKotlinPsiProcessor() {
         return declarationToRename
     }
 
-    override fun substituteElementToRename(element: PsiElement, editor: Editor, renameCallback: Pass<PsiElement>) {
+    override fun substituteElementToRename(element: PsiElement, editor: Editor, renameCallback: Pass<in PsiElement>) {
         val namedUnwrappedElement = element.namedUnwrappedElement ?: return
 
         val callableDeclaration = namedUnwrappedElement as? KtCallableDeclaration
@@ -360,19 +355,25 @@ class RenameKotlinPropertyProcessor : RenameKotlinPsiProcessor() {
     }
 
     private fun addRenameElements(
-        psiMethod: PsiMethod?,
+        psiMethod: PsiMethod,
         oldName: String?,
         newName: String?,
         allRenames: MutableMap<PsiElement, String>,
         scope: SearchScope
     ) {
-        if (psiMethod == null) return
+        val allOverriders = runProcessWithProgressSynchronously(
+            KotlinBundle.message("rename.searching.for.all.overrides"),
+            canBeCancelled = true,
+            psiMethod.project,
+        ) {
+            OverridingMethodsSearch.search(psiMethod, scope, true).findAll()
+        }
 
-        OverridingMethodsSearch.search(psiMethod, scope, true).forEach { overrider ->
+        for (overrider in allOverriders) {
             val overriderElement = overrider.namedUnwrappedElement
 
             if (overriderElement != null && overriderElement !is SyntheticElement) {
-              RenameUtil.assertNonCompileElement(overriderElement)
+                RenameUtil.assertNonCompileElement(overriderElement)
 
                 val overriderName = overriderElement.name
 
@@ -398,25 +399,12 @@ class RenameKotlinPropertyProcessor : RenameKotlinPsiProcessor() {
 
     private fun findDeepestOverriddenDeclaration(declaration: KtCallableDeclaration): KtCallableDeclaration? {
         if (declaration.modifierList?.hasModifier(KtTokens.OVERRIDE_KEYWORD) == true) {
-            val bindingContext = declaration.analyze()
-            var descriptor = bindingContext[BindingContext.DECLARATION_TO_DESCRIPTOR, declaration]
-            if (descriptor is ValueParameterDescriptor) {
-                descriptor = bindingContext[BindingContext.VALUE_PARAMETER_AS_PROPERTY, descriptor]
-                    ?: return declaration
-            }
+            val deepestSuperDeclarations = KotlinSearchUsagesSupport.findDeepestSuperMethodsNoWrapping(declaration)
 
-            if (descriptor != null) {
-                assert(descriptor is PropertyDescriptor) { "Property descriptor is expected" }
-
-                val supers = (descriptor as PropertyDescriptor).getDeepestSuperDeclarations()
-
-                // Take one of supers for now - API doesn't support substitute to several elements (IDEA-48796)
-                val deepest = supers.first()
-                if (deepest != descriptor) {
-                    val superPsiElement = DescriptorToSourceUtils.descriptorToDeclaration(deepest)
-                    return superPsiElement as? KtCallableDeclaration
-                }
-            }
+            // Take one of supers for now - API doesn't support substitute to several elements (IDEA-48796)
+            return deepestSuperDeclarations
+                .filterIsInstance<KtCallableDeclaration>()
+                .firstOrNull()
         }
 
         return null
@@ -483,7 +471,7 @@ class RenameKotlinPropertyProcessor : RenameKotlinPsiProcessor() {
 
         val adjustedUsages = if (element is KtParameter) usages.filterNot {
             val refTarget = it.reference?.resolve()
-            refTarget is KtLightMethod && DataClassDescriptorResolver.isComponentLike(Name.guessByFirstCharacter(refTarget.name))
+            refTarget is KtLightMethod && DataClassResolver.isComponentLike(Name.guessByFirstCharacter(refTarget.name))
         } else usages.toList()
 
         val refKindUsages = adjustedUsages.groupBy { usage: UsageInfo ->

@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.uast.kotlin
 
@@ -22,6 +22,7 @@ class KotlinUReturnExpression(
         get() = generateSequence(uastParent) { it.uastParent }
             .find {
                 it is ULabeledExpression && it.label == label ||
+                        it is UMethod && it.name == label ||
                         (it is UMethod || it is KotlinLocalFunctionULambdaExpression) && label == null ||
                         it is ULambdaExpression && it.uastParent.let { parent -> parent is UCallExpression && parent.methodName == label }
             }

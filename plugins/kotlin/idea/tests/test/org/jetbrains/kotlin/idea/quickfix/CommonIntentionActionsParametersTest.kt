@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.quickfix
 
@@ -14,7 +14,7 @@ import org.junit.runner.RunWith
 @RunWith(JUnit38ClassRunner::class)
 class CommonIntentionActionsParametersTest : LightPlatformCodeInsightFixtureTestCase() {
 
-    override fun getProjectDescriptor() = KotlinWithJdkAndRuntimeLightProjectDescriptor.INSTANCE_FULL_JDK
+    override fun getProjectDescriptor() = KotlinWithJdkAndRuntimeLightProjectDescriptor.getInstanceFullJdk()
 
     override fun setUp() {
         super.setUp()
@@ -57,6 +57,36 @@ class CommonIntentionActionsParametersTest : LightPlatformCodeInsightFixtureTest
         )
     }
 
+  fun testSetConstructorParameters() {
+      myFixture.configureByText(
+          "foo.kt",
+           """
+           class Foo(<caret>) {
+           }
+           """.trimIndent()
+      )
+
+    val action = createChangeParametersActions(
+        myFixture.atCaret<UMethod>().javaPsi,
+        setMethodParametersRequest(
+            linkedMapOf<String, JvmType>(
+                "i" to PsiType.INT,
+                "file" to PsiType.getTypeByName("java.io.File", project, myFixture.file.resolveScope)
+            ).entries
+        )
+    ).find { it.text.contains("Change signature of Foo") }
+    if (action == null) fail("Change signature intention not found")
+    myFixture.launchAction(action!!)
+    myFixture.checkResult(
+        """
+        import java.io.File
+
+        class Foo(i: Int, file: File) {
+        }
+        """.trimIndent(),
+        true
+    )
+  }
 
     fun testAddParameterToTheEnd() {
         myFixture.configureByText(

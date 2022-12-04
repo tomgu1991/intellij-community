@@ -15,7 +15,7 @@ import com.siyeh.ig.junit.JUnitCommonClassNames
 import org.jetbrains.kotlin.descriptors.CallableDescriptor
 import org.jetbrains.kotlin.descriptors.ClassDescriptor
 import org.jetbrains.kotlin.descriptors.ClassifierDescriptor
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToCall
 import org.jetbrains.kotlin.idea.caches.resolve.util.getJavaClassDescriptor
@@ -37,7 +37,9 @@ import org.jetbrains.kotlin.synthetic.SyntheticJavaPropertyDescriptor
 import org.jetbrains.kotlin.utils.addToStdlib.safeAs
 import javax.swing.JPanel
 
-class RedundantInnerClassModifierInspection : AbstractKotlinInspection(), CleanupLocalInspectionTool {
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.inspections.AbstractKotlinInspection
+
+class RedundantInnerClassModifierInspection : AbstractKotlinInspection() {
     @Suppress("MemberVisibilityCanBePrivate")
     var ignorableAnnotations = OrderedSet(listOf(JUnitCommonClassNames.ORG_JUNIT_JUPITER_API_NESTED))
 
@@ -158,7 +160,7 @@ class RedundantInnerClassModifierInspection : AbstractKotlinInspection(), Cleanu
             val bindingContext = containingClass.analyze(BodyResolveMode.PARTIAL)
             val fqName =
                 bindingContext[BindingContext.DECLARATION_TO_DESCRIPTOR, containingClass]?.fqNameOrNull()?.asString() ?: return emptyList()
-            val psiFactory = KtPsiFactory(targetClass)
+            val psiFactory = KtPsiFactory(targetClass.project)
             val newReceiver = psiFactory.createExpression(fqName)
             return ReferencesSearch.search(targetClass, targetClass.useScope).mapNotNull {
                 val callExpression = it.element.parent as? KtCallExpression ?: return@mapNotNull null

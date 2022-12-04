@@ -14,22 +14,35 @@ import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.ui.MessageDialogBuilder;
 import com.intellij.openapi.ui.Messages;
+import com.intellij.openapi.util.NlsActions;
 import com.intellij.openapi.util.io.NioFiles;
 import com.intellij.ui.UIBundle;
 import com.intellij.util.ui.IoErrorText;
 import com.intellij.util.ui.UIUtil;
 import org.jetbrains.annotations.NotNull;
 
-import javax.swing.JTextField;
+import javax.swing.*;
 import java.awt.event.KeyEvent;
 import java.io.IOException;
 
 public class FileDeleteAction extends FileChooserAction {
+  /** @deprecated please use {@link FileDeleteAction#FileDeleteAction(String, String, Icon)} instead */
+  @Deprecated
+  public FileDeleteAction() { }
+
+  @SuppressWarnings("unused")
+  public FileDeleteAction(@NlsActions.ActionText String text, @NlsActions.ActionDescription String description, Icon icon) {
+    super(text, description, icon);
+  }
+
   @Override
   protected void update(@NotNull FileChooserPanel panel, @NotNull AnActionEvent e) {
     var visible = isEnabled(e);
     e.getPresentation().setVisible(visible);
-    e.getPresentation().setEnabled(visible && !panel.selectedPaths().isEmpty());
+    e.getPresentation().setEnabled(
+      visible &&
+      !(e.getInputEvent() instanceof KeyEvent && e.getData(PlatformCoreDataKeys.CONTEXT_COMPONENT) instanceof JTextField) &&  // do not override text deletion
+      !panel.selectedPaths().isEmpty());
   }
 
   @Override

@@ -5,6 +5,7 @@ import com.intellij.codeInsight.BlockUtils;
 import com.intellij.codeInsight.ChangeContextUtil;
 import com.intellij.codeInsight.daemon.impl.analysis.HighlightControlFlowUtil;
 import com.intellij.codeInsight.daemon.impl.quickfix.SimplifyBooleanExpressionFix;
+import com.intellij.codeInspection.dataFlow.JavaMethodContractUtil;
 import com.intellij.codeInspection.redundantCast.RemoveRedundantCastUtil;
 import com.intellij.java.refactoring.JavaRefactoringBundle;
 import com.intellij.openapi.diagnostic.Logger;
@@ -109,11 +110,8 @@ public final class InlineUtil implements CommonJavaInlineUtil {
       }
       else if (varType instanceof PsiEllipsisType &&
                ((PsiEllipsisType)varType).getComponentType().equals(exprType)) { //convert vararg to array
-        final PsiExpressionList argumentList = PsiTreeUtil.getParentOfType(expr, PsiExpressionList.class);
-        LOG.assertTrue(argumentList != null);
-        final PsiExpression[] arguments = argumentList.getExpressions();
-        String varargsWrapper = "new " + exprType.getCanonicalText() + "[]{" + StringUtil.join(Arrays.asList(arguments), PsiElement::getText, ",") + '}';
-        expr.replace(elementFactory.createExpressionFromText(varargsWrapper, argumentList));
+        String varargsWrapper = "new " + exprType.getCanonicalText() + "[]{" + expr.getText() + '}';
+        expr.replace(elementFactory.createExpressionFromText(varargsWrapper, expr));
       }
       else {
         boolean insertCastWhenUnchecked = !(exprType instanceof PsiClassType && ((PsiClassType)exprType).isRaw() && parent instanceof PsiExpressionList);
@@ -479,10 +477,84 @@ public final class InlineUtil implements CommonJavaInlineUtil {
         isAccessedForWriting = true;
       }
     }
+    if (refs.size() == 1 && !isAccessedForWriting && isFirstUse(variable, refs.get(0))) return true;
 
     PsiExpression initializer = variable.getInitializer();
     return canInlineParameterOrThisVariable(variable.getProject(), initializer, false, false,
                                             refs.size(), isAccessedForWriting);
+  }
+
+  private static boolean isFirstUse(PsiLocalVariable variable, PsiReferenceExpression expression) {
+    if (!(variable.getParent() instanceof PsiDeclarationStatement decl)) return false;
+    PsiStatement statement = PsiTreeUtil.getNextSiblingOfType(decl, PsiStatement.class);
+    if (statement == null) return false;
+    PsiElement parent;
+    PsiExpression cur = expression;
+    while (true) {
+      parent = cur.getParent();
+      if (parent instanceof PsiPolyadicExpression poly) {
+        if (poly.getOperands()[0] != cur) return false;
+        cur = poly;
+      } else if (parent instanceof PsiParenthesizedExpression ||
+                 parent instanceof PsiTypeCastExpression ||
+                 parent instanceof PsiUnaryExpression ||
+                 parent instanceof PsiInstanceOfExpression ||
+                 parent instanceof PsiSwitchExpression) {
+        cur = (PsiExpression)parent;
+      } else if (parent instanceof PsiConditionalExpression cond) {
+        if (cond.getCondition() != cur) return false;
+        cur = cond;
+      } else if (parent instanceof PsiExpressionList list) {
+        for (PsiExpression expr : list.getExpressions()) {
+          if (expr == cur) break;
+          if (!ExpressionUtils.isSafelyRecomputableExpression(expr)) return false;
+        }
+        if (!(list.getParent() instanceof PsiCallExpression call)) return false;
+        PsiExpression qualifier = call instanceof PsiMethodCallExpression methodCall ? methodCall.getMethodExpression().getQualifierExpression() :
+                                  call instanceof PsiNewExpression newExpression ? newExpression.getQualifier() : null;
+        if (qualifier != null && !ExpressionUtils.isSafelyRecomputableExpression(qualifier)) return false;
+        cur = call;
+      }
+      else if (parent instanceof PsiReferenceExpression ref) {
+        if (parent.getParent() instanceof PsiMethodCallExpression call) {
+          cur = call;
+        } else {
+          cur = ref;
+        }
+      } else if (parent instanceof PsiArrayAccessExpression arr) {
+        if (arr.getIndexExpression() == cur && !ExpressionUtils.isSafelyRecomputableExpression(arr)) return false;
+        cur = arr;
+      } else if (parent instanceof PsiArrayInitializerExpression init) {
+        for (PsiExpression initializer : init.getInitializers()) {
+          if (initializer == cur) break;
+          if (!ExpressionUtils.isSafelyRecomputableExpression(initializer)) return false;
+        }
+        cur = init;
+      }
+      else if (parent instanceof PsiNewExpression newExpression) {
+        cur = newExpression;
+      }
+      else if (parent instanceof PsiLocalVariable var) {
+        return var.getParent() == statement;
+      }
+      else if (parent instanceof PsiStatement) {
+        if (parent != statement) return false;
+        if (parent instanceof PsiAssertStatement ||
+            parent instanceof PsiReturnStatement ||
+            parent instanceof PsiIfStatement ||
+            parent instanceof PsiExpressionStatement ||
+            parent instanceof PsiSynchronizedStatement ||
+            parent instanceof PsiSwitchStatement ||
+            parent instanceof PsiWhileStatement ||
+            parent instanceof PsiForeachStatement) {
+          return true;
+        }
+        return false;
+      }
+      else {
+        return false;
+      }
+    }
   }
 
   private static boolean canInlineParameterOrThisVariable(Project project,
@@ -575,7 +647,8 @@ public final class InlineUtil implements CommonJavaInlineUtil {
           return false;
         }
       }
-      return true; //TODO: "suspicious" places to review by user!
+      PsiMethod method = ((PsiCallExpression)initializer).resolveMethod();
+      return method == null || JavaMethodContractUtil.isPure(method);
     }
     else if (initializer instanceof PsiLiteralExpression) {
       return true;
@@ -651,7 +724,9 @@ public final class InlineUtil implements CommonJavaInlineUtil {
 
     boolean shouldBeFinal = variable.hasModifierProperty(PsiModifier.FINAL) && strictlyFinal;
     Project project = variable.getProject();
-    if (canInlineParameterOrThisVariable(project, initializer, shouldBeFinal, strictlyFinal, refs.size(), isAccessedForWriting)) {
+    boolean canInline = refs.size() == 1 && !isAccessedForWriting && isFirstUse(variable, refs.get(0)) ||
+                        canInlineParameterOrThisVariable(project, initializer, shouldBeFinal, strictlyFinal, refs.size(), isAccessedForWriting);
+    if (canInline) {
       if (shouldBeFinal) {
         declareUsedLocalsFinal(initializer, true);
       }

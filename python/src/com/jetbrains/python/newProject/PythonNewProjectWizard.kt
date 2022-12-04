@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.jetbrains.python.newProject
 
 import com.intellij.ide.highlighter.ModuleFileType
@@ -16,8 +16,8 @@ import com.intellij.openapi.projectRoots.impl.SdkConfigurationUtil
 import com.intellij.openapi.roots.ui.configuration.projectRoot.ProjectSdksModel
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
+import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.Panel
-import com.intellij.ui.dsl.gridLayout.HorizontalAlign
 import com.jetbrains.python.PyBundle
 import com.jetbrains.python.PythonModuleTypeBase
 import com.jetbrains.python.newProject.steps.ProjectSpecificSettingsStep
@@ -29,7 +29,6 @@ import com.jetbrains.python.sdk.add.PyAddNewVirtualEnvPanel
 import com.jetbrains.python.sdk.add.PyAddSdkPanel
 import com.jetbrains.python.sdk.pythonSdk
 import java.nio.file.Path
-import kotlin.streams.toList
 
 /**
  * A wizard for creating new pure-Python projects in IntelliJ.
@@ -71,7 +70,7 @@ interface NewProjectWizardPythonData : NewProjectWizardBaseData {
   companion object {
     val KEY = Key.create<NewProjectWizardPythonData>(NewProjectWizardPythonData::class.java.name)
 
-    val NewProjectWizardStep.pythonData get() = data.getUserData(KEY)!!
+    private val NewProjectWizardStep.pythonData get() = data.getUserData(KEY)!!
 
     val NewProjectWizardStep.pythonSdkProperty get() = pythonData.pythonSdkProperty
     val NewProjectWizardStep.pythonSdk get() = pythonData.pythonSdk
@@ -203,9 +202,7 @@ private class NewEnvironmentStep<P>(parent: P)
       PyAddNewVirtualEnvPanel(null, null, sdks, newProjectPath, context),
       PyAddNewCondaEnvPanel(null, null, sdks, newProjectPath),
     )
-    val providedPanels = PySdkProvider.EP_NAME.extensions()
-      .map { it.createNewEnvironmentPanel(null, null, sdks, newProjectPath, context) }
-      .toList()
+    val providedPanels = PySdkProvider.EP_NAME.extensionList.map { it.createNewEnvironmentPanel(null, null, sdks, newProjectPath, context) }
     val panels = basePanels + providedPanels
     return panels
       .associateBy { it.envName }
@@ -237,7 +234,7 @@ private class PythonSdkPanelAdapterStep<P>(parent: P, val panel: PyAddSdkPanel)
       row {
         cell(panel)
           .validationRequestor { panel.addChangeListener(it) }
-          .horizontalAlign(HorizontalAlign.FILL)
+          .align(AlignX.FILL)
           .validationOnInput { panel.validateAll().firstOrNull() }
           .validationOnApply { panel.validateAll().firstOrNull() }
       }

@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 @file:JvmName("ServiceContainerUtil")
 package com.intellij.testFramework
 
@@ -25,6 +25,15 @@ fun <T : Any> ComponentManager.registerServiceInstance(serviceInterface: Class<T
 }
 
 /**
+ * Unregister service specified by [serviceInterface] if it was registered;
+ * throws [IllegalStateException] if the service was not registered.
+ */
+@TestOnly
+fun ComponentManager.unregisterService(serviceInterface: Class<*>) {
+  (this as ComponentManagerImpl).unregisterService(serviceInterface)
+}
+
+/**
  * Register a new service or replace an existing service with a specified instance for testing purposes.
  * Registration will be rolled back when parentDisposable is disposed. In most of the cases,
  * [com.intellij.testFramework.UsefulTestCase.getTestRootDisposable] should be specified.
@@ -34,11 +43,13 @@ fun <T : Any> ComponentManager.registerOrReplaceServiceInstance(serviceInterface
   val previous = this.getService(serviceInterface)
   if (previous != null) {
     replaceService(serviceInterface, instance, parentDisposable)
-  } else {
+  }
+  else {
     (this as ComponentManagerImpl).registerServiceInstance(serviceInterface, instance, testDescriptor)
     if (instance is Disposable) {
       Disposer.register(parentDisposable, instance)
-    } else {
+    }
+    else {
       Disposer.register(parentDisposable) {
         this.unregisterComponent(serviceInterface)
       }
@@ -65,8 +76,8 @@ fun <T : Any> ComponentManager.registerComponentInstance(componentInterface: Cla
 
 @TestOnly
 @JvmOverloads
-fun ComponentManager.registerComponentImplementation(componentInterface: Class<*>, componentImplementation: Class<*>, shouldBeRegistered: Boolean = false) {
-  (this as ComponentManagerImpl).registerComponentImplementation(componentInterface, componentImplementation, shouldBeRegistered)
+fun ComponentManager.registerComponentImplementation(key: Class<*>, implementation: Class<*>, shouldBeRegistered: Boolean = false) {
+  (this as ComponentManagerImpl).registerComponentImplementation(key, implementation, shouldBeRegistered)
 }
 
 @TestOnly

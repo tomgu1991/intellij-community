@@ -25,6 +25,7 @@ import com.intellij.psi.*;
 import com.intellij.psi.impl.source.tree.injected.InjectedLanguageUtil;
 import com.intellij.psi.impl.source.tree.injected.InjectedLanguageUtilBase;
 import com.intellij.psi.util.PsiUtilCore;
+import com.intellij.ui.ExperimentalUI;
 import com.intellij.util.ObjectUtils;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.ui.EmptyIcon;
@@ -339,7 +340,7 @@ public final class CachedIntentions {
     return IntentionGroup.OTHER;
   }
 
-  @NotNull
+  @Nullable
   public Icon getIcon(@NotNull IntentionActionWithTextCaching value) {
     if (value.getIcon() != null) {
       return value.getIcon();
@@ -366,11 +367,11 @@ public final class CachedIntentions {
     if (IntentionManagerSettings.getInstance().isShowLightBulb(action)) {
       return myErrorFixes.contains(value) ? AllIcons.Actions.QuickfixBulb
                                           : myInspectionFixes.contains(value) ? AllIcons.Actions.IntentionBulb :
-                                            AllIcons.Actions.RealIntentionBulb;
+                                            ExperimentalUI.isNewUI() ? null : AllIcons.Actions.RealIntentionBulb;
     }
     else {
       if (myErrorFixes.contains(value)) return AllIcons.Actions.QuickfixOffBulb;
-      return IconLoader.getDisabledIcon(AllIcons.Actions.RealIntentionBulb);
+      return ExperimentalUI.isNewUI() ? null : IconLoader.getDisabledIcon(AllIcons.Actions.RealIntentionBulb);
     }
   }
 

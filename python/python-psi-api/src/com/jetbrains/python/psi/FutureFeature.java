@@ -28,7 +28,7 @@ public enum FutureFeature {
   ABSOLUTE_IMPORT("absolute_import", LanguageLevel.PYTHON25, LanguageLevel.PYTHON30),
   PRINT_FUNCTION("print_function", LanguageLevel.PYTHON26, LanguageLevel.PYTHON30),
   UNICODE_LITERALS("unicode_literals", LanguageLevel.PYTHON26, LanguageLevel.PYTHON30),
-  ANNOTATIONS("annotations", LanguageLevel.PYTHON37, LanguageLevel.PYTHON311)
+  ANNOTATIONS("annotations", LanguageLevel.PYTHON37, LanguageLevel.PYTHON312)
   // NOTE: only add new features to the end unless you want to break existing stubs that rely on ordinal
   ;
 
@@ -61,7 +61,6 @@ public enum FutureFeature {
   }
 
   /**
-   * @param level
    * @return true iff the feature can either be imported from __future__ at given level, or is already built-in.
    */
   public boolean availableAt(@NotNull LanguageLevel level) {
@@ -69,7 +68,6 @@ public enum FutureFeature {
   }
 
   /**
-   * @param level
    * @return true iff the feature is already present (required) at given level, and there's no need to import it.
    */
   public boolean requiredAt(@NotNull LanguageLevel level) {
