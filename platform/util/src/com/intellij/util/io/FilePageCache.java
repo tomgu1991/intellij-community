@@ -188,6 +188,7 @@ final class FilePageCache {
         if (wrapper != null) {
           //noinspection NonAtomicOperationOnVolatileField
           ++myMappingChangeCount;
+          assertUnderSegmentAllocationLock();
           pagesToRemoveByPageId.put(key, wrapper);
           totalSizeCached -= wrapper.getLength();
         }
@@ -301,20 +302,20 @@ final class FilePageCache {
   void unmapBuffersForOwner(PagedFileStorage fileStorage) {
     Map<Long, DirectBufferWrapper> buffers = getBuffersForOwner(fileStorage);
 
-    if (!buffers.isEmpty()) {
-      pagesAccessLock.lock();
-      try {
-        for (Long key : buffers.keySet()) {
-          pagesByPageId.remove(key);
-        }
-      }
-      finally {
-        pagesAccessLock.unlock();
-      }
-    }
-
     pagesAllocationLock.lock();
     try {
+      if (!buffers.isEmpty()) {
+        pagesAccessLock.lock();
+        try {
+          for (Long key : buffers.keySet()) {
+            pagesByPageId.remove(key);
+          }
+        }
+        finally {
+          pagesAccessLock.unlock();
+        }
+      }
+
       disposeRemovedSegments(fileStorage);
     }
     finally {
@@ -323,18 +324,18 @@ final class FilePageCache {
   }
 
   void flushBuffers() {
-    pagesAccessLock.lock();
-    try {
-      while (!pagesByPageId.isEmpty()) {
-        pagesByPageId.doRemoveEldestEntry();
-      }
-    }
-    finally {
-      pagesAccessLock.unlock();
-    }
-
     pagesAllocationLock.lock();
     try {
+      pagesAccessLock.lock();
+      try {
+        while (!pagesByPageId.isEmpty()) {
+          pagesByPageId.doRemoveEldestEntry();
+        }
+      }
+      finally {
+        pagesAccessLock.unlock();
+      }
+
       disposeRemovedSegments(null);
     }
     finally {
@@ -379,9 +380,9 @@ final class FilePageCache {
   }
 
   void assertNoBuffersLocked() {
-    pagesAllocationLock.lock();
+    pagesAccessLock.lock();
     try {
-      pagesAccessLock.lock();
+      pagesAllocationLock.lock();
       try {
         for (DirectBufferWrapper value : pagesByPageId.values()) {
           if (value.isLocked()) {
@@ -395,11 +396,11 @@ final class FilePageCache {
         }
       }
       finally {
-        pagesAccessLock.unlock();
+        pagesAllocationLock.unlock();
       }
     }
     finally {
-      pagesAllocationLock.unlock();
+      pagesAccessLock.unlock();
     }
   }
 
@@ -430,9 +431,9 @@ final class FilePageCache {
 
   @NotNull
   FilePageCacheStatistics getStatistics() {
-    pagesAllocationLock.lock();
+    pagesAccessLock.lock();
     try {
-      pagesAccessLock.lock();
+      pagesAllocationLock.lock();
       try {
         return new FilePageCacheStatistics(PagedFileStorage.CHANNELS_CACHE.getStatistics(),
                                            myUncachedFileAccess,
@@ -447,11 +448,11 @@ final class FilePageCache {
                                            cachedSizeLimit);
       }
       finally {
-        pagesAccessLock.unlock();
+        pagesAllocationLock.unlock();
       }
     }
     finally {
-      pagesAllocationLock.unlock();
+      pagesAccessLock.unlock();
     }
   }
 
@@ -525,7 +526,7 @@ final class FilePageCache {
   }
 
   private void ensureSize(long sizeLimit) {
-    pagesAllocationLock.isHeldByCurrentThread();
+    assert pagesAllocationLock.isHeldByCurrentThread();
 
     pagesAccessLock.lock();
     try {

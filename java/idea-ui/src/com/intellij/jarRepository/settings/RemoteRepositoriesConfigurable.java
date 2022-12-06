@@ -42,7 +42,6 @@ import java.util.stream.Collectors;
 
 import static com.intellij.jarRepository.settings.JarRepositoryLibraryBindUtils.*;
 import static com.intellij.ui.ListUtil.removeSelectedItems;
-import static org.jetbrains.jps.model.library.JpsMavenRepositoryLibraryDescriptor.JAR_REPOSITORY_ID_NOT_SET;
 
 public class RemoteRepositoriesConfigurable implements SearchableConfigurable, Configurable.NoScroll {
   private JPanel myMainPanel;
@@ -146,7 +145,7 @@ public class RemoteRepositoriesConfigurable implements SearchableConfigurable, C
         ).ask(myProject);
 
         if (resetConfirmed) {
-          updateLibrariesRepositoryId(myMutableEntityStorageWrapper.builder, currentIds, JAR_REPOSITORY_ID_NOT_SET);
+          updateLibrariesRepositoryId(myMutableEntityStorageWrapper.builder, currentIds, null);
           resetReposModel(RemoteRepositoryDescription.DEFAULT_REPOSITORIES);
         }
       }
@@ -343,7 +342,9 @@ public class RemoteRepositoriesConfigurable implements SearchableConfigurable, C
   }
 
   /**
-   * Created to wrap mutable builder and pass it into action listener via closure
+   * Created to wrap non-final builder and pass final wrapper to remove button action listener lambda.
+   * <p/>
+   * See {@link RemoteRepositoriesConfigurable#setupRepoRemoveButton(Project, MutableEntityStorageWrapper, JBList, CollectionListModel, JButton)}
    */
   private static class MutableEntityStorageWrapper {
     private final WorkspaceModel workspaceModel;

@@ -21,6 +21,7 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.*;
+import com.intellij.psi.controlFlow.DefUseUtil;
 import com.intellij.psi.impl.source.PsiFieldImpl;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.util.PsiTreeUtil;
@@ -31,6 +32,7 @@ import com.intellij.util.IncorrectOperationException;
 import com.intellij.util.SmartList;
 import com.intellij.util.containers.ContainerUtil;
 import com.siyeh.ig.bugs.EqualsWithItselfInspection;
+import com.siyeh.ig.controlflow.PointlessBooleanExpressionInspection;
 import com.siyeh.ig.fixes.EqualsToEqualityFix;
 import com.siyeh.ig.numeric.ComparisonToNaNInspection;
 import com.siyeh.ig.psiutils.*;
@@ -324,6 +326,11 @@ public class ConstantValueInspection extends AbstractBaseJavaLocalInspectionTool
         if (method == null || !JavaMethodContractUtil.isPure(method)) return true;
       }
     }
+    if (new PointlessBooleanExpressionInspection().getExpressionKind(expression) !=
+        PointlessBooleanExpressionInspection.BooleanExpressionKind.UNKNOWN) {
+      // avoid double reporting
+      return true;
+    }
     while (expression != null && BoolUtils.isNegation(expression)) {
       expression = BoolUtils.getNegated(expression);
     }
@@ -429,6 +436,10 @@ public class ConstantValueInspection extends AbstractBaseJavaLocalInspectionTool
 
     if (PsiUtil.skipParenthesizedExprUp(psiAnchor.getParent()) instanceof PsiAssignmentExpression assignment &&
         PsiTreeUtil.isAncestor(assignment.getLExpression(), psiAnchor, false)) {
+      IElementType tokenType = assignment.getOperationTokenType();
+      if (tokenType.equals(JavaTokenType.ANDEQ) || tokenType.equals(JavaTokenType.OREQ)) {
+        if (isFlagSetChain(assignment.getLExpression(), tokenType.equals(JavaTokenType.ANDEQ))) return;
+      }
       reporter.registerProblem(
         psiAnchor,
         JavaAnalysisBundle.message("dataflow.message.pointless.assignment.expression", Boolean.toString(evaluatesToTrue)),
@@ -454,6 +465,18 @@ public class ConstantValueInspection extends AbstractBaseJavaLocalInspectionTool
                                                 "dataflow.message.constant.condition.when.reached" :
                                                 "dataflow.message.constant.condition", evaluatesToTrue ? 1 : 0);
     reporter.registerProblem(psiAnchor, message, fixes.toArray(LocalQuickFix.EMPTY_ARRAY));
+  }
+
+  private static boolean isFlagSetChain(@NotNull PsiExpression expression, boolean isAnd) {
+    PsiLocalVariable local = ExpressionUtils.resolveLocalVariable(expression);
+    if (local == null) return false;
+    PsiExpression initializer = local.getInitializer();
+    if (!ExpressionUtils.isLiteral(initializer, isAnd)) return false;
+    if (!(PsiUtil.getVariableCodeBlock(local, null) instanceof PsiCodeBlock block)) return false;
+    PsiElement[] defs = DefUseUtil.getDefs(block, local, expression.getParent());
+    // boolean x = false; x|=something;
+    return defs.length == 1 && defs[0] == local && 
+           VariableAccessUtils.getVariableReferences(local, block).stream().filter(PsiUtil::isAccessedForWriting).limit(2).count() > 1;
   }
 
   private static @Nullable LocalQuickFix createSimplifyBooleanExpressionFix(PsiElement element, final boolean value) {

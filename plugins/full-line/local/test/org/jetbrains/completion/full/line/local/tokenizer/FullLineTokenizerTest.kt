@@ -26,7 +26,7 @@ internal class FullLineTokenizerTest {
   }
 
   companion object {
-    val bpe = FullLineTokenizer(ModelsFiles.gpt2_py_4L_512_83_q_local.tokenizer)
+    val bpe = FullLineTokenizer.load(ModelsFiles.currentModel.tokenizer)
 
     @JvmStatic
     fun encodeTests(): Stream<Arguments> {

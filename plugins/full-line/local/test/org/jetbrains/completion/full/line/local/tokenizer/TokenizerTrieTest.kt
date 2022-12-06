@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test
 
 internal class TokenizerTrieTest {
   companion object {
-    private val trie = TokenizerTrie(FullLineTokenizer(ModelsFiles.gpt2_py_4L_512_83_q_local.tokenizer))
+    private val trie = TokenizerTrie(FullLineTokenizer.load(ModelsFiles.currentModel.tokenizer))
   }
 
   @Test

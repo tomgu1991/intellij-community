@@ -98,16 +98,17 @@ open class AttachToProcessDialog(
 
   private var filteringPattern: String = ""
 
-  private val localAttachView = AttachToLocalProcessView(project, state, attachDebuggerProviders)
-  private val remoteAttachView = AttachToRemoteProcessView(project, state, attachHostProviders, attachDebuggerProviders)
+  private val columnsLayout = application.getService(AttachDialogColumnsLayoutService::class.java).getColumnsLayout()
+
+  private val localAttachView = AttachToLocalProcessView(project, state, columnsLayout, attachDebuggerProviders)
+  private val remoteAttachView = AttachToRemoteProcessView(project, state, columnsLayout, attachHostProviders, attachDebuggerProviders)
   private val allViews = listOf(localAttachView, remoteAttachView)
   private var currentAttachView = AtomicLazyProperty<AttachToProcessView> { localAttachView }
 
   private val viewsPanel = panel { row { segmentedButton(allViews) { it.getName() }.bind(currentAttachView) } }
 
-
   private val viewPanel = JPanel(MigLayout("ins 0, fill, gap 0, novisualpadding")).apply {
-    minimumSize = Dimension(application.getService(AttachDialogColumnsLayoutService::class.java).getColumnsLayout().getMinimumViewWidth(), JBUI.scale(400))
+    minimumSize = Dimension(columnsLayout.getMinimumViewWidth(), JBUI.scale(400))
     border = JBUI.Borders.customLine(JBColor.border(), 1, 1, 1, 1)
   }
 
@@ -295,6 +296,7 @@ open class AttachToProcessDialog(
     actions.add(RefreshActionButton())
     actions.add(SelectedViewAction())
     actions.add(DebuggerFilterComboBox())
+    actions.add(ActionManager.getInstance().getAction("XDebugger.Attach.Dialog.Settings"))
 
     return ActionManager.getInstance().createActionToolbar(ActionPlaces.ATTACH_DIALOG_TOOLBAR, DefaultActionGroup(actions), true)
   }

@@ -5,11 +5,11 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.project.ProjectManager
-import kotlinx.coroutines.Dispatchers
 import org.jetbrains.completion.full.line.FullLineCompletionMode
 import org.jetbrains.completion.full.line.FullLineProposal
 import org.jetbrains.completion.full.line.RawFullLineProposal
 import org.jetbrains.completion.full.line.currentOpenProject
+import org.jetbrains.completion.full.line.language.FullLineLanguageSupporter
 import org.jetbrains.completion.full.line.language.ModelState
 import org.jetbrains.completion.full.line.local.CompletionException
 import org.jetbrains.completion.full.line.local.ExecutionContext
@@ -42,7 +42,6 @@ class LocalFullLineCompletionProvider private constructor(
           numBeams = modelState.beamSize,
           lenNormBase = modelState.lenBase,
           lenNormPow = modelState.lenPow,
-          maxContextLen = modelState.contextLength(),
           filename = query.filename,
           oneTokenMode = query.mode == FullLineCompletionMode.ONE_TOKEN,
           numSuggestions = config.proposalsLimit,
@@ -70,11 +69,12 @@ class LocalFullLineCompletionProvider private constructor(
 
   companion object {
     fun create(language: Language): FullLineCompletionProvider? {
+      val modelsManager = service<ConfigurableModelsManager>()
       if (!checkedLanguages.contains(language.id)) {
         ApplicationManager.getApplication().executeOnPooledThread {
-          service<ConfigurableModelsManager>().run {
+          modelsManager.run {
             val project = ProjectManager.getInstance().currentOpenProject() ?: return@run
-            getLatest(language, true).also {
+            getSchema(language, true).also {
               checkedLanguages.add(language.id)
               val cur = modelsSchema.targetLanguage(language)
               if (cur?.version != it.version) {
@@ -83,6 +83,12 @@ class LocalFullLineCompletionProvider private constructor(
             }
           }
         }
+      }
+
+      FullLineLanguageSupporter.getInstance(language)?.modelVersion?.let {
+        val curSchema = modelsManager.modelsSchema.targetLanguage(language)?.version
+        if (curSchema?.startsWith("SNAPSHOT", true) == true || curSchema != it)
+          return null
       }
 
       val model = LocalModelsCache.getInstance().tryGetModel(language) ?: return null

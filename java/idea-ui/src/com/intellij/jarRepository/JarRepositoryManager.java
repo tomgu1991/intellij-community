@@ -328,7 +328,7 @@ public final class JarRepositoryManager {
     }
 
     String repositoryId = desc.getJarRepositoryId();
-    if (Objects.equals(repositoryId, JpsMavenRepositoryLibraryDescriptor.JAR_REPOSITORY_ID_NOT_SET)) {
+    if (repositoryId == null) {
       return null;
     }
 
@@ -508,6 +508,10 @@ public final class JarRepositoryManager {
     ModalityState startModality = ModalityState.defaultModalityState();
     AsyncPromise<T> promise = new AsyncPromise<>();
     DOWNLOADER_EXECUTOR.execute(() -> {
+      if (promise.isCancelled()) {
+        return;
+      }
+
       try {
         ourTasksInProgress.incrementAndGet();
         final ProgressIndicator indicator = new EmptyProgressIndicator(startModality);

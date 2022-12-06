@@ -3,6 +3,7 @@ package com.intellij.ide.projectWizard.generators
 
 import com.intellij.ide.JavaUiBundle
 import com.intellij.ide.projectWizard.NewProjectWizardCollector.BuildSystem.logAddSampleCodeChanged
+import com.intellij.ide.projectWizard.NewProjectWizardCollector.BuildSystem.logAddSampleOnboardingTipsChangedEvent
 import com.intellij.ide.projectWizard.NewProjectWizardCollector.BuildSystem.logContentRootChanged
 import com.intellij.ide.projectWizard.NewProjectWizardCollector.BuildSystem.logModuleFileLocationChanged
 import com.intellij.ide.projectWizard.NewProjectWizardCollector.BuildSystem.logModuleNameChanged
@@ -13,6 +14,7 @@ import com.intellij.ide.wizard.AbstractNewProjectWizardStep
 import com.intellij.ide.wizard.NewProjectWizardBaseData
 import com.intellij.ide.wizard.NewProjectWizardStep
 import com.intellij.ide.wizard.NewProjectWizardStep.Companion.ADD_SAMPLE_CODE_PROPERTY_NAME
+import com.intellij.ide.wizard.NewProjectWizardStep.Companion.GENERATE_ONBOARDING_TIPS_NAME
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.module.ModuleManager
 import com.intellij.openapi.module.StdModuleTypes
@@ -31,6 +33,7 @@ import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.openapi.ui.getCanonicalPath
 import com.intellij.openapi.ui.getPresentablePath
 import com.intellij.ui.UIBundle
+import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.dsl.builder.*
 import com.intellij.ui.layout.ValidationInfoBuilder
 
@@ -45,12 +48,15 @@ abstract class IntelliJNewProjectWizardStep<ParentStep>(val parent: ParentStep) 
   final override val moduleFileLocationProperty = propertyGraph.lazyProperty(::suggestModuleFilePath)
   final override val addSampleCodeProperty = propertyGraph.property(true)
     .bindBooleanStorage(ADD_SAMPLE_CODE_PROPERTY_NAME)
+  private val generateOnboardingTipsProperty = propertyGraph.property(AssetsNewProjectWizardStep.proposeToGenerateOnboardingTipsByDefault())
+    .bindBooleanStorage(GENERATE_ONBOARDING_TIPS_NAME)
 
   final override var sdk by sdkProperty
   final override var moduleName by moduleNameProperty
   final override var contentRoot by contentRootProperty
   final override var moduleFileLocation by moduleFileLocationProperty
   final override var addSampleCode by addSampleCodeProperty
+  final override val generateOnboardingTips by generateOnboardingTipsProperty
 
   private var userDefinedContentRoot: Boolean = false
   private var userDefinedModuleFileLocation: Boolean = false
@@ -89,11 +95,19 @@ abstract class IntelliJNewProjectWizardStep<ParentStep>(val parent: ParentStep) 
           .whenItemSelectedFromUi { logSdkChanged(sdk) }
       }
       customOptions()
+      lateinit var addSampleCode: Cell<JBCheckBox>
       row {
-        checkBox(UIBundle.message("label.project.wizard.new.project.add.sample.code"))
+        addSampleCode = checkBox(UIBundle.message("label.project.wizard.new.project.add.sample.code"))
           .bindSelected(addSampleCodeProperty)
           .whenStateChangedFromUi { logAddSampleCodeChanged(it) }
       }.topGap(TopGap.SMALL)
+      indent {
+        row {
+          checkBox(UIBundle.message("label.project.wizard.new.project.generate.onboarding.tips"))
+            .bindSelected(generateOnboardingTipsProperty)
+            .whenStateChangedFromUi { logAddSampleOnboardingTipsChangedEvent(it) }
+        }
+      }.enabledIf(addSampleCode.selected)
       collapsibleGroup(UIBundle.message("label.project.wizard.new.project.advanced.settings")) {
         row(UIBundle.message("label.project.wizard.new.project.module.name")) {
           textField()
